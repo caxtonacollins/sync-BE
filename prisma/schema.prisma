@@ -1,0 +1,199 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+  SYSTEM
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+  RESTRICTED
+}
+
+model User {
+  id                  String              @id @default(uuid())
+  email               String              @unique
+  password            String
+  firstName           String
+  lastName            String
+  phoneNumber         String?
+  role                UserRole            @default(USER)
+  status              AccountStatus       @default(ACTIVE)
+  verificationStatus  VerificationStatus  @default(UNVERIFIED)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  lastLogin           DateTime?
+
+  // KYC Information
+  dateOfBirth        DateTime?
+  address            String?
+  city               String?
+  state              String?
+  country            String?
+  postalCode         String?
+  idType             String?             // e.g., "passport", "driver_license"
+  idNumber           String?
+  idFrontImage       String?
+  idBackImage        String?
+  selfieImage        String?
+
+  // Fiat Accounts
+  fiatAccounts       FiatAccount[]
+  cryptoWallets      CryptoWallet[]
+
+  // Security
+  twoFactorEnabled   Boolean             @default(false)
+  twoFactorSecret    String?
+  loginAttempts      Int                 @default(0)
+  lockedUntil        DateTime?
+
+  // Relations
+  transactions       Transaction[]
+  swapOrders        SwapOrder[]
+  sessions          Session[]
+  auditLogs         AuditLog[]
+}
+
+model FiatAccount {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  provider        String      // "monnify", "paystack", etc.
+  accountNumber   String
+  accountName     String
+  bankName        String?
+  bankCode        String?
+  currency        String      @default("NGN")
+  isDefault       Boolean     @default(false)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  verifiedAt      DateTime?
+
+  transactions    Transaction[]
+}
+
+model CryptoWallet {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  network         String      // "ethereum", "bitcoin", "starknet", etc.
+  address         String
+  currency        String      // "STRK", "ETH", "BTC", "USDC", etc.
+  isDefault       Boolean     @default(false)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  transactions    Transaction[]
+}
+
+model Transaction {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  type            String      // "deposit", "withdrawal", "swap", "transfer"
+  status          String      // "pending", "completed", "failed", "reversed"
+  amount          Float
+  currency        String
+  fee             Float       @default(0)
+  netAmount       Float
+  reference       String      @unique
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  completedAt     DateTime?
+
+  // Relations
+  fiatAccountId   String?
+  fiatAccount     FiatAccount? @relation(fields: [fiatAccountId], references: [id])
+  cryptoWalletId  String?
+  cryptoWallet    CryptoWallet? @relation(fields: [cryptoWalletId], references: [id])
+  swapOrderId     String?
+  swapOrder       SwapOrder? @relation(fields: [swapOrderId], references: [id])
+}
+
+model SwapOrder {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  fromCurrency    String
+  toCurrency      String
+  fromAmount      Float
+  toAmount        Float
+  rate            Float
+  fee             Float
+  status          String      // "pending", "completed", "failed", "partial"
+  reference       String      @unique
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  completedAt     DateTime?
+
+  transactions    Transaction[]
+}
+
+model Session {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  token           String      @unique
+  ipAddress       String?
+  userAgent       String?
+  expiresAt       DateTime
+  createdAt       DateTime    @default(now())
+}
+
+model AuditLog {
+  id              String      @id @default(uuid())
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id])
+  action          String
+  entityType      String?
+  entityId        String?
+  metadata        Json?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime    @default(now())
+}
+
+model SystemSetting {
+  id              String      @id @default(uuid())
+  key             String      @unique
+  value           Json
+  description     String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model ExchangeRate {
+  id              String      @id @default(uuid())
+  fromCurrency    String
+  toCurrency      String
+  rate            Float
+  expiresAt       DateTime
+  createdAt       DateTime    @default(now())
+}
+

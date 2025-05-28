@@ -1,36 +1,23 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
-import appConfig from '../config/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
+import { AuthModule } from './auth/auth.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
+import { ContractService } from './contract/contract.service';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: [`.env.${process.env.NODE_ENV || 'development'}`],
-      load: [appConfig],
-    }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DB_URL,
-      ssl: {
-        rejectUnauthorized: false,
-      },
-      synchronize: true,
-      autoLoadEntities: true,
-      logging: true,
-      retryAttempts: 5,
-      retryDelay: 3000,
-      connectTimeoutMS: 10000,
-    }),
     UserModule,
+    PrismaModule,
     AuthModule,
+    TransactionModule,
+    ExchangeRateModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, PrismaService, ContractService],
 })
 export class AppModule {}

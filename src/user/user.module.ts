@@ -1,15 +1,11 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
-import { User } from './entities/user.entity';
-import { AuthModule } from 'src/auth/auth.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { CreateUserService } from './providers/create-user.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), forwardRef(() => AuthModule)],
-  providers: [UserService, CreateUserService],
   controllers: [UserController],
-  exports: [UserService, CreateUserService],
+  providers: [UserService],
+  imports: [PrismaModule],
 })
 export class UserModule {}

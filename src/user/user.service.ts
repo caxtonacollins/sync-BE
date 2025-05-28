@@ -1,111 +1,266 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
-import { HashingProvider } from '../auth/provider/hashing.provider';
+import * as bcrypt from 'bcrypt';
+import { UserFilterDto } from './dto/user-filter.dto';
+import { Prisma, VerificationStatus } from '@prisma/client';
+import { PaginationDto } from './dto/pagination.dto';
 
 @Injectable()
 export class UserService {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    private readonly hashingProvider: HashingProvider,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  public createUser(createUserDto: CreateUserDto) {
-    const newUser = this.userRepository.create(createUserDto);
-    return this.userRepository.save(newUser);
+  private readonly SALT_ROUNDS = 12;
+
+  async hashPassword(password: string): Promise<string> {
+    return await bcrypt.hash(password, this.SALT_ROUNDS);
   }
 
-  public async findAllUsers(
-    page: number,
-    limit: number,
-    sortBy?: string,
-    order: 'ASC' | 'DESC' = 'ASC',
-  ) {
-    const [users, total] = await this.userRepository.findAndCount({
-      skip: (page - 1) * limit,
-      take: limit,
-      order: sortBy ? { [sortBy]: order } : { id: 'ASC' },
-    });
-
-    return {
-      total,
-      data: users,
-    };
+  async verifyPassword(plainText: string, hash: string): Promise<boolean> {
+    return await bcrypt.compare(plainText, hash);
   }
 
-  // GET ALL USERS
-  findAll() {
-    return this.userRepository.find({
-      select: [
-        'id',
-        'fullName',
-        'email',
-        'profilePicture',
-        'isVerified',
-        'walletAddress',
-      ],
-    });
-  }
-
-  // Finding a Single User By Registered ID
-  public findOneById(id: number): Promise<User> {
+  async createUser(createUserDto: CreateUserDto) {
     try {
-      const user = this.userRepository.findOneBy({ id });
-      return user;
+      const passwordHash = await this.hashPassword(createUserDto.password);
+
+      return this.prisma.user.create({
+        data: {
+          email: createUserDto.email,
+          password: passwordHash,
+          firstName: createUserDto.firstName,
+          lastName: createUserDto.lastName,
+          phoneNumber: createUserDto.phoneNumber,
+          role: createUserDto.role,
+          status: createUserDto.status,
+          verificationStatus: createUserDto.verificationStatus,
+        },
+      });
     } catch (error) {
-      throw new NotFoundException({ description: error }, 'User Not Found');
+      console.log('Error creating user:', error.message);
     }
   }
 
-  // Deleting a User By Registered ID
-  public deleteUser(id: number) {
-    return this.userRepository.delete(id);
+  async findAll(filter: UserFilterDto): Promise<{
+    data: any[];
+    meta: {
+      page: number;
+      limit: number;
+      total: number;
+    };
+  }> {
+    const where: Prisma.UserWhereInput = {};
+
+    if (filter.search) {
+      where.OR = [
+        { firstName: { contains: filter.search, mode: 'insensitive' } },
+        { lastName: { contains: filter.search, mode: 'insensitive' } },
+        { email: { contains: filter.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (filter.role) {
+      where.role = filter.role;
+    }
+
+    if (filter.verificationStatus) {
+      where.verificationStatus = filter.verificationStatus;
+    }
+
+    if (filter.status) {
+      where.status = filter.status;
+    }
+
+    if (filter.email) {
+      where.email = filter.email;
+    }
+
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip: filter.skip,
+        take: filter.limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      data: users.map((user) => user),
+      meta: {
+        page: filter.page,
+        limit: filter.limit,
+        total,
+      },
+    };
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    console.log(`Updating user ${id} without auth check`);
+  async getByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
 
-    // Check if user exists
-    const user = await this.userRepository.findOne({
-      where: { id: Number(id) },
+  async getById(id: string, include?: Prisma.UserInclude) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include,
     });
+
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    // Handle password update separately
-    if (updateUserDto.password) {
-      console.log('Updating password');
-      user.password = await this.hashingProvider.hashPassword(
-        updateUserDto.password,
-      );
-      delete updateUserDto.password;
-    }
-
-    // Update other fields
-    console.log('Updating other fields');
-    Object.assign(user, updateUserDto);
-
-    // Save and return updated user
-    console.log('Saving user');
-    const updatedUser = await this.userRepository.save(user);
-    console.log('User updated successfully');
-
-    // const { password, ...result } = updatedUser;
-    const { ...result } = updatedUser;
-
-    return result;
+    return user;
   }
 
-  async findOneByEmail(email: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) {
-      throw new NotFoundException(`User with email ${email} not found`);
-    }
+  async getUserFiatAccounts(userId: string, pagination: PaginationDto) {
+    const [accounts, total] = await Promise.all([
+      this.prisma.fiatAccount.findMany({
+        where: { userId },
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.fiatAccount.count({ where: { userId } }),
+    ]);
+
+    return {
+      data: accounts,
+      meta: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total,
+      },
+    };
+  }
+
+  async getUserCryptoWallets(userId: string, pagination: PaginationDto) {
+    const [wallets, total] = await Promise.all([
+      this.prisma.cryptoWallet.findMany({
+        where: { userId },
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.cryptoWallet.count({ where: { userId } }),
+    ]);
+
+    return {
+      data: wallets,
+      meta: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total,
+      },
+    };
+  }
+
+  async getUserTransactions(userId: string, pagination: PaginationDto) {
+    const [transactions, total] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: { userId },
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          fiatAccount: true,
+          cryptoWallet: true,
+          swapOrder: true,
+        },
+      }),
+      this.prisma.transaction.count({ where: { userId } }),
+    ]);
+
+    return {
+      data: transactions,
+      meta: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total,
+      },
+    };
+  }
+
+  async getUserSwapOrders(userId: string, pagination: PaginationDto) {
+    const [orders, total] = await Promise.all([
+      this.prisma.swapOrder.findMany({
+        where: { userId },
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          transactions: true,
+        },
+      }),
+      this.prisma.swapOrder.count({ where: { userId } }),
+    ]);
+
+    return {
+      data: orders,
+      meta: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total,
+      },
+    };
+  }
+
+  async update(id: string, UpdateUserDto: UpdateUserDto) {
+    return await this.prisma.user.update({
+      where: { id },
+      data: UpdateUserDto,
+    });
+  }
+
+  async updatePassword(id: string, newPassword: string) {
+    const passwordHash = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
+
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { password: passwordHash },
+    });
+
+    return user;
+  }
+
+  async verifyUserKyc(
+    id: string,
+    verificationData: {
+      verificationStatus: VerificationStatus;
+      verificationNotes?: string;
+    },
+  ) {
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        verificationStatus: verificationData.verificationStatus,
+      },
+    });
+
+    // Create audit log
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'KYC_VERIFICATION',
+        entityType: 'User',
+        entityId: id,
+        userId: id,
+        metadata: {
+          status: verificationData.verificationStatus,
+          notes: verificationData.verificationNotes,
+        },
+      },
+    });
+  }
+
+  async remove(id: string) {
+    const user = await this.prisma.user.delete({
+      where: { id },
+    });
+
     return user;
   }
 }

@@ -1,10 +1,24 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
-import { CreateUserDto } from './create-user.dto';
-import { PartialType } from '@nestjs/mapped-types';
+import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { AccountStatus, VerificationStatus } from '@prisma/client';
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {
+export class UpdateUserDto {
   @IsOptional()
   @IsString()
-  @MinLength(8)
-  password?: string;
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
+  @IsOptional()
+  @IsEnum(AccountStatus)
+  status?: AccountStatus;
+
+  @IsOptional()
+  @IsEnum(VerificationStatus)
+  verificationStatus?: VerificationStatus;
 }

@@ -1,0 +1,202 @@
+[
+  {
+    "type": "impl",
+    "name": "AccountFactoryImpl",
+    "interface_name": "contracts::AccountFactory::AccountFactory::IAccountFactory"
+  },
+  {
+    "type": "interface",
+    "name": "contracts::AccountFactory::AccountFactory::IAccountFactory",
+    "items": [
+      {
+        "type": "function",
+        "name": "create_account",
+        "inputs": [
+          {
+            "name": "public_key",
+            "type": "core::felt252"
+          },
+          {
+            "name": "user_unique_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_account",
+        "inputs": [
+          {
+            "name": "user",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_liquidity_bridge",
+        "inputs": [
+          {
+            "name": "new_bridge",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_account_class_hash",
+        "inputs": [
+          {
+            "name": "new_account_class_hash",
+            "type": "core::starknet::class_hash::ClassHash"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_liquidity_bridge",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "UpgradeableImpl",
+    "interface_name": "openzeppelin_upgrades::interface::IUpgradeable"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_upgrades::interface::IUpgradeable",
+    "items": [
+      {
+        "type": "function",
+        "name": "upgrade",
+        "inputs": [
+          {
+            "name": "new_class_hash",
+            "type": "core::starknet::class_hash::ClassHash"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "account_class_hash",
+        "type": "core::starknet::class_hash::ClassHash"
+      },
+      {
+        "name": "liquidity_bridge",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "class_hash",
+        "type": "core::starknet::class_hash::ClassHash",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Upgraded",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "contracts::AccountFactory::AccountFactory::AccountCreated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "public_key",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "contracts::AccountFactory::AccountFactory::DefaultTokenAdded",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "token_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "contracts::AccountFactory::AccountFactory::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "UpgradeableEvent",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "AccountCreated",
+        "type": "contracts::AccountFactory::AccountFactory::AccountCreated",
+        "kind": "nested"
+      },
+      {
+        "name": "DefaultTokenAdded",
+        "type": "contracts::AccountFactory::AccountFactory::DefaultTokenAdded",
+        "kind": "nested"
+      }
+    ]
+  }
+]
