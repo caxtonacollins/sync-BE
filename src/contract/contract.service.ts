@@ -107,13 +107,13 @@ export class ContractService {
   };
 
   registerUserTOLiquidity = async (
-    user_address: string,
-    fiat_account_id: string,
+    userAddress: string,
+    fiatAccountId: string,
   ) => {
     if (!this.liquidityContractAddress)
       throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
-    if (!user_address) throw new Error('user address is required');
-    if (!fiat_account_id) throw new Error('user address is required');
+    if (!userAddress) throw new Error('user address is required');
+    if (!fiatAccountId) throw new Error('fiat account id is required');
 
     if (!this.private_key || !this.account_address)
       throw new Error('account credentials required');
@@ -127,7 +127,7 @@ export class ContractService {
     const call = {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'register_user',
-      calldata: [user_address, fiat_account_id],
+      calldata: [userAddress, fiatAccountId],
     };
 
     const account = this.getAccount();
@@ -156,11 +156,11 @@ export class ContractService {
     }
   };
 
-  checkUserRegistered = async (user_address: string) => {
+  checkUserRegistered = async (userAddress: string) => {
     if (!this.liquidityContractAddress)
       throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
 
-    if (!user_address) throw new Error('user address is required');
+    if (!userAddress) throw new Error('user address is required');
 
     const liquidityClass = await getClassAt(this.liquidityContractAddress);
 
@@ -171,7 +171,7 @@ export class ContractService {
       this.liquidityContractAddress,
     );
 
-    const result = await liquidityContract.is_user_registered(user_address);
+    const result = await liquidityContract.is_user_registered(userAddress);
     return result;
   };
 
@@ -218,5 +218,35 @@ export class ContractService {
         process.exit(1);
       }
     }
+  };
+
+  getDeployerWallet = () => {
+    return new Account(this.provider, this.accountAddress, this.private_key);
+  };
+
+  getAccountAddress = async (userAddress: string) => {
+    if (!this.accountFactoryAddress)
+      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
+
+    if (!userAddress) throw new Error('user address is required');
+
+    const AccountClass = await getClassAt(this.accountFactoryAddress);
+
+    try {
+      const accountContract = createNewContractInstance(
+        AccountClass.abi,
+        this.accountFactoryAddress,
+      );
+
+      const result = await accountContract.get_account(userAddress);
+      return result;
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  };
+
+  setLiquidityContractAddress = (address: string) => {
+    this.liquidityContractAddress = address;
   };
 }

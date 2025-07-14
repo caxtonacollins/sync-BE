@@ -15,12 +15,16 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
+import { MonnifyService } from '../monnify/monnify.service';
 
 @Controller('user')
 // @ApiTags('Users')
 // @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly monnifyService: MonnifyService,
+  ) {}
 
   @Post()
   async create(@Body() createUserDto: CreateUserDto) {
@@ -40,7 +44,7 @@ export class UserController {
   }
 
   @Get(':id')
-  findById(
+  async findById(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('fiatAccounts') fiatAccounts?: string,
     @Query('cryptoWallets') cryptoWallets?: string,
@@ -49,15 +53,17 @@ export class UserController {
   ) {
     try {
       const parseBoolean = (value?: string) => value === 'true';
-
       const include: Prisma.UserInclude = {
         fiatAccounts: parseBoolean(fiatAccounts),
         cryptoWallets: parseBoolean(cryptoWallets),
         transactions: parseBoolean(transactions),
         swapOrders: parseBoolean(swapOrders),
       };
-
-      return this.userService.getById(id, include);
+      const user = await this.userService.getById(id, include);
+      const monnifyAccountDetails =
+        await this.monnifyService.getReservedAccountDetails(id);
+      console.log('Monnify account details:', monnifyAccountDetails);
+      return { user, monnifyAccountDetails };
     } catch (error) {
       console.error('Error finding user by ID:', error);
       throw new Error('Failed to find user by ID');

@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { ContractService } from './contract/contract.service';
+import { MonnifyService } from './monnify/monnify.service';
 
 @Module({
   imports: [
@@ -18,6 +19,6 @@ import { ContractService } from './contract/contract.service';
     ExchangeRateModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService, ContractService],
+  providers: [AppService, PrismaService, ContractService, MonnifyService],
 })
 export class AppModule {}

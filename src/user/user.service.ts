@@ -3,15 +3,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { FiatAccountDto } from './dto/fiat-account.dto';
+import { CryptoWalletDto } from './dto/crypto-wallet.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
+import { MonnifyService } from 'src/monnify/monnify.service';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private monnifyService: MonnifyService,
+  ) {}
 
   private readonly SALT_ROUNDS = 12;
 
@@ -23,11 +29,25 @@ export class UserService {
     return await bcrypt.compare(plainText, hash);
   }
 
+  async createFiatAccount(fiatAccountDto: FiatAccountDto) {
+    return this.prisma.fiatAccount.create({
+      data: fiatAccountDto,
+    });
+  }
+
+  async createCryptoWallet(cryptoWalletDto: CryptoWalletDto) {
+    return this.prisma.cryptoWallet.create({
+      data: cryptoWalletDto,
+    });
+  }
+
   async createUser(createUserDto: CreateUserDto) {
-    try {
+    // Wrap the whole flow in a single Prisma transaction so user + accounts are atomic
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Hash password and create user
       const passwordHash = await this.hashPassword(createUserDto.password);
 
-      return this.prisma.user.create({
+      const user = await tx.user.create({
         data: {
           email: createUserDto.email,
           password: passwordHash,
@@ -39,9 +59,43 @@ export class UserService {
           verificationStatus: createUserDto.verificationStatus,
         },
       });
-    } catch (error) {
-      console.log('Error creating user:', error.message);
-    }
+
+      // 2. Create a default fiat account for the user (placeholder – provider integration TBD)
+      await tx.fiatAccount.create({
+        data: {
+          userId: user.id,
+          provider: 'manual',
+          accountNumber: `ACC-${Date.now()}`,
+          accountName: `${user.firstName} ${user.lastName}`,
+          currency: 'NGN',
+          isDefault: true,
+        },
+      });
+
+      // 3. Create a default crypto wallet for the user (address generation TBD)
+      await tx.cryptoWallet.create({
+        data: {
+          userId: user.id,
+          network: 'starknet',
+          address: `0x${Math.random().toString(16).substring(2, 42)}`.padEnd(
+            42,
+            '0',
+          ),
+          currency: 'ETH',
+          isDefault: true,
+        },
+      });
+
+      // 4. Create Monnify reserve account for the user
+      try {
+        await this.monnifyService.createReserveAccount(user);
+      } catch (error) {
+        console.error('Failed to create Monnify account:', error);
+        // We can retry this later or have a background job handle failures
+      }
+
+      return user;
+    });
   }
 
   async findAll(filter: UserFilterDto): Promise<{
