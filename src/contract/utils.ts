@@ -4,8 +4,8 @@ import {
   Contract,
   ec,
   num,
-  RPC,
   RpcProvider,
+  shortString,
   stark,
 } from 'starknet';
 import { promises as fs } from 'fs';
@@ -55,9 +55,8 @@ export async function deployAccount() {
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
       maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-      tip: 10 ** 13,
-      paymasterData: [],
+      // feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
+      // tip: 10 ** 13,
       resourceBounds: {
         l1_gas: {
           max_amount: num.toHex(maxQtyGasAuthorized),
@@ -72,7 +71,7 @@ export async function deployAccount() {
 
     const txR = await provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.actual_fee);
+      console.log('Paid fee for account creation =', txR.statusReceipt);
     }
   } catch (error) {
     console.error('Error during account creation:', error);
@@ -88,15 +87,51 @@ export async function getClassAt(contractAddress: string) {
 export async function writeAbiToFile(classHash: any, fileName: string) {
   if (!classHash.abi) throw new Error('No ABI found for liquidity contract');
 
-  await fs.mkdir('./abi', { recursive: true });
+  const dirExists = await fs
+    .access('./abi')
+    .then(() => true)
+    .catch(() => false);
 
-  await fs.writeFile(
+  if (!dirExists) {
+    console.log(`Directory ./abi does not exist. Creating it.`);
+    await fs.mkdir('./abi', { recursive: true });
+  }
+  const fileExists = await fs
+    .access(`src/contract/abi/${fileName}.json`)
+    .then(() => true)
+    .catch(() => false);
+
+  if (!fileExists) {
+    console.log(`File ${fileName}.json does not exist. Creating it.`);
+    await fs.writeFile(
+      `src/contract/abi/${fileName}.json`,
+      JSON.stringify(classHash.abi, undefined, 2),
+    );
+    return;
+  }
+  const content = await fs.readFile(
     `src/contract/abi/${fileName}.json`,
-    JSON.stringify(classHash.abi, undefined, 2),
+    'utf-8',
   );
+
+  if (!content) {
+    console.log(`No ABI file found for ${fileName}. Creating a new one.`);
+    await fs.mkdir('./abi', { recursive: true });
+
+    await fs.writeFile(
+      `src/contract/abi/${fileName}.json`,
+      JSON.stringify(classHash.abi, undefined, 2),
+    );
+  }
 }
 
 export function createNewContractInstance(abi: Abi, address: string) {
   const provider = connectToStarknet();
   return new Contract(abi, address, provider);
+}
+
+export function uuidToFelt252(uuid: string) {
+  const feltUuid = uuid.replace(/-/g, '');
+
+  return shortString.encodeShortString(feltUuid.slice(0, 31));
 }

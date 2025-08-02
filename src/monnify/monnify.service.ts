@@ -38,6 +38,7 @@ export class MonnifyService {
       if (response.status === 200) {
         // Account created successfully.
         console.log(`Account created successfully, ${accountName}`);
+        return response.data;
       } else {
         // Handle errors or failed responses.
         console.error('message response:' + response.data);

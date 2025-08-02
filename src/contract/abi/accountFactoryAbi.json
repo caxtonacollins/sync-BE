@@ -2,11 +2,11 @@
   {
     "type": "impl",
     "name": "AccountFactoryImpl",
-    "interface_name": "contracts::AccountFactory::AccountFactory::IAccountFactory"
+    "interface_name": "isyncpayment::accountFactory::accountFactory::AccountFactory::IAccountFactory"
   },
   {
     "type": "interface",
-    "name": "contracts::AccountFactory::AccountFactory::IAccountFactory",
+    "name": "isyncpayment::accountFactory::accountFactory::AccountFactory::IAccountFactory",
     "items": [
       {
         "type": "function",
@@ -38,7 +38,7 @@
             "type": "core::starknet::contract_address::ContractAddress"
           }
         ],
-        "state_mutability": "external"
+        "state_mutability": "view"
       },
       {
         "type": "function",
@@ -101,6 +101,66 @@
     ]
   },
   {
+    "type": "impl",
+    "name": "OwnableMixinImpl",
+    "interface_name": "openzeppelin_access::ownable::interface::OwnableABI"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_access::ownable::interface::OwnableABI",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "transferOwnership",
+        "inputs": [
+          {
+            "name": "newOwner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounceOwnership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
     "type": "constructor",
     "name": "constructor",
     "inputs": [
@@ -110,6 +170,10 @@
       },
       {
         "name": "liquidity_bridge",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "owner",
         "type": "core::starknet::contract_address::ContractAddress"
       }
     ]
@@ -140,7 +204,58 @@
   },
   {
     "type": "event",
-    "name": "contracts::AccountFactory::AccountFactory::AccountCreated",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnershipTransferStarted",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::accountFactory::accountFactory::AccountFactory::AccountCreated",
     "kind": "struct",
     "members": [
       {
@@ -162,7 +277,7 @@
   },
   {
     "type": "event",
-    "name": "contracts::AccountFactory::AccountFactory::DefaultTokenAdded",
+    "name": "isyncpayment::accountFactory::accountFactory::AccountFactory::DefaultTokenAdded",
     "kind": "struct",
     "members": [
       {
@@ -179,7 +294,7 @@
   },
   {
     "type": "event",
-    "name": "contracts::AccountFactory::AccountFactory::Event",
+    "name": "isyncpayment::accountFactory::accountFactory::AccountFactory::Event",
     "kind": "enum",
     "variants": [
       {
@@ -188,13 +303,18 @@
         "kind": "flat"
       },
       {
+        "name": "OwnableEvent",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      },
+      {
         "name": "AccountCreated",
-        "type": "contracts::AccountFactory::AccountFactory::AccountCreated",
+        "type": "isyncpayment::accountFactory::accountFactory::AccountFactory::AccountCreated",
         "kind": "nested"
       },
       {
         "name": "DefaultTokenAdded",
-        "type": "contracts::AccountFactory::AccountFactory::DefaultTokenAdded",
+        "type": "isyncpayment::accountFactory::accountFactory::AccountFactory::DefaultTokenAdded",
         "kind": "nested"
       }
     ]

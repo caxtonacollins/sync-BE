@@ -16,6 +16,7 @@ import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from '../monnify/monnify.service';
+import { ContractService } from 'src/contract/contract.service';
 
 @Controller('user')
 // @ApiTags('Users')
@@ -24,6 +25,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly monnifyService: MonnifyService,
+    private readonly contractService: ContractService,
   ) {}
 
   @Post()
@@ -60,10 +62,7 @@ export class UserController {
         swapOrders: parseBoolean(swapOrders),
       };
       const user = await this.userService.getById(id, include);
-      const monnifyAccountDetails =
-        await this.monnifyService.getReservedAccountDetails(id);
-      console.log('Monnify account details:', monnifyAccountDetails);
-      return { user, monnifyAccountDetails };
+      return { user };
     } catch (error) {
       console.error('Error finding user by ID:', error);
       throw new Error('Failed to find user by ID');

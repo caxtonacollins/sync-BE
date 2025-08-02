@@ -11,13 +11,15 @@ import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from 'src/monnify/monnify.service';
+import { ContractService } from 'src/contract/contract.service';
 
 @Injectable()
 export class UserService {
   constructor(
     private prisma: PrismaService,
     private monnifyService: MonnifyService,
-  ) {}
+    private readonly contractService: ContractService,
+  ) { }
 
   private readonly SALT_ROUNDS = 12;
 
@@ -42,60 +44,118 @@ export class UserService {
   }
 
   async createUser(createUserDto: CreateUserDto) {
-    // Wrap the whole flow in a single Prisma transaction so user + accounts are atomic
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Hash password and create user
-      const passwordHash = await this.hashPassword(createUserDto.password);
+    return this.prisma.$transaction(
+      async (tx) => {
+        // 1. Hash password and create user
+        const passwordHash = await this.hashPassword(createUserDto.password);
 
-      const user = await tx.user.create({
-        data: {
-          email: createUserDto.email,
-          password: passwordHash,
-          firstName: createUserDto.firstName,
-          lastName: createUserDto.lastName,
-          phoneNumber: createUserDto.phoneNumber,
-          role: createUserDto.role,
-          status: createUserDto.status,
-          verificationStatus: createUserDto.verificationStatus,
-        },
-      });
+        const user = await tx.user.create({
+          data: {
+            email: createUserDto.email,
+            password: passwordHash,
+            firstName: createUserDto.firstName,
+            lastName: createUserDto.lastName,
+            phoneNumber: createUserDto.phoneNumber,
+            role: createUserDto.role,
+            status: createUserDto.status,
+            verificationStatus: createUserDto.verificationStatus,
+          },
+        });
 
-      // 2. Create a default fiat account for the user (placeholder – provider integration TBD)
-      await tx.fiatAccount.create({
-        data: {
-          userId: user.id,
-          provider: 'manual',
-          accountNumber: `ACC-${Date.now()}`,
-          accountName: `${user.firstName} ${user.lastName}`,
-          currency: 'NGN',
-          isDefault: true,
-        },
-      });
+        // 2. Create fiat accounts for supported currencies
+        const fiatCurrencies = ['NGN']; // 'GHS', 'USD'
 
-      // 3. Create a default crypto wallet for the user (address generation TBD)
-      await tx.cryptoWallet.create({
-        data: {
-          userId: user.id,
-          network: 'starknet',
-          address: `0x${Math.random().toString(16).substring(2, 42)}`.padEnd(
-            42,
-            '0',
-          ),
-          currency: 'ETH',
-          isDefault: true,
-        },
-      });
+        // Create fiat accounts for each currency
+        for (const currency of fiatCurrencies) {
+          try {
+            // Only attempt to create Monnify account for NGN
+            if (currency === 'NGN') {
+              const monnifyData =
+                await this.monnifyService.createReserveAccount(user);
 
-      // 4. Create Monnify reserve account for the user
-      try {
-        await this.monnifyService.createReserveAccount(user);
-      } catch (error) {
-        console.error('Failed to create Monnify account:', error);
-        // We can retry this later or have a background job handle failures
-      }
+              // Set the default account as the first account in the array
+              const defaultAccount = monnifyData.responseBody.accounts[0];
 
-      return user;
-    });
+              await tx.fiatAccount.create({
+                data: {
+                  userId: user.id,
+                  provider: 'monnify',
+                  currency: monnifyData.responseBody.currencyCode,
+                  isDefault: currency === 'NGN',
+                  accountNumber: defaultAccount.accountNumber,
+                  accountName: defaultAccount.accountName,
+                  bankName: defaultAccount.bankName,
+                  bankCode: defaultAccount.bankCode,
+                  // Store Monnify specific data
+                  contractCode: monnifyData.responseBody.contractCode,
+                  accountReference: monnifyData.responseBody.accountReference,
+                  reservationReference:
+                    monnifyData.responseBody.reservationReference,
+                  reservedAccountType:
+                    monnifyData.responseBody.reservedAccountType,
+                  collectionChannel: monnifyData.responseBody.collectionChannel,
+                  customerEmail: monnifyData.responseBody.customerEmail,
+                  customerName: monnifyData.responseBody.customerName,
+
+                  // Store all accounts as JSON
+                  accounts: monnifyData.responseBody.accounts,
+
+                  // Store default account details for quick access
+                  // defaultBankCode: defaultAccount.bankCode,
+                  // defaultBankName: defaultAccount.bankName,
+                  // defaultAccountNumber: defaultAccount.accountNumber,
+                  // defaultAccountName: defaultAccount.accountName,
+                },
+              });
+            }
+          } catch (error) {
+            console.error(`Failed to create ${currency} fiat account:`, error);
+            // Continue with other currencies if one fails
+          }
+        }
+
+        // 3. Create Starknet wallets for supported tokens
+        const cryptoTokens = ['STRK']; //'ETH', 'USDC'
+
+        try {
+          // Create the Starknet account and get its address from the event
+          const result = await this.contractService.createAccount(user.id);
+
+          // console.log(
+          //   chalk.green(
+          //     `Starknet account created successfully: ${JSON.stringify(result, null, 2)}`,
+          //   ),
+          // );
+
+          if (!result?.accountAddress) {
+            throw new Error(
+              'Failed to get Starknet account address from event',
+            );
+          }
+
+          // Create wallet records for each supported token
+          for (const currency of cryptoTokens) {
+            await tx.cryptoWallet.create({
+              data: {
+                userId: user.id,
+                network: 'starknet',
+                address: result.accountAddress,
+                currency,
+                isDefault: currency === 'STRK',
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Failed to create Starknet accounts:', error);
+          // The transaction will still succeed even if crypto wallet creation fails
+        }
+
+        return user;
+      },
+      {
+        timeout: 60_000,
+      },
+    );
   }
 
   async findAll(filter: UserFilterDto): Promise<{
@@ -145,7 +205,11 @@ export class UserService {
     ]);
 
     return {
-      data: users.map((user) => user),
+      data: users.map((user) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password, ...userWithoutPassword } = user;
+        return userWithoutPassword;
+      }),
       meta: {
         page: filter.page,
         limit: filter.limit,
@@ -155,7 +219,13 @@ export class UserService {
   }
 
   async getByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    }
+    return null;
   }
 
   async getById(id: string, include?: Prisma.UserInclude) {
@@ -168,7 +238,9 @@ export class UserService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
   async getUserFiatAccounts(userId: string, pagination: PaginationDto) {

@@ -18,6 +18,8 @@ import {
   createNewContractInstance,
   deployAccount,
   getClassAt,
+  getDeployerWallet,
+  uuidToFelt252,
   writeAbiToFile,
 } from './utils';
 import chalk from 'chalk';
@@ -31,9 +33,9 @@ export class ContractService {
   private accountContractHash: string;
 
   private private_key: string;
-  private account_address: string;
   private maxQtyGasAuthorized: string;
   private maxPriceAuthorizeForOneGas: string;
+  private deployerAccount: Account;
 
   constructor() {
     this.provider = connectToStarknet();
@@ -44,13 +46,9 @@ export class ContractService {
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
 
     this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
-    this.account_address = process.env.ACCOUNT_ADDRESS || '';
     this.maxQtyGasAuthorized = '2000';
     this.maxPriceAuthorizeForOneGas = '16283550959677';
-  }
-
-  private getAccount(): Account {
-    return new Account(this.provider, this.accountAddress, this.private_key);
+    this.deployerAccount = getDeployerWallet();
   }
 
   createAccount = async (user_unique_id: string) => {
@@ -61,6 +59,8 @@ export class ContractService {
     if (!this.private_key) throw new Error('private key is required');
     if (!user_unique_id) throw new Error('user unique id is required');
 
+    const user_felt252_id = uuidToFelt252(user_unique_id);
+
     try {
       const accountFactoryClass = await this.provider.getClassAt(
         this.accountFactoryAddress,
@@ -70,39 +70,61 @@ export class ContractService {
 
       const { publicKey } = createKeyPair();
 
+      console.log(
+        `Creating account for user with ID: ${user_felt252_id} and public key: ${publicKey}`,
+      );
+
       const call = {
         contractAddress: this.accountFactoryAddress,
         entrypoint: 'create_account',
-        calldata: [publicKey, user_unique_id],
+        calldata: [publicKey, user_felt252_id],
       };
 
-      const account = this.getAccount();
+      const account = this.getDeployerWallet();
 
+      console.log(chalk.blue('Executing account creation transaction...'));
+
+      // Remove resourceBounds from transaction options for RPC v0.8 compatibility
       const { transaction_hash: txH } = await account.execute(call, {
         version: 3,
         maxFee: 10 ** 15,
         feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
         tip: 10 ** 13,
         paymasterData: [],
-        resourceBounds: {
-          l1_gas: {
-            max_amount: num.toHex(this.maxQtyGasAuthorized),
-            max_price_per_unit: num.toHex(this.maxPriceAuthorizeForOneGas),
-          },
-          l2_gas: {
-            max_amount: num.toHex(0),
-            max_price_per_unit: num.toHex(0),
-          },
-        },
       });
 
+      console.log(chalk.green('Transaction hash:'), txH);
+      console.log(chalk.blue('Waiting for transaction confirmation...'));
       const txR = await this.provider.waitForTransaction(txH);
       if (txR.isSuccess()) {
-        console.log('Paid fee =', txR.actual_fee);
+        // Parse the account creation event
+        const events = txR.value.events;
+        const accountCreatedEvent = events?.find(
+          (event) =>
+            event.keys[0] ===
+            '0x1d9ca8a89626bead91b5cb4275a622219e9443975b34f3fdbc683e8621231a9',
+        );
+
+        if (!accountCreatedEvent) {
+          throw new Error(
+            'Account creation event not found in transaction receipt',
+          );
+        }
+
+        // The account address is in the second position of the data array
+        const accountAddress = accountCreatedEvent.data[1];
+
+        console.log('Account created with address:', accountAddress);
+        return {
+          transactionHash: txH,
+          accountAddress,
+          receipt: txR,
+        };
       }
     } catch (error) {
-      console.error('Error creating account:', error);
-      throw new Error('Failed to create account');
+      console.error(JSON.stringify(error, null, 2));
+      // console.error('Error creating account:', error);
+      // throw new Error('Failed to create account');
     }
   };
 
@@ -115,7 +137,7 @@ export class ContractService {
     if (!userAddress) throw new Error('user address is required');
     if (!fiatAccountId) throw new Error('fiat account id is required');
 
-    if (!this.private_key || !this.account_address)
+    if (!this.private_key || !this.accountAddress)
       throw new Error('account credentials required');
 
     const liquidityClass = await this.provider.getClassAt(
@@ -130,7 +152,7 @@ export class ContractService {
       calldata: [userAddress, fiatAccountId],
     };
 
-    const account = this.getAccount();
+    const account = this.getDeployerWallet();
 
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
@@ -152,7 +174,7 @@ export class ContractService {
 
     const txR = await this.provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.actual_fee);
+      console.log('Paid fee =', txR.statusReceipt);
     }
   };
 
@@ -248,5 +270,62 @@ export class ContractService {
 
   setLiquidityContractAddress = (address: string) => {
     this.liquidityContractAddress = address;
+  };
+
+  getUserDashboardData = async (userAddress: string) => {
+    if (!userAddress) throw new Error('user address is required');
+
+    try {
+      // Check if user is registered
+      const isRegistered = await this.checkUserRegistered(userAddress);
+
+      // Get user account address from factory
+      const accountAddress = await this.getAccountAddress(userAddress);
+
+      // Get account nonce as a way to check if account exists and is active
+      let nonce = '0';
+      try {
+        const nonceResponse = await this.provider.getNonceForAddress(
+          accountAddress.toString(),
+        );
+        nonce = nonceResponse.toString();
+      } catch (error) {
+        console.error('Error fetching nonce:', error);
+      }
+
+      // Get liquidity contract details if user is registered
+      let liquidityDetails = null;
+      if (isRegistered && this.liquidityContractAddress) {
+        const liquidityClass = await getClassAt(this.liquidityContractAddress);
+        const liquidityContract = createNewContractInstance(
+          liquidityClass.abi,
+          this.liquidityContractAddress,
+        );
+
+        // Get user's liquidity details
+        try {
+          liquidityDetails =
+            await liquidityContract.get_user_details(userAddress);
+        } catch (error) {
+          console.error('Error fetching liquidity details:', error);
+          liquidityDetails = null;
+        }
+      }
+
+      const dashboardData = {
+        isRegistered,
+        accountAddress: accountAddress?.toString() || null,
+        nonce,
+        accountStatus: nonce !== '0' ? 'active' : 'pending',
+        liquidityDetails,
+        userAddress,
+        timestamp: new Date().toISOString(),
+      };
+
+      return dashboardData;
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      throw new Error('Failed to fetch dashboard data');
+    }
   };
 }

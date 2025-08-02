@@ -75,6 +75,7 @@ model User {
   swapOrders        SwapOrder[]
   sessions          Session[]
   auditLogs         AuditLog[]
+  encryptedKey      EncryptedKey?
 }
 
 model FiatAccount {
@@ -92,6 +93,14 @@ model FiatAccount {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   verifiedAt      DateTime?
+  contractCode          String?
+  accountReference      String?
+  reservationReference  String?
+  reservedAccountType   String?
+  collectionChannel     String?
+  customerEmail         String?
+  customerName          String?
+  accounts              Json?
 
   transactions    Transaction[]
 }
@@ -164,6 +173,22 @@ model Session {
   userAgent       String?
   expiresAt       DateTime
   createdAt       DateTime    @default(now())
+  lastActive      DateTime    @default(now())
+  isActive        Boolean     @default(true)
+  deviceInfo      Json?
+}
+
+model EncryptedKey {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  encryptedPrivateKey String
+  encryptedUserKey    String
+  iv                  String
+  authTag             String
+  masterAuthTag       String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id])
 }
 
 model AuditLog {
