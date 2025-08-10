@@ -1,4 +1,5 @@
 import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
+import { Public } from './decorators/public.decorator';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { Enable2FADto, Verify2FADto } from './dto/enable-2fa.dto';
@@ -18,6 +19,7 @@ interface RequestWithUser extends Request {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('login')
   async login(@Body() loginDto: LoginDto, @Req() req: Request) {
     return this.authService.login(

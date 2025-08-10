@@ -218,6 +218,24 @@ export class UserService {
     };
   }
 
+  async findOne(
+    id: string,
+    fiatAccounts?: boolean,
+    cryptoWallets?: boolean,
+    transactions?: boolean,
+    swapOrders?: boolean,
+  ) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        fiatAccounts: fiatAccounts || false,
+        cryptoWallets: cryptoWallets || false,
+        transactions: transactions || false,
+        swapOrders: swapOrders || false,
+      },
+    });
+  }
+
   async getByEmail(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user) {

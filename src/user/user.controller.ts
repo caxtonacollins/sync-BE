@@ -8,6 +8,7 @@ import {
   Patch,
   Query,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -17,8 +18,11 @@ import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from '../monnify/monnify.service';
 import { ContractService } from 'src/contract/contract.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('user')
+@UseGuards(JwtAuthGuard)
 // @ApiTags('Users')
 // @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
@@ -28,6 +32,7 @@ export class UserController {
     private readonly contractService: ContractService,
   ) {}
 
+  @Public()
   @Post()
   async create(@Body() createUserDto: CreateUserDto) {
     try {
@@ -69,6 +74,7 @@ export class UserController {
     }
   }
 
+  @Public()
   @Get('email/:email')
   async getByEmail(@Param('email') email: string) {
     try {
