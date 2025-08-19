@@ -31,6 +31,7 @@ export class ContractService {
   private accountAddress: string;
   private accountFactoryAddress: string;
   private accountContractHash: string;
+  private syncTokenAddress: string;
 
   private private_key: string;
   private maxQtyGasAuthorized: string;
@@ -44,6 +45,7 @@ export class ContractService {
     this.accountAddress = process.env.ACCOUNT_ADDRESS || '';
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
+    this.syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
 
     this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
     this.maxQtyGasAuthorized = '2000';
@@ -160,16 +162,16 @@ export class ContractService {
       feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
       tip: 10 ** 13,
       paymasterData: [],
-      resourceBounds: {
-        l1_gas: {
-          max_amount: num.toHex(this.maxQtyGasAuthorized),
-          max_price_per_unit: num.toHex(this.maxPriceAuthorizeForOneGas),
-        },
-        l2_gas: {
-          max_amount: num.toHex(0),
-          max_price_per_unit: num.toHex(0),
-        },
-      },
+      // resourceBounds: {
+      //   l1_gas: {
+      //     max_amount: num.toHex(this.maxQtyGasAuthorized),
+      //     max_price_per_unit: num.toHex(this.maxPriceAuthorizeForOneGas),
+      //   },
+      //   l2_gas: {
+      //     max_amount: num.toHex(0),
+      //     max_price_per_unit: num.toHex(0),
+      //   },
+      // },
     });
 
     const txR = await this.provider.waitForTransaction(txH);
@@ -246,6 +248,30 @@ export class ContractService {
     return new Account(this.provider, this.accountAddress, this.private_key);
   };
 
+  getSyncTokenBalance = async (address: string) => {
+    if (!this.syncTokenAddress)
+      throw new Error('SYNC_TOKEN_ADDRESS env variable is not set');
+
+    if (!address) throw new Error('user address is required');
+
+    const syncTokenClass = await getClassAt(this.syncTokenAddress);
+
+    await writeAbiToFile(syncTokenClass, 'syncTokenAbi');
+
+    try {
+      const syncTokenContract = createNewContractInstance(
+        syncTokenClass.abi,
+        this.syncTokenAddress,
+      );
+
+      const result = await syncTokenContract.balance_of(address);
+      return result;
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  };
+
   getAccountAddress = async (userAddress: string) => {
     if (!this.accountFactoryAddress)
       throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
@@ -253,6 +279,8 @@ export class ContractService {
     if (!userAddress) throw new Error('user address is required');
 
     const AccountClass = await getClassAt(this.accountFactoryAddress);
+
+    await writeAbiToFile(AccountClass, 'accountFactoryAbi');
 
     try {
       const accountContract = createNewContractInstance(
@@ -326,6 +354,101 @@ export class ContractService {
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       throw new Error('Failed to fetch dashboard data');
+    }
+  };
+
+  getAccountBalance = async (symbol: string) => {
+    if (!symbol) throw new Error('symbol is required');
+    if (!this.accountAddress)
+      throw new Error('ACCOUNT_ADDRESS env variable is not set');
+    try {
+      // connect to account contract
+      const AccountClass = await getClassAt(this.accountAddress);
+      const accountContract = createNewContractInstance(
+        AccountClass.abi,
+        this.accountAddress,
+      );
+      const result = await accountContract.get_token_balance(symbol);
+      return result;
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  };
+
+  // Set account class hash in account factory
+  setAccountClassHash = async (classHash: string) => {
+    if (!classHash) throw new Error('class hash is required');
+    this.accountContractHash = classHash;
+
+    const call = {
+      contractAddress: this.accountFactoryAddress,
+      entrypoint: 'set_account_class_hash',
+      calldata: [classHash],
+    };
+
+    const account = this.getDeployerWallet();
+
+    await account.execute(call);
+
+    console.log('Account class hash set successfully');
+  };
+
+  getAccountClassHash = async () => {
+    if (!this.accountFactoryAddress)
+      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
+    const accountFactoryClass = await this.provider.getClassAt(
+      this.accountFactoryAddress,
+    );
+    if (!accountFactoryClass.abi)
+      throw new Error('No ABI found for account factory contract');
+    const accountFactoryContract = createNewContractInstance(
+      accountFactoryClass.abi,
+      this.accountFactoryAddress,
+    );
+    const result = await accountFactoryContract.get_account_class_hash();
+    // result is probably { account_class_hash: string } or just a felt
+    const feltValue = Array.isArray(result) ? result[0] : result;
+
+    // Convert decimal string to hex
+    const hexValue = '0x' + BigInt(feltValue).toString(16);
+
+    return hexValue;
+  };
+
+  upgradeAccountFactory = async (classHash: string) => {
+    if (!classHash) throw new Error('class hash is required');
+    if (!this.accountFactoryAddress)
+      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
+
+    if (!this.private_key || !this.accountAddress)
+      throw new Error('account credentials required');
+
+    const accountFactoryClass = await this.provider.getClassAt(
+      this.accountFactoryAddress,
+    );
+    if (!accountFactoryClass.abi)
+      throw new Error('No ABI found for account factory contract');
+
+    const call = {
+      contractAddress: this.accountFactoryAddress,
+      entrypoint: 'upgrade',
+      calldata: [classHash],
+    };
+
+    const account = this.getDeployerWallet();
+
+    const { transaction_hash: txH } = await account.execute(call, {
+      version: 3,
+      maxFee: 10 ** 15,
+      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
+      tip: 10 ** 13,
+      paymasterData: [],
+    });
+
+    const txR = await this.provider.waitForTransaction(txH);
+    if (txR.isSuccess()) {
+      console.log('Paid fee =', txR.statusReceipt);
     }
   };
 }

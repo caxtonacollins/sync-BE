@@ -12,7 +12,13 @@ import { promises as fs } from 'fs';
 
 export function connectToStarknet() {
   return new RpcProvider({
-    nodeUrl: process.env.STARKNET_NODE_URL,
+    nodeUrl: process.env.STARKNET_NODE_URL_8,
+  });
+}
+
+export function connectToStarknet7() {
+  return new RpcProvider({
+    nodeUrl: process.env.STARKNET_NODE_URL_7,
   });
 }
 
