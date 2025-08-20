@@ -33,6 +33,9 @@ export class ContractService {
   private accountContractHash: string;
   private syncTokenAddress: string;
   private strkTokenAddress: string;
+  private usdcTokenAddress: string;
+  private usdtTokenAddress: string;
+  private ethTokenAddress: string;
 
   private private_key: string;
   private maxQtyGasAuthorized: string;
@@ -48,6 +51,9 @@ export class ContractService {
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
     this.syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
     this.strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
+    this.usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
+    this.usdtTokenAddress = process.env.USDT_TOKEN_ADDRESS || '';
+    this.ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
 
     this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
     this.maxQtyGasAuthorized = '2000';
@@ -314,11 +320,13 @@ export class ContractService {
     if (!symbol) throw new Error('symbol is required');
     if (!userAddress) throw new Error('userAddress is required');
 
-    // Map symbols to addresses - you need the correct STRK token address
+    // Map symbols to their contract addresses on Starknet
     const tokenAddressMap: { [key: string]: string } = {
       SYNC: this.syncTokenAddress,
-      STRK: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d", // Official STRK token address
-      // Add other tokens like ETH, USDC, USDT here
+      STRK: this.strkTokenAddress,
+      USDC: this.usdcTokenAddress,
+      USDT: this.usdtTokenAddress,
+      ETH: this.ethTokenAddress,
     };
 
     const tokenAddress = tokenAddressMap[symbol.toUpperCase()];
@@ -326,17 +334,33 @@ export class ContractService {
       throw new Error(`Token with symbol ${symbol} not supported`);
     }
 
+    // Different tokens have different decimal places
+    const decimalsMap: { [key: string]: number } = {
+      SYNC: 18,
+      STRK: 18,
+      USDC: 6,  // USDC has 6 decimals
+      USDT: 6,  // USDT has 6 decimals
+      ETH: 18,
+    };
+
     try {
       const tokenContract = createNewContractInstance(erc20, tokenAddress);
 
-      const balance = await tokenContract.balance_of(userAddress);
+      console.log(
+        `Fetching ${symbol} balance for account ${userAddress} from token contract ${tokenAddress}`,
+      );
 
-      // Convert from wei to human-readable format (STRK has 18 decimals)
-      const balanceInStrk = Number(balance) / Math.pow(10, 18);
+      const balance = await tokenContract.balance_of(userAddress);
+      const decimals = decimalsMap[symbol.toUpperCase()] || 18;
+
+      // Convert from smallest unit to human-readable format
+      const balanceFormatted = Number(balance) / Math.pow(10, decimals);
 
       return {
         raw: balance.toString(),
-        formatted: balanceInStrk.toString()
+        formatted: balanceFormatted.toString(),
+        symbol: symbol.toUpperCase(),
+        decimals: decimals
       };
     } catch (error) {
       console.error(
