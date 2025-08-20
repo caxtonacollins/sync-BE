@@ -12,6 +12,7 @@ import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from 'src/monnify/monnify.service';
 import { ContractService } from 'src/contract/contract.service';
+import chalk from 'chalk';
 
 @Injectable()
 export class UserService {
@@ -121,11 +122,11 @@ export class UserService {
           // Create the Starknet account and get its address from the event
           const result = await this.contractService.createAccount(user.id);
 
-          // console.log(
-          //   chalk.green(
-          //     `Starknet account created successfully: ${JSON.stringify(result, null, 2)}`,
-          //   ),
-          // );
+          console.log(
+            chalk.green(
+              `Starknet account created successfully: ${JSON.stringify(result, null, 2)}`,
+            ),
+          );
 
           if (!result?.accountAddress) {
             throw new Error(
@@ -150,7 +151,9 @@ export class UserService {
           // The transaction will still succeed even if crypto wallet creation fails
         }
 
-        return user;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password, ...userWithoutPassword } = user;
+        return userWithoutPassword;
       },
       {
         timeout: 60_000,
@@ -401,10 +404,75 @@ export class UserService {
   }
 
   async remove(id: string) {
-    const user = await this.prisma.user.delete({
-      where: { id },
-    });
+    return this.prisma.$transaction(async (prisma) => {
+      // First delete all related FiatAccount records
+      await prisma.fiatAccount.deleteMany({
+        where: { userId: id },
+      });
 
-    return user;
+      // Then delete all related CryptoWallet records
+      await prisma.cryptoWallet.deleteMany({
+        where: { userId: id },
+      });
+
+      // Then delete all related Transaction records
+      await prisma.transaction.deleteMany({
+        where: { userId: id },
+      });
+
+      // Then delete all related SwapOrder records
+      await prisma.swapOrder.deleteMany({
+        where: { userId: id },
+      });
+
+      // Then delete all related AuditLog records
+      await prisma.auditLog.deleteMany({
+        where: { userId: id },
+      });
+
+      // Then delete all related EncryptedKey records
+      await prisma.encryptedKey.deleteMany({
+        where: { userId: id },
+      });
+
+      // Then delete all related Session records
+      await prisma.session.deleteMany({
+        where: { userId: id },
+      });
+
+      // Then delete the user and return without the password
+      const deletedUser = await prisma.user.delete({
+        where: { id },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phoneNumber: true,
+          role: true,
+          status: true,
+          verificationStatus: true,
+          createdAt: true,
+          updatedAt: true,
+          lastLogin: true,
+          dateOfBirth: true,
+          address: true,
+          city: true,
+          state: true,
+          country: true,
+          postalCode: true,
+          idType: true,
+          idNumber: true,
+          idFrontImage: true,
+          idBackImage: true,
+          selfieImage: true,
+          twoFactorEnabled: true,
+          loginAttempts: true,
+          lockedUntil: true,
+        },
+      });
+      
+      return deletedUser;
+    });
   }
 }
