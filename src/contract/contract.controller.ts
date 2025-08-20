@@ -13,7 +13,11 @@ class SetAccountClassHashDto {
   classHash: string;
 }
 
-class UpgradeAccountFactoryDto extends SetAccountClassHashDto { }
+class UpgradeAccountFactoryDto extends SetAccountClassHashDto {}
+
+class TransferOwnershipDto {
+  newOwnerAddress: string;
+}
 
 @Controller('contract')
 export class ContractController {
@@ -38,9 +42,12 @@ export class ContractController {
     return this.contractService.getUserDashboardData(userAddress);
   }
 
-  @Get('balance/:symbol')
-  getAccountBalance(@Param('symbol') symbol: string) {
-    return this.contractService.getAccountBalance(symbol);
+  @Get('balance/:userAddress/:symbol')
+  getAccountBalance(
+    @Param('userAddress') userAddress: string,
+    @Param('symbol') symbol: string,
+  ) {
+    return this.contractService.getAccountBalance(symbol, userAddress);
   }
 
   @Get('account_classhash')
@@ -59,4 +66,21 @@ export class ContractController {
       upgradeAccountFactoryDto.classHash,
     );
   }
+
+  @Post('transfer-ownership')
+  transferFactoryOwnership(@Body() transferOwnershipDto: TransferOwnershipDto) {
+    return this.contractService.transferFactoryOwnership(
+      transferOwnershipDto.newOwnerAddress,
+    );
+  }
+
+  @Post('transfer-liquidity-ownership')
+  transferLiquidityOwnership(
+    @Body() transferOwnershipDto: TransferOwnershipDto,
+  ) {
+    return this.contractService.transferLiquidityOwnership(
+      transferOwnershipDto.newOwnerAddress,
+    );
+  }
+
 }

@@ -2,7 +2,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   Account,
-  num,
   RPC,
   ec,
   RpcProvider,
@@ -22,6 +21,7 @@ import {
   uuidToFelt252,
   writeAbiToFile,
 } from './utils';
+import erc20 from './abi/erc20.json';
 import chalk from 'chalk';
 
 @Injectable()
@@ -32,6 +32,7 @@ export class ContractService {
   private accountFactoryAddress: string;
   private accountContractHash: string;
   private syncTokenAddress: string;
+  private strkTokenAddress: string;
 
   private private_key: string;
   private maxQtyGasAuthorized: string;
@@ -46,6 +47,7 @@ export class ContractService {
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
     this.syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
+    this.strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
 
     this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
     this.maxQtyGasAuthorized = '2000';
@@ -54,11 +56,6 @@ export class ContractService {
   }
 
   createAccount = async (user_unique_id: string) => {
-    if (!this.accountFactoryAddress)
-      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
-    if (!this.accountContractHash)
-      throw new Error('ACCOUNT_CONTRACT_HASH env variable is not set');
-    if (!this.private_key) throw new Error('private key is required');
     if (!user_unique_id) throw new Error('user unique id is required');
 
     const user_felt252_id = uuidToFelt252(user_unique_id);
@@ -72,10 +69,6 @@ export class ContractService {
 
       const { publicKey } = createKeyPair();
 
-      console.log(
-        `Creating account for user with ID: ${user_felt252_id} and public key: ${publicKey}`,
-      );
-
       const call = {
         contractAddress: this.accountFactoryAddress,
         entrypoint: 'create_account',
@@ -84,19 +77,10 @@ export class ContractService {
 
       const account = this.getDeployerWallet();
 
-      console.log(chalk.blue('Executing account creation transaction...'));
-
-      // Remove resourceBounds from transaction options for RPC v0.8 compatibility
       const { transaction_hash: txH } = await account.execute(call, {
-        version: 3,
         maxFee: 10 ** 15,
-        feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-        tip: 10 ** 13,
-        paymasterData: [],
       });
 
-      console.log(chalk.green('Transaction hash:'), txH);
-      console.log(chalk.blue('Waiting for transaction confirmation...'));
       const txR = await this.provider.waitForTransaction(txH);
       if (txR.isSuccess()) {
         // Parse the account creation event
@@ -116,7 +100,6 @@ export class ContractService {
         // The account address is in the second position of the data array
         const accountAddress = accountCreatedEvent.data[1];
 
-        console.log('Account created with address:', accountAddress);
         return {
           transactionHash: txH,
           accountAddress,
@@ -125,8 +108,7 @@ export class ContractService {
       }
     } catch (error) {
       console.error(JSON.stringify(error, null, 2));
-      // console.error('Error creating account:', error);
-      // throw new Error('Failed to create account');
+      throw error;
     }
   };
 
@@ -134,13 +116,8 @@ export class ContractService {
     userAddress: string,
     fiatAccountId: string,
   ) => {
-    if (!this.liquidityContractAddress)
-      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
     if (!userAddress) throw new Error('user address is required');
     if (!fiatAccountId) throw new Error('fiat account id is required');
-
-    if (!this.private_key || !this.accountAddress)
-      throw new Error('account credentials required');
 
     const liquidityClass = await this.provider.getClassAt(
       this.liquidityContractAddress,
@@ -248,30 +225,6 @@ export class ContractService {
     return new Account(this.provider, this.accountAddress, this.private_key);
   };
 
-  getSyncTokenBalance = async (address: string) => {
-    if (!this.syncTokenAddress)
-      throw new Error('SYNC_TOKEN_ADDRESS env variable is not set');
-
-    if (!address) throw new Error('user address is required');
-
-    const syncTokenClass = await getClassAt(this.syncTokenAddress);
-
-    await writeAbiToFile(syncTokenClass, 'syncTokenAbi');
-
-    try {
-      const syncTokenContract = createNewContractInstance(
-        syncTokenClass.abi,
-        this.syncTokenAddress,
-      );
-
-      const result = await syncTokenContract.balance_of(address);
-      return result;
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
-  };
-
   getAccountAddress = async (userAddress: string) => {
     if (!this.accountFactoryAddress)
       throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
@@ -357,21 +310,39 @@ export class ContractService {
     }
   };
 
-  getAccountBalance = async (symbol: string) => {
+  getAccountBalance = async (symbol: string, userAddress: string) => {
     if (!symbol) throw new Error('symbol is required');
-    if (!this.accountAddress)
-      throw new Error('ACCOUNT_ADDRESS env variable is not set');
+    if (!userAddress) throw new Error('userAddress is required');
+
+    // Map symbols to addresses - you need the correct STRK token address
+    const tokenAddressMap: { [key: string]: string } = {
+      SYNC: this.syncTokenAddress,
+      STRK: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d", // Official STRK token address
+      // Add other tokens like ETH, USDC, USDT here
+    };
+
+    const tokenAddress = tokenAddressMap[symbol.toUpperCase()];
+    if (!tokenAddress) {
+      throw new Error(`Token with symbol ${symbol} not supported`);
+    }
+
     try {
-      // connect to account contract
-      const AccountClass = await getClassAt(this.accountAddress);
-      const accountContract = createNewContractInstance(
-        AccountClass.abi,
-        this.accountAddress,
-      );
-      const result = await accountContract.get_token_balance(symbol);
-      return result;
+      const tokenContract = createNewContractInstance(erc20, tokenAddress);
+
+      const balance = await tokenContract.balance_of(userAddress);
+
+      // Convert from wei to human-readable format (STRK has 18 decimals)
+      const balanceInStrk = Number(balance) / Math.pow(10, 18);
+
+      return {
+        raw: balance.toString(),
+        formatted: balanceInStrk.toString()
+      };
     } catch (error) {
-      console.log(error);
+      console.error(
+        `Error fetching balance for ${symbol} for account ${userAddress}:`,
+        error,
+      );
       throw error;
     }
   };
@@ -414,6 +385,102 @@ export class ContractService {
     const hexValue = '0x' + BigInt(feltValue).toString(16);
 
     return hexValue;
+  };
+
+  transferFactoryOwnership = async (newOwnerAddress: string) => {
+    if (!this.accountFactoryAddress)
+      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
+    if (!newOwnerAddress) throw new Error('newOwnerAddress is required');
+
+    try {
+      console.log(
+        `Transferring ownership of factory ${this.accountFactoryAddress} to ${newOwnerAddress}`,
+      );
+
+      const call = {
+        contractAddress: this.accountFactoryAddress,
+        entrypoint: 'transfer_ownership',
+        calldata: [newOwnerAddress],
+      };
+
+      const account = this.getDeployerWallet();
+
+      console.log(chalk.blue('Executing ownership transfer transaction...'));
+
+      const { transaction_hash: txH } = await account.execute(call, {
+        maxFee: 10 ** 15,
+      });
+
+      console.log(chalk.green('Transaction hash:'), txH);
+      console.log(chalk.blue('Waiting for transaction confirmation...'));
+      const txR = await this.provider.waitForTransaction(txH);
+
+      if (txR.isSuccess()) {
+        console.log(
+          chalk.green(
+            `Successfully transferred ownership to ${newOwnerAddress}`,
+          ),
+        );
+        return {
+          transactionHash: txH,
+          receipt: txR,
+        };
+      } else {
+        throw new Error('Ownership transfer transaction failed');
+      }
+    } catch (error) {
+      console.error(JSON.stringify(error, null, 2));
+      throw error;
+    }
+  };
+
+  transferLiquidityOwnership = async (newOwnerAddress: string) => {
+    if (!this.liquidityContractAddress)
+      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
+    if (!newOwnerAddress) throw new Error('newOwnerAddress is required');
+
+    try {
+      console.log(
+        `Transferring ownership of liquidity contract ${this.liquidityContractAddress} to ${newOwnerAddress}`,
+      );
+
+      const call = {
+        contractAddress: this.liquidityContractAddress,
+        entrypoint: 'transfer_ownership',
+        calldata: [newOwnerAddress],
+      };
+
+      const account = this.getDeployerWallet(); // This must be the current owner
+
+      console.log(
+        chalk.blue('Executing liquidity ownership transfer transaction...'),
+      );
+
+      const { transaction_hash: txH } = await account.execute(call, {
+        maxFee: 10 ** 15,
+      });
+
+      console.log(chalk.green('Transaction hash:'), txH);
+      console.log(chalk.blue('Waiting for transaction confirmation...'));
+      const txR = await this.provider.waitForTransaction(txH);
+
+      if (txR.isSuccess()) {
+        console.log(
+          chalk.green(
+            `Successfully transferred liquidity ownership to ${newOwnerAddress}`,
+          ),
+        );
+        return {
+          transactionHash: txH,
+          receipt: txR,
+        };
+      } else {
+        throw new Error('Liquidity ownership transfer transaction failed');
+      }
+    } catch (error) {
+      console.error(JSON.stringify(error, null, 2));
+      throw error;
+    }
   };
 
   upgradeAccountFactory = async (classHash: string) => {
