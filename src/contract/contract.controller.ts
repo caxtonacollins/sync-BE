@@ -19,6 +19,25 @@ class TransferOwnershipDto {
   newOwnerAddress: string;
 }
 
+class SwapFiatToTokenDto {
+  userUniqueId: string;
+  fiatSymbol: string;
+  tokenSymbol: string;
+  fiatAmount: string;
+}
+
+class SwapTokenToFiatDto {
+  userUniqueId: string;
+  fiatSymbol: string;
+  tokenSymbol: string;
+  tokenAmount: string;
+}
+
+class MintTokenDto {
+  receiverAddress: string;
+  amount: string;
+}
+
 @Controller('contract')
 export class ContractController {
   constructor(private readonly contractService: ContractService) { }
@@ -80,6 +99,34 @@ export class ContractController {
   ) {
     return this.contractService.transferLiquidityOwnership(
       transferOwnershipDto.newOwnerAddress,
+    );
+  }
+
+  @Post('swap-fiat-to-token')
+  swapFiatToToken(@Body() swapFiatToTokenDto: SwapFiatToTokenDto) {
+    return this.contractService.swapFiatToToken(
+      swapFiatToTokenDto.userUniqueId,
+      swapFiatToTokenDto.fiatSymbol,
+      swapFiatToTokenDto.tokenSymbol,
+      swapFiatToTokenDto.fiatAmount,
+    );
+  }
+
+  @Post('swap-token-to-fiat')
+  swapTokenToFiat(@Body() swapTokenToFiatDto: SwapTokenToFiatDto) {
+    return this.contractService.swapTokenToFiat(
+      swapTokenToFiatDto.userUniqueId,
+      swapTokenToFiatDto.fiatSymbol,
+      swapTokenToFiatDto.tokenSymbol,
+      swapTokenToFiatDto.tokenAmount,
+    );
+  }
+
+  @Post('mint-token')
+  mintToken(@Body() mintTokenDto: MintTokenDto) {
+    return this.contractService.mintToken(
+      mintTokenDto.receiverAddress,
+      mintTokenDto.amount,
     );
   }
 

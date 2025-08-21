@@ -9,6 +9,7 @@ import {
   CallData,
   hash,
   LibraryError,
+  uint256,
 } from 'starknet';
 import 'dotenv/config';
 import {
@@ -346,10 +347,6 @@ export class ContractService {
     try {
       const tokenContract = createNewContractInstance(erc20, tokenAddress);
 
-      console.log(
-        `Fetching ${symbol} balance for account ${userAddress} from token contract ${tokenAddress}`,
-      );
-
       const balance = await tokenContract.balance_of(userAddress);
       const decimals = decimalsMap[symbol.toUpperCase()] || 18;
 
@@ -417,10 +414,6 @@ export class ContractService {
     if (!newOwnerAddress) throw new Error('newOwnerAddress is required');
 
     try {
-      console.log(
-        `Transferring ownership of factory ${this.accountFactoryAddress} to ${newOwnerAddress}`,
-      );
-
       const call = {
         contractAddress: this.accountFactoryAddress,
         entrypoint: 'transfer_ownership',
@@ -429,21 +422,15 @@ export class ContractService {
 
       const account = this.getDeployerWallet();
 
-      console.log(chalk.blue('Executing ownership transfer transaction...'));
-
       const { transaction_hash: txH } = await account.execute(call, {
         maxFee: 10 ** 15,
       });
 
-      console.log(chalk.green('Transaction hash:'), txH);
-      console.log(chalk.blue('Waiting for transaction confirmation...'));
       const txR = await this.provider.waitForTransaction(txH);
 
       if (txR.isSuccess()) {
         console.log(
-          chalk.green(
-            `Successfully transferred ownership to ${newOwnerAddress}`,
-          ),
+          `Successfully transferred ownership to ${newOwnerAddress}`,
         );
         return {
           transactionHash: txH,
@@ -500,6 +487,134 @@ export class ContractService {
         };
       } else {
         throw new Error('Liquidity ownership transfer transaction failed');
+      }
+    } catch (error) {
+      console.error(JSON.stringify(error, null, 2));
+      throw error;
+    }
+  };
+
+  swapFiatToToken = async (
+    userUniqueId: string,
+    fiatSymbol: string,
+    tokenSymbol: string,
+    fiatAmount: string,
+  ) => {
+    if (!userUniqueId) throw new Error('userUniqueId is required');
+    if (!fiatSymbol) throw new Error('fiatSymbol is required');
+    if (!tokenSymbol) throw new Error('tokenSymbol is required');
+    if (!fiatAmount) throw new Error('fiatAmount is required');
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'swap_fiat_to_token',
+      calldata: [userUniqueId, fiatSymbol, tokenSymbol, fiatAmount],
+    };
+
+    try {
+      const account = this.getDeployerWallet();
+
+      const { transaction_hash: txH } = await account.execute(call, {
+        maxFee: 10 ** 15,
+      });
+
+      const txR = await this.provider.waitForTransaction(txH);
+
+      if (txR.isSuccess()) {
+        console.log(
+          chalk.green(
+            `Successfully swapped fiat to token for user ${userUniqueId}`,
+          ),
+        );
+        return {
+          transactionHash: txH,
+          receipt: txR,
+        };
+      } else {
+        throw new Error('Swap transaction failed');
+      }
+    } catch (error) {
+      console.error(JSON.stringify(error, null, 2));
+      throw error;
+    }
+  };
+
+  swapTokenToFiat = async (
+    userUniqueId: string,
+    fiatSymbol: string,
+    tokenSymbol: string,
+    tokenAmount: string,
+  ) => {
+    if (!userUniqueId) throw new Error('userUniqueId is required');
+    if (!fiatSymbol) throw new Error('fiatSymbol is required');
+    if (!tokenSymbol) throw new Error('tokenSymbol is required');
+    if (!tokenAmount) throw new Error('tokenAmount is required');
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'swap_token_to_fiat',
+      calldata: [userUniqueId, fiatSymbol, tokenSymbol, tokenAmount],
+    };
+
+    try {
+      const account = this.getDeployerWallet();
+
+      const { transaction_hash: txH } = await account.execute(call, {
+        maxFee: 10 ** 15,
+      });
+
+      const txR = await this.provider.waitForTransaction(txH);
+
+      if (txR.isSuccess()) {
+        console.log(
+          chalk.green(
+            `Successfully swapped token to fiat for user ${userUniqueId}`,
+          ),
+        );
+        return {
+          transactionHash: txH,
+          receipt: txR,
+        };
+      } else {
+        throw new Error('Swap transaction failed');
+      }
+    } catch (error) {
+      console.error(JSON.stringify(error, null, 2));
+      throw error;
+    }
+  };
+
+  mintToken = async ( receiverAddress: string, amount: string ) => {
+    if (!receiverAddress) throw new Error('receiverAddress is required');
+    if (!amount) throw new Error('amount is required');
+
+    const call = {
+      contractAddress: this.syncTokenAddress,
+      entrypoint: 'mint',
+      calldata: [receiverAddress, uint256.bnToUint256(amount)],
+    };
+
+    try {
+      const account = this.getDeployerWallet();
+
+      const { transaction_hash: txH } = await account.execute(call, {
+        maxFee: 10 ** 15,
+      });
+
+      const txR = await this.provider.waitForTransaction(txH);
+
+      if (txR.isSuccess()) {
+        console.log(
+          chalk.green(
+            `Successfully minted token for user ${receiverAddress}`,
+          ),
+        );
+        return {
+          transactionHash: txH,
+          receipt: txR,
+        };
+      } else {
+        throw new Error('Mint transaction failed');
       }
     } catch (error) {
       console.error(JSON.stringify(error, null, 2));
