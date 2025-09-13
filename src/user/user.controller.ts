@@ -50,6 +50,7 @@ export class UserController {
     return this.userService.findAll(filter);
   }
 
+  @Public()
   @Get(':id')
   async findById(
     @Param('id', ParseUUIDPipe) id: string,
@@ -107,6 +108,12 @@ export class UserController {
     @Query() pagination: PaginationDto,
   ) {
     return await this.userService.getUserTransactions(id, pagination);
+  }
+
+  @Public()
+  @Get('getUserByCryptoAddress/:address')
+  async getUserByCryptoAddress(@Param('address') address: string) {
+    return this.userService.getUserByCryptoAddress(address);
   }
 
   @Get(':id/swap-orders')

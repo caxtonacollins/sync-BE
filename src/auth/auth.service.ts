@@ -250,7 +250,7 @@ export class AuthService {
       // Store the encrypted private key
       await this.keyManagementService.storePrivateKey(
         userId,
-        wallet.privateKey as string,
+        wallet.privateKey,
       );
 
       // Store the public address
@@ -279,7 +279,7 @@ export class AuthService {
       // Store the encrypted private key
       await this.keyManagementService.storePrivateKey(
         userId,
-        wallet.privateKey as string,
+        wallet.privateKey,
       );
 
       // Store the public address

@@ -34,7 +34,7 @@ export const generateReference = () => {
   const cleanedId = uniqueID.replace(/[^a-zA-Z0-9]/g, '');
 
   // Add a custom preffix
-  const reference = 'Bilpoint' + cleanedId;
+  const reference = 'sync' + cleanedId;
 
   return reference;
 };

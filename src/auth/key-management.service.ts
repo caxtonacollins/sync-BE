@@ -40,7 +40,7 @@ export class KeyManagementService {
     const masterAuthTag = masterCipher.getAuthTag();
 
     // Store encrypted data
-        await this.prisma.encryptedKey.create({
+    await this.prisma.encryptedKey.create({
       data: {
         userId,
         encryptedPrivateKey: encryptedKey.toString('base64'),

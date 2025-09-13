@@ -20,7 +20,7 @@ export class UserService {
     private prisma: PrismaService,
     private monnifyService: MonnifyService,
     private readonly contractService: ContractService,
-  ) { }
+  ) {}
 
   private readonly SALT_ROUNDS = 12;
 
@@ -237,6 +237,23 @@ export class UserService {
         swapOrders: swapOrders || false,
       },
     });
+  }
+
+  async getUserByCryptoAddress(address: string) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        cryptoWallets: {
+          some: {
+            address,
+          },
+        },
+      },
+      include: {
+        cryptoWallets: true,
+      },
+    });
+
+    return user;
   }
 
   async getByEmail(email: string) {
@@ -471,7 +488,7 @@ export class UserService {
           lockedUntil: true,
         },
       });
-      
+
       return deletedUser;
     });
   }
