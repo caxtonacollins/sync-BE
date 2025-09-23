@@ -19,6 +19,7 @@ import {
   createKeyPair,
   createNewContractInstance,
   deployAccount,
+  formatTokenAmount,
   getClassAt,
   getDeployerWallet,
   uuidToFelt252,
@@ -525,6 +526,31 @@ export class ContractService {
     }
   };
 
+  getTokenAmountInUsd = async (address: string, amount: string) => {
+    if (!this.liquidityContractAddress)
+      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
+    if (!address) throw new Error('address is required');
+    if (!amount) throw new Error('amount is required');
+
+    const liquidityClass = await getClassAt(this.liquidityContractAddress);
+
+    await writeAbiToFile(liquidityClass, 'liquidityAbi');
+
+    const liquidityContract = createNewContractInstance(
+      liquidityClass.abi,
+      this.liquidityContractAddress,
+    );
+
+    const result = await liquidityContract.get_token_amount_in_usd(
+      address,
+      uint256.bnToUint256(amount),
+    );
+
+    if (BigInt(result as bigint) < BigInt(1000)) {
+      return formatTokenAmount(result as bigint, 3);
+    } else return result;
+  };
+
   swapFiatToToken = async (
     userContractAddress: string,
     fiatSymbol: string,
@@ -557,7 +583,11 @@ export class ContractService {
       const account = this.getDeployerWallet();
 
       const { transaction_hash: txH } = await account.execute(call, {
+        // version: 3,
         maxFee: 10 ** 15,
+        // feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
+        // tip: 10 ** 13,
+        // paymasterData: [],
       });
 
       const txR = await this.provider.waitForTransaction(txH);

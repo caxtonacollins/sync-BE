@@ -141,3 +141,7 @@ export function uuidToFelt252(uuid: string) {
 
   return shortString.encodeShortString(feltUuid.slice(0, 31));
 }
+
+export function formatTokenAmount(value: bigint, decimals: number): number {
+  return Number(value) / 10 ** decimals;
+}

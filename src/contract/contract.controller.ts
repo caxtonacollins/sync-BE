@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Query } from '@nestjs/common';
 import { ContractService } from './contract.service';
 
 class CreateAccountDto {
@@ -70,6 +70,14 @@ export class ContractController {
     @Param('symbol') symbol: string,
   ) {
     return this.contractService.getAccountBalance(symbol, userAddress);
+  }
+
+  @Get('amount_in_usd')
+  getAmountInUsd(
+    @Query('address') address: string,
+    @Query('amount') amount: string,
+  ) {
+    return this.contractService.getTokenAmountInUsd(address, amount);
   }
 
   @Get('account_classhash')
