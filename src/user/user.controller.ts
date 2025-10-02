@@ -38,8 +38,13 @@ export class UserController {
     try {
       return await this.userService.createUser(createUserDto);
     } catch (error) {
-      console.error('Error creating user:', error);
-      throw new Error('Failed to create user');
+      if (error.code === 'P2002') {
+        throw new Error('Email already in use. Please use a different email or login.');
+      } else if (error instanceof Prisma.PrismaClientValidationError) {
+        throw new Error('Invalid user data. Please check your information and try again.');
+      }
+      
+      throw new Error('Failed to create account. Please try again later.');
     }
   }
 
@@ -102,7 +107,7 @@ export class UserController {
     return await this.userService.getUserCryptoWallets(id, pagination);
   }
 
-  @Get(':id/transactions')
+  @Get(':id/tx')
   async getUserTransactions(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() pagination: PaginationDto,

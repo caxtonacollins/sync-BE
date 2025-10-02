@@ -314,4 +314,138 @@ export class AuthService {
 
     return wallets;
   }
+
+  // Security Settings Methods
+  async getSecurityStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        twoFactorEnabled: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get recent login sessions
+    const recentSessions = await this.prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      mfaEnabled: user.twoFactorEnabled,
+      passkeyEnabled: false, // TODO: Implement passkey support
+      biometricsEnabled: false, // TODO: Implement biometric support
+      lastPasswordChange: user.updatedAt.toISOString(),
+      recentLogins: recentSessions.map((session) => ({
+        date: session.createdAt.toISOString(),
+        device: session.userAgent || 'Unknown Device',
+        location: session.ipAddress || 'Unknown Location',
+      })),
+    };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!isValidPassword) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password changed successfully' };
+  }
+
+  async initializeMfa(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const secret = speakeasy.generateSecret({
+      name: `Sync:${user.email}`,
+    });
+
+    // Store the secret temporarily
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorSecret: secret.base32 },
+    });
+
+    // Generate QR code
+    if (!secret.otpauth_url) {
+      throw new Error('Failed to generate OTP authentication URL');
+    }
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    // Generate backup codes
+    const backupCodes = Array.from({ length: 8 }, () =>
+      Math.random().toString(36).substring(2, 10).toUpperCase(),
+    );
+
+    return {
+      secret: secret.base32,
+      qrCode: qrCodeUrl,
+      backupCodes,
+    };
+  }
+
+  async verifyMfaSetup(userId: string, code: string, secret: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || user.twoFactorSecret !== secret) {
+      throw new BadRequestException('Invalid setup session');
+    }
+
+    const isValid = speakeasy.totp.verify({
+      secret,
+      encoding: 'base32',
+      token: code,
+    });
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid verification code');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorEnabled: true },
+    });
+
+    return { message: 'MFA enabled successfully' };
+  }
 }

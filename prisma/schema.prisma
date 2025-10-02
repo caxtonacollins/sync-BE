@@ -213,12 +213,3 @@ model SystemSetting {
   updatedAt       DateTime    @updatedAt
 }
 
-model ExchangeRate {
-  id              String      @id @default(uuid())
-  fromCurrency    String
-  toCurrency      String
-  rate            Float
-  expiresAt       DateTime
-  createdAt       DateTime    @default(now())
-}
-

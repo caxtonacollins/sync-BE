@@ -75,7 +75,12 @@ export class MonnifyService {
       const accounts = response.data.responseBody.accounts;
       return { accounts };
     } catch (error) {
-      console.error('Error fetching Monnify account details:', error);
+      if (error.response) {
+        console.error("Monnify Error:", error.response.data);
+        throw new Error(error.response.data.responseMessage);
+      } else {
+        console.error("Unexpected Error:", error.message);
+      }
     }
   }
 }

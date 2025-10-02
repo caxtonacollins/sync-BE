@@ -27,6 +27,7 @@ import {
 } from './utils';
 import erc20 from './abi/erc20.json';
 import chalk from 'chalk';
+import { log } from 'console';
 
 @Injectable()
 export class ContractService {
@@ -42,15 +43,12 @@ export class ContractService {
   private ethTokenAddress: string;
 
   private private_key: string;
-  private maxQtyGasAuthorized: string;
-  private maxPriceAuthorizeForOneGas: string;
-  private deployerAccount: Account;
 
   constructor() {
     this.provider = connectToStarknet();
     this.liquidityContractAddress =
       process.env.LIQUIDITY_CONTRACT_ADDRESS || '';
-    this.accountAddress = process.env.ACCOUNT_ADDRESS || '';
+    this.accountAddress = process.env.DEPLOYER_ADDRESS || '';
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
     this.syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
@@ -60,13 +58,12 @@ export class ContractService {
     this.ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
 
     this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
-    this.maxQtyGasAuthorized = '2000';
-    this.maxPriceAuthorizeForOneGas = '16283550959677';
-    this.deployerAccount = getDeployerWallet();
   }
 
   createAccount = async (user_unique_id: string) => {
     if (!user_unique_id) throw new Error('user unique id is required');
+    if (!this.accountFactoryAddress)
+      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
 
     const user_felt252_id = uuidToFelt252(user_unique_id);
 
@@ -87,11 +84,14 @@ export class ContractService {
 
       const account = this.getDeployerWallet();
 
+      log("account:", account);
+
       const { transaction_hash: txH } = await account.execute(call, {
         maxFee: 10 ** 15,
       });
 
       const txR = await this.provider.waitForTransaction(txH);
+      log(txR);
       if (txR.isSuccess()) {
         // Parse the account creation event
         const events = txR.value.events;

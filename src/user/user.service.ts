@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -11,8 +9,8 @@ import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from 'src/monnify/monnify.service';
-import { ContractService } from 'src/contract/contract.service';
 import chalk from 'chalk';
+import { ContractService } from 'src/contract/contract.service';
 
 @Injectable()
 export class UserService {
@@ -20,7 +18,7 @@ export class UserService {
     private prisma: PrismaService,
     private monnifyService: MonnifyService,
     private readonly contractService: ContractService,
-  ) {}
+  ) { }
 
   private readonly SALT_ROUNDS = 12;
 
@@ -100,55 +98,55 @@ export class UserService {
 
                   // Store all accounts as JSON
                   accounts: monnifyData.responseBody.accounts,
-
-                  // Store default account details for quick access
-                  // defaultBankCode: defaultAccount.bankCode,
-                  // defaultBankName: defaultAccount.bankName,
-                  // defaultAccountNumber: defaultAccount.accountNumber,
-                  // defaultAccountName: defaultAccount.accountName,
                 },
               });
             }
+            console.log(
+              chalk.green(`Monnify account created for ${currency}`),
+            );
           } catch (error) {
             console.error(`Failed to create ${currency} fiat account:`, error);
             // Continue with other currencies if one fails
           }
         }
 
-        // 3. Create Starknet wallets for supported tokens
-        const cryptoTokens = ['STRK']; //'ETH', 'USDC'
-
         try {
-          // Create the Starknet account and get its address from the event
-          const result = await this.contractService.createAccount(user.id);
+          // Create the StarkNet account
+          const accountResult = await this.contractService.createAccount(user.id);
+          if (!accountResult) {
+            throw new Error('Failed to create StarkNet account');
+          }
 
           console.log(
             chalk.green(
-              `Starknet account created successfully: ${JSON.stringify(result, null, 2)}`,
+              `StarkNet account created: ${accountResult.accountAddress}`,
             ),
           );
 
-          if (!result?.accountAddress) {
-            throw new Error(
-              'Failed to get Starknet account address from event',
+          await tx.cryptoWallet.create({
+            data: {
+              userId: user.id,
+              network: 'starknet',
+              address: accountResult.accountAddress,
+              currency: 'STRK',
+              isDefault: true,
+            },
+          });
+
+          // Register user with liquidity bridge
+          const defaultFiatAccount = await tx.fiatAccount.findFirst({
+            where: { userId: user.id, isDefault: true },
+          });
+
+          if (defaultFiatAccount) {
+            await this.contractService.registerUserToLiquidity(
+              accountResult.accountAddress,
+              defaultFiatAccount.id,
             );
           }
-
-          // Create wallet records for each supported token
-          for (const currency of cryptoTokens) {
-            await tx.cryptoWallet.create({
-              data: {
-                userId: user.id,
-                network: 'starknet',
-                address: result.accountAddress,
-                currency,
-                isDefault: currency === 'STRK',
-              },
-            });
-          }
-        } catch (error) {
-          console.error('Failed to create Starknet accounts:', error);
-          // The transaction will still succeed even if crypto wallet creation fails
+        } catch (contractError) {
+          console.error('StarkNet account creation failed:', contractError);
+          // Continue with user creation even if crypto wallet setup fails
         }
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -42,7 +42,7 @@ export class TransactionController {
     });
   }
 
-  // GET /transactions?userId=abc-123&type=deposit&status=completed&page=2&limit=5
+  // GET /tx?userId=abc-123&type=deposit&status=completed&page=2&limit=5
   @Get()
   findAll(
     @Query('userId') userId?: string,

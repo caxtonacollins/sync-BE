@@ -1,9 +1,19 @@
-import { Controller, Post, Body, Get, Param, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ContractService } from './contract.service';
+import { EventListenerClientService } from './event-listener-client.service';
+import { ContractEventHandlerService } from './contract-event-handler.service';
 
+// --- DTOs ---
 class CreateAccountDto {
-  userContractAddress: string;
   fiatAccountId: string;
+  userContractAddress: string;
 }
 
 class SetLiquidityContractAddressDto {
@@ -41,13 +51,21 @@ class MintTokenDto {
 
 @Controller('contract')
 export class ContractController {
-  constructor(private readonly contractService: ContractService) {}
+  constructor(
+    private readonly contractService: ContractService,
+    private readonly eventListenerClient: EventListenerClientService,
+    private readonly eventHandlerService: ContractEventHandlerService,
+  ) {}
+
+  @Post('events')
+  handleContractEvent(@Body() eventPayload: any) {
+    this.eventHandlerService.handleEvent(eventPayload);
+    return { status: 'event received' };
+  }
 
   @Post('create-account')
   createAccount(@Body() createAccountDto: CreateAccountDto) {
-    return this.contractService.createAccount(
-      createAccountDto.userContractAddress,
-    );
+    return this.contractService.createAccount(createAccountDto.fiatAccountId);
   }
 
   @Post('set-liquidity-contract-address')
@@ -119,17 +137,17 @@ export class ContractController {
   }
 
   @Post('register-user-to-liquidity')
-  registerUserToLiquidity(@Body() createAccountDto: CreateAccountDto) {
+  registerUserToLiquidity(@Body() registerUserToLiquidityDto: CreateAccountDto) {
     return this.contractService.registerUserToLiquidity(
-      createAccountDto.userContractAddress,
-      createAccountDto.fiatAccountId,
+      registerUserToLiquidityDto.userContractAddress,
+      registerUserToLiquidityDto.fiatAccountId,
     );
   }
 
   @Post('is-user-registered')
-  isUserRegistered(@Body() createAccountDto: CreateAccountDto) {
+  isUserRegistered(@Body() isUserRegisteredDto: CreateAccountDto) {
     return this.contractService.isUserRegistered(
-      createAccountDto.userContractAddress,
+      isUserRegisteredDto.userContractAddress,
     );
   }
 
@@ -197,4 +215,49 @@ export class ContractController {
       mintTokenDto.amount,
     );
   }
+
+  // Event Listener Endpoints
+  @Get('event-listener/status')
+  async getEventListenerStatus() {
+    return await this.eventHandlerService.getListenerStatus();
+  }
+
+  @Post('event-listener/subscribe-transaction/:transactionHash')
+  async subscribeToTransaction(@Param('transactionHash') transactionHash: string) {
+    await this.eventHandlerService.subscribeToTransaction(transactionHash);
+    return {
+      message: `Subscribed to transaction ${transactionHash}`,
+      transactionHash,
+    };
+  }
+
+  @Get('event-listener/subscriptions')
+  async getActiveSubscriptions() {
+    const status = await this.eventListenerClient.getStatus();
+    return {
+      isConnected: status?.isConnected || false,
+      activeSubscriptions: status?.activeSubscriptions || 0,
+      subscriptionIds: status?.subscriptions?.map(s => s.id) || [],
+    };
+  }
+
+  @Post('event-listener/unsubscribe/:subscriptionId')
+  async unsubscribeFromEvent(@Param('subscriptionId') subscriptionId: string) {
+    const result = await this.eventListenerClient.unsubscribe(subscriptionId);
+    return {
+      success: result.success,
+      message: result.message,
+      subscriptionId,
+    };
+  }
+
+  @Post('event-listener/unsubscribe-all')
+  async unsubscribeFromAllEvents() {
+    const result = await this.eventListenerClient.unsubscribeAll();
+    return {
+      success: result.success,
+      message: result.message,
+    };
+  }
 }
+
