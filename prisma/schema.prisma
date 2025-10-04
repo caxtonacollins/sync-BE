@@ -87,6 +87,9 @@ model FiatAccount {
   accountName     String
   bankName        String?
   bankCode        String?
+  balance         Float       @default(0)
+  availableBalance Float?     @default(0)
+  ledgerBalance   Float?      @default(0)
   currency        String      @default("NGN")
   isDefault       Boolean     @default(false)
   isActive        Boolean     @default(true)

@@ -3,8 +3,6 @@ import {
   Get,
   Post,
   Body,
-  Param,
-  Query,
   UseGuards,
   Request,
   HttpStatus,
@@ -30,9 +28,12 @@ export class WalletController {
    * Get unified wallet balance
    */
   @Get('balance')
-  async getBalance(@Request() req) {
+  async getBalance(@Request() req: { user: { sub: string } }) {
     try {
       const userId = req.user.sub;
+      if (!userId) {
+        throw new BadRequestException('User ID not found in request');
+      }
       return await this.walletService.getUnifiedBalance(userId);
     } catch (error) {
       this.logger.error('Failed to get wallet balance:', error);
@@ -55,29 +56,18 @@ export class WalletController {
   }
 
   /**
-   * Get transaction history
+   * Get fiat accounts
    */
-  @Get('transactions')
-  async getTransactions(
-    @Request() req,
-    @Query('limit') limit?: string,
-  ) {
+  @Get('fiat-accounts')
+  async getFiatAccounts(@Request() req) {
     try {
       const userId = req.user.sub;
-      
-      // Validate limit parameter
-      let transactionLimit = 50;
-      if (limit) {
-        const parsedLimit = parseInt(limit, 10);
-        if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-          throw new BadRequestException('Limit must be a number between 1 and 100');
-        }
-        transactionLimit = parsedLimit;
+      if (!userId) {
+        throw new BadRequestException('User ID not found in request');
       }
-      
-      return await this.walletService.getTransactionHistory(userId, transactionLimit);
+      return await this.walletService.getFiatAccounts(userId);
     } catch (error) {
-      this.logger.error('Failed to get transaction history:', error);
+      this.logger.error('Failed to get fiat accounts:', error);
       throw error;
     }
   }
@@ -93,11 +83,11 @@ export class WalletController {
   ) {
     try {
       const userId = req.user.sub;
-      
+
       if (!userId) {
         throw new BadRequestException('User ID is required');
       }
-      
+
       return await this.walletService.createFiatAccount(
         userId,
         createFiatAccountDto.currency,
@@ -119,11 +109,11 @@ export class WalletController {
   ) {
     try {
       const userId = req.user.sub;
-      
+
       if (!userId) {
         throw new BadRequestException('User ID is required');
       }
-      
+
       return await this.walletService.createCryptoWallet(
         userId,
         createCryptoWalletDto.currency,
@@ -145,20 +135,22 @@ export class WalletController {
   ) {
     try {
       const userId = req.user.sub;
-      
+
       if (!userId) {
         throw new BadRequestException('User ID is required');
       }
-      
+
       // Additional business logic validation
       if (bridgeLiquidityDto.fromType === bridgeLiquidityDto.toType) {
-        throw new BadRequestException('Cannot bridge between same wallet types');
+        throw new BadRequestException(
+          'Cannot bridge between same wallet types',
+        );
       }
-      
+
       if (bridgeLiquidityDto.fromCurrency === bridgeLiquidityDto.toCurrency) {
         throw new BadRequestException('Cannot bridge between same currencies');
       }
-      
+
       return await this.walletService.bridgeLiquidity(
         userId,
         bridgeLiquidityDto.fromType,

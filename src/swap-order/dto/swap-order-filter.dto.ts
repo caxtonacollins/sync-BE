@@ -1,6 +1,19 @@
-import { IsOptional, IsString, IsNumber, IsUUID } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsUUID,
+  IsISO8601,
+} from 'class-validator';
 
 export class SwapOrderFilterDto {
+  @IsOptional()
+  @IsISO8601()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  toDate?: string;
   @IsOptional()
   @IsNumber()
   page?: number = 1;

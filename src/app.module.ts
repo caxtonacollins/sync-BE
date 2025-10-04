@@ -10,6 +10,8 @@ import { ContractModule } from './contract/contract.module';
 import { WalletModule } from './wallet/wallet.module';
 import { MonnifyModule } from './monnify/monnify.module';
 import { ContractService } from './contract/contract.service';
+import { SwapOrderModule } from './swap-order/swap-order.module';
+import { SwapOrderService } from './swap-order/swap-order.service';
 
 @Module({
   imports: [
@@ -20,8 +22,9 @@ import { ContractService } from './contract/contract.service';
     ContractModule,
     WalletModule,
     MonnifyModule,
+    SwapOrderModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService, ContractService],
+  providers: [AppService, PrismaService, ContractService, SwapOrderService],
 })
 export class AppModule {}

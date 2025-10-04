@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MonnifyService } from '../monnify/monnify.service';
 import { Logger } from '@nestjs/common';
@@ -48,6 +52,44 @@ export class WalletService {
   ) {}
 
   /**
+   * Get fiat accounts for a user
+   */
+  async getFiatAccounts(userId: string) {
+    try {
+      const accounts = await this.prisma.fiatAccount.findMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      return accounts.map((account) => ({
+        id: account.id,
+        name: `${account.user.firstName} ${account.user.lastName}`,
+        accountNumber: account.accountNumber,
+        balance: 0, // This will be replaced with actual balance from Monnify later
+        currency: account.currency,
+        initials: `${account.user.firstName[0]}${account.user.lastName[0]}`,
+        isDefault: account.isDefault,
+      }));
+    } catch (error) {
+      this.logger.error(
+        `Failed to get fiat accounts for user ${userId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Get unified wallet balance for a user
    * Combines both fiat and crypto balances in a single response
    */
@@ -73,7 +115,7 @@ export class WalletService {
       const fiatBalances = await Promise.all(
         user.fiatAccounts.map(async (account) => {
           let balance = 0;
-          
+
           // TODO: Integrate with actual balance APIs
           // For now, return mock balance based on currency
           if (account.currency === 'NGN') {
@@ -94,7 +136,7 @@ export class WalletService {
       const cryptoBalances = await Promise.all(
         user.cryptoWallets.map(async (wallet) => {
           let balance = 0;
-          
+
           try {
             // TODO: Integrate with StarkNet balance queries
             // For now, return mock balance based on currency
@@ -104,7 +146,9 @@ export class WalletService {
               balance = 0.5; // Mock ETH balance
             }
           } catch (error) {
-            this.logger.warn(`Failed to fetch balance for wallet ${wallet.id}: ${error.message}`);
+            this.logger.warn(
+              `Failed to fetch balance for wallet ${wallet.id}: ${error.message}`,
+            );
           }
 
           return {
@@ -127,7 +171,7 @@ export class WalletService {
       };
 
       let totalValueNGN = 0;
-      
+
       fiatBalances.forEach(({ currency, balance }) => {
         totalValueNGN += balance * (exchangeRates[currency] || 1);
       });
@@ -146,15 +190,18 @@ export class WalletService {
         totalValueNGN,
       };
     } catch (error) {
-      this.logger.error(`Failed to get unified balance for user ${userId}:`, error);
+      this.logger.error(
+        `Failed to get unified balance for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }
 
-  /**
-   * Create fiat account for user
-   */
-  async createFiatAccount(userId: string, currency: string = 'NGN'): Promise<FiatAccount> {
+  async createFiatAccount(
+    userId: string,
+    currency: string = 'NGN',
+  ): Promise<FiatAccount> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -165,7 +212,8 @@ export class WalletService {
       }
 
       if (currency === 'NGN') {
-        const monnifyData = await this.monnifyService.createReserveAccount(user);
+        const monnifyData =
+          await this.monnifyService.createReserveAccount(user);
         const defaultAccount = monnifyData.responseBody.accounts[0];
 
         return await this.prisma.fiatAccount.create({
@@ -190,17 +238,22 @@ export class WalletService {
         });
       }
 
-      throw new BadRequestException(`Currency ${currency} not supported for fiat accounts`);
+      throw new BadRequestException(
+        `Currency ${currency} not supported for fiat accounts`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to create fiat account for user ${userId}:`, error);
+      this.logger.error(
+        `Failed to create fiat account for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }
 
-  /**
-   * Create crypto wallet for user
-   */
-  async createCryptoWallet(userId: string, currency: string = 'STRK'): Promise<CryptoWallet> {
+  async createCryptoWallet(
+    userId: string,
+    currency: string = 'STRK',
+  ): Promise<CryptoWallet> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -227,7 +280,10 @@ export class WalletService {
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to create crypto wallet for user ${userId}:`, error);
+      this.logger.error(
+        `Failed to create crypto wallet for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -235,7 +291,10 @@ export class WalletService {
   /**
    * Get transaction history for unified wallet
    */
-  async getTransactionHistory(userId: string, limit: number = 50): Promise<WalletTransaction[]> {
+  async getTransactionHistory(
+    userId: string,
+    limit: number = 50,
+  ): Promise<WalletTransaction[]> {
     try {
       const transactions = await this.prisma.transaction.findMany({
         where: { userId },
@@ -258,7 +317,10 @@ export class WalletService {
         metadata: tx.metadata,
       }));
     } catch (error) {
-      this.logger.error(`Failed to get transaction history for user ${userId}:`, error);
+      this.logger.error(
+        `Failed to get transaction history for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -277,9 +339,11 @@ export class WalletService {
     try {
       // TODO: Implement actual liquidity bridging logic
       // This is a placeholder for the liquidity bridge functionality
-      
-      this.logger.log(`Bridging liquidity for user ${userId}: ${amount} ${fromCurrency} -> ${toCurrency}`);
-      
+
+      this.logger.log(
+        `Bridging liquidity for user ${userId}: ${amount} ${fromCurrency} -> ${toCurrency}`,
+      );
+
       // Create swap order record
       const swapOrder = await this.prisma.swapOrder.create({
         data: {
@@ -303,7 +367,10 @@ export class WalletService {
         expectedAmount: swapOrder.toAmount,
       };
     } catch (error) {
-      this.logger.error(`Failed to bridge liquidity for user ${userId}:`, error);
+      this.logger.error(
+        `Failed to bridge liquidity for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -322,11 +389,14 @@ export class WalletService {
         fiatAccountsCount: balance.fiatBalances.length,
         cryptoWalletsCount: balance.cryptoBalances.length,
         recentTransactions,
-        hasActiveFiat: balance.fiatBalances.some(f => f.balance > 0),
-        hasActiveCrypto: balance.cryptoBalances.some(c => c.balance > 0),
+        hasActiveFiat: balance.fiatBalances.some((f) => f.balance > 0),
+        hasActiveCrypto: balance.cryptoBalances.some((c) => c.balance > 0),
       };
     } catch (error) {
-      this.logger.error(`Failed to get wallet summary for user ${userId}:`, error);
+      this.logger.error(
+        `Failed to get wallet summary for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }

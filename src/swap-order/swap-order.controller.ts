@@ -24,7 +24,11 @@ export class SwapOrderController {
 
   @Get()
   findAll(@Query() filter: SwapOrderFilterDto) {
-    return this.swapOrderService.findAll(filter);
+    try {
+      return this.swapOrderService.findAll(filter);
+    } catch (error) {
+      throw error;
+    }
   }
 
   @Get(':id')

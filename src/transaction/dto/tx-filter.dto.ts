@@ -1,5 +1,5 @@
 // dto/transaction-filter.dto.ts
-import { IsOptional, IsNumber, IsString } from 'class-validator';
+import { IsOptional, IsNumber, IsString, IsISO8601 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class TxFilterDto {
@@ -32,6 +32,15 @@ export class TxFilterDto {
   @IsOptional()
   @Type(() => Number)
   limit?: number = 10;
+
+
+  @IsOptional()
+  @IsISO8601()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  toDate?: string;
 
   get skip(): number {
     return ((this.page ?? 1) - 1) * (this.limit ?? 10);

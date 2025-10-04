@@ -43,12 +43,18 @@ export class TransactionService {
       if (filter.maxAmount !== undefined) where.amount.lte = filter.maxAmount;
     }
 
+     if (filter.fromDate || filter.toDate) {
+        where.createdAt = {};
+        if (filter.fromDate) where.createdAt.gte = new Date(filter.fromDate);
+        if (filter.toDate) where.createdAt.lte = new Date(filter.toDate);
+      }
+
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
         include,
         skip: filter.skip,
-        take: filter.limit,
+        take: Number(filter.limit),
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.transaction.count({ where }),

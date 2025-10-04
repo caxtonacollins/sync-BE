@@ -28,9 +28,11 @@
     "@nestjs/mapped-types": "*",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/swagger": "^11.2.0",
     "@prisma/client": "^6.8.2",
     "@types/qrcode": "^1.5.5",
     "@types/speakeasy": "^2.0.10",
+    "@types/uuid": "^11.0.0",
     "@types/ws": "^8.18.1",
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",
@@ -50,6 +52,8 @@
     "rxjs": "^7.8.1",
     "speakeasy": "^2.0.0",
     "starknet": "^7.6.4",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^13.0.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
