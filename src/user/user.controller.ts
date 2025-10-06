@@ -25,6 +25,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Request } from 'express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 interface JwtUser {
   userId: string;
@@ -38,6 +39,8 @@ interface RequestWithUser extends Request {
 
 @Controller('user')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Users')
+@ApiBearerAuth()
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -186,6 +189,44 @@ export class UserController {
       throw new ForbiddenException('You can only update your own password');
     }
     return await this.userService.updatePassword(id, password);
+  }
+
+  // Payment PIN routes
+  @Patch(':id/payment-pin')
+  async setPaymentPin(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('pin') pin: string,
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only set your own PIN');
+    }
+    return await this.userService.setPaymentPin(id, pin);
+  }
+
+  @Post(':id/payment-pin/verify')
+  async verifyPaymentPin(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('pin') pin: string,
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only verify your own PIN');
+    }
+    return await this.userService.verifyPaymentPin(id, pin);
+  }
+
+  @Patch(':id/payment-pin/change')
+  async changePaymentPin(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('oldPin') oldPin: string,
+    @Body('newPin') newPin: string,
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only change your own PIN');
+    }
+    return await this.userService.changePaymentPin(id, oldPin, newPin);
   }
 
   @Patch(':id/verify-kyc')

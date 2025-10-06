@@ -69,6 +69,11 @@ model User {
   twoFactorSecret    String?
   loginAttempts      Int                 @default(0)
   lockedUntil        DateTime?
+  
+  // Payment PIN security
+  paymentPinHash     String?
+  paymentPinAttempts Int                 @default(0)
+  paymentPinLockedUntil DateTime?
 
   // Relations
   transactions       Transaction[]

@@ -11,6 +11,7 @@ import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from 'src/monnify/monnify.service';
 import chalk from 'chalk';
 import { ContractService } from 'src/contract/contract.service';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class UserService {
@@ -389,6 +390,70 @@ export class UserService {
     return user;
   }
 
+  // --- Payment PIN management ---
+  private hashPin(pin: string): string {
+    const salt = randomBytes(16).toString('hex');
+    const hash = scryptSync(pin, salt, 32).toString('hex');
+    return `${salt}:${hash}`;
+  }
+
+  private verifyPin(pin: string, stored: string): boolean {
+    const [salt, storedHash] = stored.split(':');
+    const computed = scryptSync(pin, salt, 32).toString('hex');
+    return timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(computed, 'hex'));
+  }
+
+  async setPaymentPin(userId: string, pin: string) {
+    const hash = this.hashPin(pin);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinHash: hash, paymentPinAttempts: 0, paymentPinLockedUntil: null } as any,
+    });
+    return { success: true };
+  }
+
+  async verifyPaymentPin(userId: string, pin: string) {
+    const user: any = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.paymentPinLockedUntil && user.paymentPinLockedUntil > new Date()) {
+      return { success: false, lockedUntil: user.paymentPinLockedUntil };
+    }
+
+    if (!user.paymentPinHash) return { success: false };
+
+    const ok = this.verifyPin(pin, user.paymentPinHash);
+    if (!ok) {
+      const attempts = (user.paymentPinAttempts || 0) + 1;
+      let lockedUntil: Date | null = null;
+      if (attempts >= 5) {
+        lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinAttempts: lockedUntil ? 0 : attempts, paymentPinLockedUntil: lockedUntil } as any,
+    });
+      return { success: false, lockedUntil };
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinAttempts: 0, paymentPinLockedUntil: null } as any,
+    });
+    return { success: true };
+  }
+
+  async changePaymentPin(userId: string, oldPin: string, newPin: string) {
+    const verify = await this.verifyPaymentPin(userId, oldPin);
+    if (!verify.success) return { success: false, lockedUntil: verify.lockedUntil };
+    const hash = this.hashPin(newPin);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinHash: hash } as any,
+    });
+    return { success: true };
+  }
+
   async verifyUserKyc(
     id: string,
     verificationData: {
@@ -506,6 +571,7 @@ export class UserService {
         },
       },
     });
+    console.log("fiatAccount", fiatAccount);
 
     if (fiatAccount) {
       // Internal SyncPayment account found
