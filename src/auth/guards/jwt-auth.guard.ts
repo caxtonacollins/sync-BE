@@ -26,7 +26,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       throw err || new Error('User not authenticated');
     }
 
-    console.log('Authenticated user:', info, context);
     // Ensure user.sub exists for userId
     if (!user.sub && user.userId) {
       user.sub = user.userId;

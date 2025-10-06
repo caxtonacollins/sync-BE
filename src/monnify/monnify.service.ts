@@ -83,4 +83,24 @@ export class MonnifyService {
       }
     }
   }
+
+  async getNigerianBanks() {
+    return [
+      { name: 'Access Bank', code: '044' },
+      { name: 'Guaranty Trust Bank', code: '058' },
+      { name: 'Zenith Bank', code: '057' },
+      { name: 'First Bank of Nigeria', code: '011' },
+      { name: 'United Bank for Africa', code: '033' },
+      { name: 'Fidelity Bank', code: '070' },
+      { name: 'Union Bank of Nigeria', code: '032' },
+      { name: 'Stanbic IBTC Bank', code: '221' },
+      { name: 'Sterling Bank', code: '232' },
+      { name: 'Polaris Bank', code: '076' },
+      { name: 'Wema Bank', code: '035' },
+      { name: 'Ecobank Nigeria', code: '050' },
+      { name: 'OPay', code: '999992' },
+      { name: 'PalmPay', code: '999991' },
+      { name: 'Kuda Bank', code: '090267' },
+    ];
+  }
 }

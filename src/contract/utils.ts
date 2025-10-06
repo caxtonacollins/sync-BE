@@ -11,6 +11,7 @@ import {
 import { promises as fs } from 'fs';
 
 export function connectToStarknet() {
+  if (!process.env.STARKNET_NODE_URL_8) throw Error;
   return new RpcProvider({
     nodeUrl: process.env.STARKNET_NODE_URL_8,
   });

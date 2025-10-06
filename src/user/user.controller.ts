@@ -9,6 +9,8 @@ import {
   Query,
   ParseUUIDPipe,
   UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -19,12 +21,23 @@ import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from '../monnify/monnify.service';
 import { ContractService } from 'src/contract/contract.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Request } from 'express';
+
+interface JwtUser {
+  userId: string;
+  email: string;
+  role: string;
+}
+
+interface RequestWithUser extends Request {
+  user: JwtUser;
+}
 
 @Controller('user')
-@UseGuards(JwtAuthGuard)
-// @ApiTags('Users')
-// @UseInterceptors(ClassSerializerInterceptor)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -49,15 +62,14 @@ export class UserController {
   }
 
   @Get()
-  // @Roles(UserRole.ADMIN)
-  // @ApiBearerAuth()
+  @Roles('ADMIN')
   findAll(@Query() filter: UserFilterDto) {
     return this.userService.findAll(filter);
   }
 
-  @Public()
   @Get(':id')
   async findById(
+    @Req() req: RequestWithUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Query('fiatAccounts') fiatAccounts?: string,
     @Query('cryptoWallets') cryptoWallets?: string,
@@ -65,6 +77,13 @@ export class UserController {
     @Query('swapOrders') swapOrders?: string,
   ) {
     try {
+
+      // Users can only access their own data, admins can access any user's data
+      if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+        console.log('[UserController] Authorization failed - user can only access own data');
+        throw new ForbiddenException('You can only access your own data');
+      }
+
       const parseBoolean = (value?: string) => value === 'true';
       const include: Prisma.UserInclude = {
         fiatAccounts: parseBoolean(fiatAccounts),
@@ -75,13 +94,13 @@ export class UserController {
       const user = await this.userService.getById(id, include);
       return { user };
     } catch (error) {
-      console.error('Error finding user by ID:', error);
-      throw new Error('Failed to find user by ID');
+      console.error('[UserController] Error finding user by ID:', error);
+      throw error;
     }
   }
 
-  @Public()
   @Get('email/:email')
+  @Roles('ADMIN')
   async getByEmail(@Param('email') email: string) {
     try {
       return await this.userService.getByEmail(email);
@@ -93,58 +112,84 @@ export class UserController {
 
   @Get(':id/fiat-accounts')
   async getUserFiatAccounts(
+    @Req() req: RequestWithUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Query() pagination: PaginationDto,
   ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only access your own data');
+    }
     return await this.userService.getUserFiatAccounts(id, pagination);
   }
 
   @Get(':id/crypto-wallets')
   async getUserCryptoWallets(
+    @Req() req: RequestWithUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Query() pagination: PaginationDto,
   ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only access your own data');
+    }
     return await this.userService.getUserCryptoWallets(id, pagination);
   }
 
   @Get(':id/tx')
   async getUserTransactions(
+    @Req() req: RequestWithUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Query() pagination: PaginationDto,
   ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only access your own data');
+    }
     return await this.userService.getUserTransactions(id, pagination);
   }
 
-  @Public()
   @Get('getUserByCryptoAddress/:address')
+  @Roles('ADMIN')
   async getUserByCryptoAddress(@Param('address') address: string) {
     return this.userService.getUserByCryptoAddress(address);
   }
 
   @Get(':id/swap-orders')
   async getUserSwapOrders(
+    @Req() req: RequestWithUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Query() pagination: PaginationDto,
   ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only access your own data');
+    }
     return await this.userService.getUserSwapOrders(id, pagination);
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  async update(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only update your own data');
+    }
     return await this.userService.update(id, updateUserDto);
   }
 
   @Patch(':id/password')
   async updatePassword(
+    @Req() req: RequestWithUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body('password') password: string,
   ) {
+    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
+      throw new ForbiddenException('You can only update your own password');
+    }
     return await this.userService.updatePassword(id, password);
   }
 
   @Patch(':id/verify-kyc')
-  // @Roles(UserRole.ADMIN, UserRole.USER)
-  // @ApiBearerAuth()
+  @Roles('ADMIN')
   async verifyKyc(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('status') status: VerificationStatus,
@@ -157,7 +202,31 @@ export class UserController {
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.remove(id);
+  }
+
+  @Get('resolve/account/:accountNumber')
+  async resolveAccount(@Param('accountNumber') accountNumber: string) {
+    const syncAccount = await this.userService.resolveAccountNumber(accountNumber);
+    const banks = await this.monnifyService.getNigerianBanks();
+
+    if (syncAccount) {
+      // SyncPayment account found - put it at the top
+      return {
+        syncAccount,
+        banks: [
+          { name: 'SyncPayment', code: 'SYNC001', isSyncPayment: true },
+          ...banks,
+        ],
+      };
+    }
+
+    // Not a SyncPayment account - return just the banks
+    return {
+      syncAccount: null,
+      banks,
+    };
   }
 }

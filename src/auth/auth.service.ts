@@ -108,11 +108,11 @@ export class AuthService {
     // Generate tokens
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
-        { sub: user.id, email: user.email },
+        { sub: user.id, email: user.email, role: user.role },
         { expiresIn: '15m' },
       ),
       this.jwtService.signAsync(
-        { sub: user.id, email: user.email },
+        { sub: user.id, email: user.email, role: user.role },
         { expiresIn: '7d' },
       ),
     ]);
@@ -447,5 +447,70 @@ export class AuthService {
     });
 
     return { message: 'MFA enabled successfully' };
+  }
+
+  async refreshToken(refreshToken: string) {
+    try {
+      // Verify the refresh token
+      const payload = await this.jwtService.verifyAsync(refreshToken);
+
+      // Find the session with this refresh token
+      const session = await this.sessionService.findByToken(refreshToken);
+
+      if (!session) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      // Check if session is expired
+      if (session.expiresAt < new Date()) {
+        await this.sessionService.remove(session.id);
+        throw new UnauthorizedException('Refresh token expired');
+      }
+
+      // Get user details
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (!user || user.status !== AccountStatus.ACTIVE) {
+        throw new UnauthorizedException('User not found or inactive');
+      }
+
+      // Generate new tokens
+      const [newAccessToken, newRefreshToken] = await Promise.all([
+        this.jwtService.signAsync(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '15m' },
+        ),
+        this.jwtService.signAsync(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '7d' },
+        ),
+      ]);
+
+      // Update session with new refresh token
+      await this.sessionService.update(session.id, {
+        token: newRefreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        deviceInfo: {
+          ...(session.deviceInfo as object),
+          lastActive: new Date(),
+        },
+      });
+
+      return {
+        access_token: newAccessToken,
+        refresh_token: newRefreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
   }
 }

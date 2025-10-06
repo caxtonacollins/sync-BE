@@ -195,13 +195,13 @@ export class ContractService {
 
     const symbolFelt = shortString.encodeShortString(symbol);
 
-    const liquidityClass = await getClassAt(this.liquidityContractAddress);
+    // const liquidityClass = await getClassAt(this.liquidityContractAddress);
 
-    await writeAbiToFile(liquidityClass, 'liquidityAbi');
+    // await writeAbiToFile(liquidityClass, 'liquidityAbi');
 
     const call = {
       contractAddress: this.liquidityContractAddress,
-      entrypoint: 'register_user',
+      entrypoint: 'add_supported_token',
       calldata: [symbolFelt, address],
     };
 
@@ -263,6 +263,7 @@ export class ContractService {
   };
 
   getDeployerWallet = () => {
+    if (!this.provider || !this.accountAddress || !this.private_key) throw new Error("credentials required to deploy deployer's wallet");
     return new Account(this.provider, this.accountAddress, this.private_key);
   };
 

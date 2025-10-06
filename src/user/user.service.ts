@@ -490,4 +490,36 @@ export class UserService {
       return deletedUser;
     });
   }
+
+  async resolveAccountNumber(accountNumber: string) {
+    // Check if account exists in our database (SyncPayment internal account)
+    const fiatAccount = await this.prisma.fiatAccount.findFirst({
+      where: { accountNumber },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (fiatAccount) {
+      // Internal SyncPayment account found
+      return {
+        isSyncPayment: true,
+        accountNumber: fiatAccount.accountNumber,
+        accountName: fiatAccount.accountName,
+        bankName: 'SyncPayment',
+        bankCode: 'SYNC001',
+        user: fiatAccount.user,
+      };
+    }
+
+    // Not a SyncPayment account - return null to indicate external account
+    return null;
+  }
 }

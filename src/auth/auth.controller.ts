@@ -5,12 +5,14 @@ import { LoginDto } from './dto/login.dto';
 import { Enable2FADto, Verify2FADto } from './dto/enable-2fa.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { MfaVerifyDto } from './dto/mfa-setup.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request } from 'express';
 
 interface JwtUser {
   sub: string;
   email: string;
+  role: string;
 }
 
 interface RequestWithUser extends Request {
@@ -29,6 +31,12 @@ export class AuthController {
       req.ip || '127.0.0.1',
       req.headers['user-agent'] || 'unknown',
     );
+  }
+
+  @Public()
+  @Post('refresh')
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshToken(refreshTokenDto.refresh_token);
   }
 
   @UseGuards(JwtAuthGuard)

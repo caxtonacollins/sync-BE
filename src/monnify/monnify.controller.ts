@@ -20,4 +20,9 @@ export class MonnifyController {
     async getDetails(@Query('id') userId: string) {
         return this.monnifyService.getReservedAccountDetails(userId);
     }
+
+    @Get('banks/list')
+    async getBanks() {
+        return this.monnifyService.getNigerianBanks();
+    }
 }
