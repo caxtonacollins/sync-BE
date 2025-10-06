@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { EventListenerClientService } from './event-listener-client.service';
+import { LiquidityEventProcessorService } from './liquidity-event-processor.service';
 
 @Injectable()
 export class ContractEventHandlerService implements OnModuleInit {
@@ -8,6 +9,7 @@ export class ContractEventHandlerService implements OnModuleInit {
 
     constructor(
         private readonly eventListenerClient: EventListenerClientService,
+        private readonly liquidityEventProcessor: LiquidityEventProcessorService,
     ) {
         this.contractAddress = process.env.LIQUIDITY_CONTRACT_ADDRESS || '';
     }
@@ -74,11 +76,8 @@ export class ContractEventHandlerService implements OnModuleInit {
 
     handleEvent(eventPayload: any) {
         this.logger.log(`Received event from starknet-event-listener: ${JSON.stringify(eventPayload)}`);
-        // Add your business logic to process the event here
-        // For example:
-        // - Parse event data
-        // - Update database
-        // - Trigger notifications
-        // - Update user balances
+        this.liquidityEventProcessor.process(eventPayload).catch((err) => {
+            this.logger.error('Failed to process liquidity event', err);
+        });
     }
 }
