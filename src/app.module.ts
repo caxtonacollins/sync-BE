@@ -12,6 +12,8 @@ import { MonnifyModule } from './monnify/monnify.module';
 import { ContractService } from './contract/contract.service';
 import { SwapOrderModule } from './swap-order/swap-order.module';
 import { SwapOrderService } from './swap-order/swap-order.service';
+import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
+import { LiquidityPoolModule } from './liquidity-pool/liquidity-pool.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { SwapOrderService } from './swap-order/swap-order.service';
     WalletModule,
     MonnifyModule,
     SwapOrderModule,
+    ExchangeRateModule,
+    LiquidityPoolModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService, ContractService, SwapOrderService],

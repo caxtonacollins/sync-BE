@@ -143,6 +143,8 @@ model Transaction {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   completedAt     DateTime?
+  blockNumber     String?
+  transactionHash String?
 
   // Relations
   fiatAccountId   String?
@@ -151,6 +153,11 @@ model Transaction {
   cryptoWallet    CryptoWallet? @relation(fields: [cryptoWalletId], references: [id])
   swapOrderId     String?
   swapOrder       SwapOrder? @relation(fields: [swapOrderId], references: [id])
+
+  @@index([userId])
+  @@index([reference])
+  @@index([status])
+  @@index([transactionHash])
 }
 
 model SwapOrder {
@@ -168,8 +175,15 @@ model SwapOrder {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   completedAt     DateTime?
+  blockNumber     String?
+  transactionHash String?
 
   transactions    Transaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([fromCurrency, toCurrency])
+  @@index([transactionHash])
 }
 
 model Session {
@@ -219,5 +233,41 @@ model SystemSetting {
   description     String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+}
+
+model LiquidityPool {
+  id              String      @id @default(uuid())
+  symbol          String      @unique // e.g., 'NGN', 'USDC'
+  type            String      // 'fiat' or 'token'
+  balance         Float       @default(0)
+  lastUpdated     DateTime    @updatedAt
+  createdAt       DateTime    @default(now())
+
+  history         PoolHistory[]
+}
+
+model PoolHistory {
+  id              String      @id @default(uuid())
+  poolId          String
+  pool            LiquidityPool @relation(fields: [poolId], references: [id])
+  amount          Float
+  type            String      // 'add' or 'remove'
+  transactionHash String
+  blockNumber     String
+  timestamp       DateTime
+
+  @@index([poolId])
+  @@index([transactionHash])
+}
+
+model ExchangeRate {
+  id              String      @id @default(uuid())
+  fiatSymbol      String
+  tokenSymbol     String
+  rate            Float
+  lastUpdated     DateTime    @updatedAt
+  createdAt       DateTime    @default(now())
+
+  @@unique([fiatSymbol, tokenSymbol])
 }
 

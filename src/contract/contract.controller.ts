@@ -1,14 +1,6 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ContractService } from './contract.service';
-import { EventListenerClientService } from './event-listener-client.service';
-import { ContractEventHandlerService } from './contract-event-handler.service';
+import { LiquidityEventProcessorService } from './liquidity-event-processor.service';
 
 // --- DTOs ---
 class CreateAccountDto {
@@ -24,7 +16,7 @@ class SetAccountClassHashDto {
   classHash: string;
 }
 
-class UpgradeAccountFactoryDto extends SetAccountClassHashDto {}
+class UpgradeAccountFactoryDto extends SetAccountClassHashDto { }
 
 class TransferOwnershipDto {
   newOwnerAddress: string;
@@ -53,13 +45,12 @@ class MintTokenDto {
 export class ContractController {
   constructor(
     private readonly contractService: ContractService,
-    private readonly eventListenerClient: EventListenerClientService,
-    private readonly eventHandlerService: ContractEventHandlerService,
-  ) {}
+    private readonly liquidityEventProcessorService: LiquidityEventProcessorService,
+  ) { }
 
   @Post('events')
-  handleContractEvent(@Body() eventPayload: any) {
-    this.eventHandlerService.handleEvent(eventPayload);
+  async handleContractEvent(@Body() eventPayload: any) {
+    await this.liquidityEventProcessorService.process(eventPayload);
     return { status: 'event received' };
   }
 
@@ -137,7 +128,9 @@ export class ContractController {
   }
 
   @Post('register-user-to-liquidity')
-  registerUserToLiquidity(@Body() registerUserToLiquidityDto: CreateAccountDto) {
+  registerUserToLiquidity(
+    @Body() registerUserToLiquidityDto: CreateAccountDto,
+  ) {
     return this.contractService.registerUserToLiquidity(
       registerUserToLiquidityDto.userContractAddress,
       registerUserToLiquidityDto.fiatAccountId,
@@ -158,6 +151,22 @@ export class ContractController {
     return this.contractService.addSupportedToken(
       addSupportedTokenDto.symbol,
       addSupportedTokenDto.address,
+    );
+  }
+
+  @Post('add-fiat-to-liquidity')
+  addFiatToLiquidity(@Body() addFiatToLiquidityDto: { symbol: string; amount: string }) {
+    return this.contractService.addFiatToLiquidity(
+      addFiatToLiquidityDto.symbol,
+      addFiatToLiquidityDto.amount,
+    );
+  }
+
+  @Post('add-token-to-liquidity')
+  addTokenToLiquidity(@Body() addTokenToLiquidityDto: { symbol: string; amount: string }) {
+    return this.contractService.addTokenToLiquidity(
+      addTokenToLiquidityDto.symbol,
+      addTokenToLiquidityDto.amount,
     );
   }
 
@@ -216,48 +225,4 @@ export class ContractController {
     );
   }
 
-  // Event Listener Endpoints
-  @Get('event-listener/status')
-  async getEventListenerStatus() {
-    return await this.eventHandlerService.getListenerStatus();
-  }
-
-  @Post('event-listener/subscribe-transaction/:transactionHash')
-  async subscribeToTransaction(@Param('transactionHash') transactionHash: string) {
-    await this.eventHandlerService.subscribeToTransaction(transactionHash);
-    return {
-      message: `Subscribed to transaction ${transactionHash}`,
-      transactionHash,
-    };
-  }
-
-  @Get('event-listener/subscriptions')
-  async getActiveSubscriptions() {
-    const status = await this.eventListenerClient.getStatus();
-    return {
-      isConnected: status?.isConnected || false,
-      activeSubscriptions: status?.activeSubscriptions || 0,
-      subscriptionIds: status?.subscriptions?.map(s => s.id) || [],
-    };
-  }
-
-  @Post('event-listener/unsubscribe/:subscriptionId')
-  async unsubscribeFromEvent(@Param('subscriptionId') subscriptionId: string) {
-    const result = await this.eventListenerClient.unsubscribe(subscriptionId);
-    return {
-      success: result.success,
-      message: result.message,
-      subscriptionId,
-    };
-  }
-
-  @Post('event-listener/unsubscribe-all')
-  async unsubscribeFromAllEvents() {
-    const result = await this.eventListenerClient.unsubscribeAll();
-    return {
-      success: result.success,
-      message: result.message,
-    };
-  }
 }
-

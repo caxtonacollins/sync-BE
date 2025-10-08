@@ -169,6 +169,85 @@ export class ContractService {
     }
   };
 
+  addFiatToLiquidity = async (
+    symbol: string,
+    amount: string,
+  ) => {
+    if (!symbol) throw new Error('symbol is required');
+    if (!amount) throw new Error('amount is required');
+
+    const symbolFelt = uuidToFelt252(symbol);
+    const amountU256 = uint256.bnToUint256(BigInt(amount));
+
+    const liquidityClass = await this.provider.getClassAt(
+      this.liquidityContractAddress,
+    );
+    if (!liquidityClass.abi)
+      throw new Error('No ABI found for liquidity contract');
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'add_fiat_liquidity',
+      calldata: [symbolFelt, amountU256.low,
+        amountU256.high],
+    };
+
+    const account = this.getDeployerWallet();
+
+    const { transaction_hash: txH } = await account.execute(call, {
+      version: 3,
+      maxFee: 10 ** 15,
+      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
+      tip: 10 ** 13,
+      paymasterData: [],
+
+    });
+
+    const txR = await this.provider.waitForTransaction(txH);
+    if (txR.isSuccess()) {
+      console.log('Paid fee =', txR.statusReceipt);
+    }
+  };
+
+  addTokenToLiquidity = async (
+    symbol: string,
+    amount: string,
+  ) => {
+    if (!symbol) throw new Error('symbol is required');
+    if (!amount) throw new Error('amount is required');
+
+    const amountU256 = uint256.bnToUint256(BigInt(amount));
+    const symbolFelt = uuidToFelt252(symbol);
+
+    const liquidityClass = await this.provider.getClassAt(
+      this.liquidityContractAddress,
+    );
+    if (!liquidityClass.abi)
+      throw new Error('No ABI found for liquidity contract');
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'add_token_liquidity',
+      calldata: [symbolFelt, amountU256.low,
+        amountU256.high],
+    };
+
+    const account = this.getDeployerWallet();
+
+    const { transaction_hash: txH } = await account.execute(call, {
+      version: 3,
+      maxFee: 10 ** 15,
+      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
+      tip: 10 ** 13,
+      paymasterData: [],
+    });
+
+    const txR = await this.provider.waitForTransaction(txH);
+    if (txR.isSuccess()) {
+      console.log('Paid fee =', txR.statusReceipt);
+    }
+  };
+
   isUserRegistered = async (userContractAddress: string) => {
     if (!this.liquidityContractAddress)
       throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
