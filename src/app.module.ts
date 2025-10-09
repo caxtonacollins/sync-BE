@@ -14,6 +14,7 @@ import { SwapOrderModule } from './swap-order/swap-order.module';
 import { SwapOrderService } from './swap-order/swap-order.service';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { LiquidityPoolModule } from './liquidity-pool/liquidity-pool.module';
+import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { LiquidityPoolModule } from './liquidity-pool/liquidity-pool.module';
     SwapOrderModule,
     ExchangeRateModule,
     LiquidityPoolModule,
+    FlutterwaveModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService, ContractService, SwapOrderService],

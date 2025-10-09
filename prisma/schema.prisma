@@ -48,6 +48,8 @@ model User {
   lastLogin           DateTime?
 
   // KYC Information
+  bvn                 String?
+  nin                 String?
   dateOfBirth        DateTime?
   address            String?
   city               String?
