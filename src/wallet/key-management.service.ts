@@ -55,10 +55,8 @@ export class KeyManagementService {
         throw new NotFoundException('Private key not found for this wallet');
       }
 
-      // Decrypt the private key (only in memory, never persisted)
       const privateKey = decryptPrivateKey(wallet.encryptedPrivateKey);
 
-      // Create and return the Account instance
       const account = new Account(this.provider, wallet.address, privateKey);
 
       this.logger.log(`Account accessed for user ${userId}, wallet ${wallet.address}`);
@@ -88,17 +86,14 @@ export class KeyManagementService {
       // Get the user's account (with decrypted key in memory)
       const account = await this.getUserAccount(userId, walletAddress);
 
-      // Execute the transaction
       const { transaction_hash } = await account.execute(calls, {
         maxFee: 10 ** 15,
       });
 
       this.logger.log(`Transaction executed for user ${userId}: ${transaction_hash}`);
 
-      // Wait for transaction confirmation
       const receipt = await this.provider.waitForTransaction(transaction_hash);
 
-      // Log transaction completion
       await this.createAuditLog(userId, 'TRANSACTION_EXECUTED', {
         transactionHash: transaction_hash,
         success: receipt.isSuccess(),
@@ -112,7 +107,6 @@ export class KeyManagementService {
     } catch (error) {
       this.logger.error(`Transaction execution failed for user ${userId}: ${error.message}`);
       
-      // Log the failure
       await this.createAuditLog(userId, 'TRANSACTION_FAILED', {
         error: error.message,
         walletAddress: walletAddress || 'default',

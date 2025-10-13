@@ -78,7 +78,7 @@ export class WalletService {
         id: account.id,
         name: `${account.user.firstName} ${account.user.lastName}`,
         accountNumber: account.accountNumber,
-        balance: 0, // This will be replaced with actual balance from Monnify later
+        balance: 0,
         currency: account.currency,
         initials: `${account.user.firstName[0]}${account.user.lastName[0]}`,
         isDefault: account.isDefault,
@@ -97,7 +97,7 @@ export class WalletService {
       where: {
         userId,
         isActive: true,
-        isDefault: true, // Assuming we use the default account
+        isDefault: true,
       },
     });
   }
@@ -123,7 +123,7 @@ export class WalletService {
         id: wallet.id,
         name: `${wallet.user.firstName} ${wallet.user.lastName}`,
         address: wallet.address,
-        balance: 0, // This will be replaced with actual balance from StarkNet later
+        balance: 0,
         currency: wallet.currency,
         initials: `${wallet.user.firstName[0]}${wallet.user.lastName[0]}`,
         isDefault: wallet.isDefault,
