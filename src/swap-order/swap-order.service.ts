@@ -127,8 +127,8 @@ export class SwapOrderService {
     } = swapOrder;
     this.logger.log(`Executing Token-to-Fiat swap for order ${swapOrder.id}`);
 
-    const fromAmountBigInt = parseTokenAmount(fromAmount, 18);
-    console.log('fromAmountBigInt', fromAmountBigInt);
+    // const fromAmountBigInt = parseTokenAmount(fromAmount, 18);
+    // console.log('fromAmountBigInt', fromAmountBigInt);
 
     // Step 1: Validate user registration and account status
     const cryptoWallet = await this.walletService.getCryptoWallets(userId);
@@ -299,10 +299,10 @@ export class SwapOrderService {
       this.logger.log(
         `Initiating fiat payout of ${swapOrder.toAmount} ${swapOrder.toCurrency} to user ${swapOrder.userId}`,
       );
-
+ 
       const payoutResult = await this.paymentService.initiatePayout(
         fiatAccount,
-        swapOrder.toAmount,
+        swapOrder.toAmount || 0,
         swapOrder.toCurrency,
       );
 

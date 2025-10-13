@@ -170,11 +170,11 @@ model SwapOrder {
   fromCurrency    String
   toCurrency      String
   fromAmount      Float
-  toAmount        Float
-  rate            Float
+  toAmount        Float?
+  rate            Float?
   swapType        SwapType?
-  fee             Float
-  status          String      // "pending", "completed", "failed", "partial"
+  fee             Float?
+  status          String      @default("pending")    // "pending", "completed", "failed", "partial"
   reference       String      @unique
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

@@ -48,12 +48,11 @@ export class ContractController {
   constructor(
     private readonly contractService: ContractService,
     private readonly liquidityEventProcessorService: LiquidityEventProcessorService,
-  ) { }
+  ) {}
 
   @Post('events')
   async handleContractEvent(@Body() eventPayload: any) {
-    await this.liquidityEventProcessorService.process(eventPayload);
-    return { status: 'event received' };
+    return this.liquidityEventProcessorService.process(eventPayload);
   }
 
   @Post('create-account')

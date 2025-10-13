@@ -23,6 +23,7 @@ export class CreateSwapOrderDto {
   fromAmount: number;
 
   @IsNumber()
+  @IsOptional()
   toAmount: number;
 
   @IsNumber()

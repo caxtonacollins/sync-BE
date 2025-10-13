@@ -2,11 +2,74 @@ import { Injectable } from '@nestjs/common';
 import { User } from '@prisma/client';
 import axios from 'axios';
 
+export interface ExchangeRateResponse {
+  rate: number;
+  source: {
+    currency: string;
+    amount: number;
+  };
+  destination: {
+    currency: string;
+    amount: number;
+  };
+}
+
 @Injectable()
 export class FlutterwaveService {
   private readonly currencies = ['NGN']; //'GBP', 'USD', 'EUR'
 
-  constructor() {
+  private readonly baseUrl = 'https://api.flutterwave.com/v3';
+
+  constructor() {}
+
+  /**
+   * Fetches the exchange rate between two currencies
+   * @param sourceCurrency - 3-letter ISO currency code of the source currency (e.g., 'KES')
+   * @param destinationCurrency - 3-letter ISO currency code of the destination currency (e.g., 'USD')
+   * @param amount - The amount in the destination currency to convert from
+   * @returns Promise with the exchange rate and converted amounts
+   */
+  async getExchangeRate(
+    sourceCurrency: string,
+    destinationCurrency: string,
+    amount: number,
+  ): Promise<ExchangeRateResponse> {
+    if (!process.env.FLUTTERWAVE_SECRET_KEY) {
+      throw new Error('Flutterwave secret key not found');
+    }
+
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/transfers/rates`,
+        {
+          params: {
+            amount,
+            destination_currency: destinationCurrency,
+            source_currency: sourceCurrency,
+          },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+          },
+        },
+      );
+
+      if (response.data.status !== 'success') {
+        throw new Error(
+          `Failed to fetch exchange rate: ${response.data.message || 'Unknown error'}`,
+        );
+      }
+
+      return response.data.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.message || error.message;
+        console.error(`Flutterwave Exchange Rate Error: ${message}`);
+        throw new Error(`Failed to fetch exchange rate: ${message}`);
+      }
+      console.error('Unexpected error in getExchangeRate:', error);
+      throw new Error('Failed to fetch exchange rate');
+    }
   }
 
   private async createVirtualAccount(user: User, currency: string) {

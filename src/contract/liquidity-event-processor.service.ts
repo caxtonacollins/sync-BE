@@ -1,6 +1,7 @@
 import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SwapOrderService } from '../swap-order/swap-order.service';
+import { felt252ToUuid } from './utils';
 
 // Event name constants matching Cairo events
 const EVENT_NAMES = {
@@ -37,12 +38,15 @@ interface BatchEventPayload {
 @Injectable()
 export class LiquidityEventProcessorService {
   private readonly logger = new Logger(LiquidityEventProcessorService.name);
+  private readonly swapOrderService: SwapOrderService;
 
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => SwapOrderService))
-    private readonly swapOrderService?: SwapOrderService,
-  ) { }
+    swapOrderService: SwapOrderService,
+  ) {
+    this.swapOrderService = swapOrderService;
+  }
 
   async process(payload: BatchEventPayload | EventPayload | EventPayload[]) {
     try {
@@ -88,12 +92,11 @@ export class LiquidityEventProcessorService {
 
   private async routeEvent(evt: EventPayload) {
     const eventName = evt.data.name;
-    console.log("event", evt)
+    console.log('event', evt);
 
     this.logger.debug(
       `Routing event: ${eventName} | Block: ${evt.blockNumber} | Tx: ${evt.transactionHash}`,
     );
-
 
     try {
       switch (eventName) {
@@ -296,16 +299,7 @@ export class LiquidityEventProcessorService {
     );
 
     // Find and complete matching pending swap order
-    await this.completeNearestPendingOrder(
-      user,
-      swap_order_id,
-      fiat_symbol,
-      token_symbol,
-      fiatAmt,
-      tokenAmt,
-      feeAmt,
-      evt,
-    );
+    await this.completeNearestPendingOrder(evt);
   }
 
   /**
@@ -314,40 +308,11 @@ export class LiquidityEventProcessorService {
    * After updating the order, trigger the fiat payout
    */
   private async handleTokenToFiatSwap(evt: EventPayload) {
-    const {
-      user,
-      swap_order_id,
-      fiat_symbol,
-      token_symbol,
-      fiat_amount,
-      fiat_amount_formatted,
-      token_amount,
-      token_amount_formatted,
-      fee,
-      fee_formatted,
-    } = evt.data;
+    const completedOrderId = await this.completeNearestPendingOrder(evt);
 
-    const fiatAmt = parseFloat(fiat_amount_formatted || fiat_amount || '0');
-    const tokenAmt = parseFloat(token_amount_formatted || token_amount || '0');
-    const feeAmt = parseFloat(fee_formatted || fee || '0');
+    console.log('completedNearestPendingOrder', completedOrderId);
 
-    this.logger.log(
-      `Token→Fiat Swap Confirmed just before completeNearestPendingOrder: ${tokenAmt} ${token_symbol} → ${fiatAmt} ${fiat_symbol} | Fee: ${feeAmt}`,
-    );
-
-    
-    const completedOrderId = await this.completeNearestPendingOrder(
-      user,
-      swap_order_id,
-      token_symbol,
-      fiat_symbol,
-      tokenAmt,
-      fiatAmt,
-      feeAmt,
-      evt,
-    );
-
-    if (completedOrderId && this.swapOrderService) {
+    if (completedOrderId) {
       try {
         this.logger.log(`Triggering payout for swap order ${completedOrderId}`);
         await this.swapOrderService.initiatePayoutForSwap(completedOrderId);
@@ -408,7 +373,12 @@ export class LiquidityEventProcessorService {
     );
 
     await this.prisma.exchangeRate.upsert({
-      where: { fiatSymbol_tokenSymbol: { fiatSymbol: fiat_symbol, tokenSymbol: token_symbol } },
+      where: {
+        fiatSymbol_tokenSymbol: {
+          fiatSymbol: fiat_symbol,
+          tokenSymbol: token_symbol,
+        },
+      },
       update: {
         rate: rate,
       },
@@ -445,9 +415,13 @@ export class LiquidityEventProcessorService {
           // You might want to add a field to FiatAccount to mark it as contract-linked
         },
       });
-      this.logger.log(`Linked fiat account ${fiat_account_id} to user ${wallet.userId}`);
+      this.logger.log(
+        `Linked fiat account ${fiat_account_id} to user ${wallet.userId}`,
+      );
     } else {
-      this.logger.warn(`Could not find user for wallet address ${user} to link fiat account.`);
+      this.logger.warn(
+        `Could not find user for wallet address ${user} to link fiat account.`,
+      );
     }
   }
 
@@ -455,24 +429,31 @@ export class LiquidityEventProcessorService {
    * Find and complete a pending swap order that matches the event data
    * Returns the completed order ID for further processing (e.g., triggering payout)
    */
-  private async  completeNearestPendingOrder(
-    user: string,
-    swapOrderId: string,
-    fromCurrency: string,
-    toCurrency: string,
-    fromAmount: number,
-    toAmount: number,
-    fee: number,
+  private async completeNearestPendingOrder(
     evt: EventPayload,
   ): Promise<string | null> {
-    // Find pending or processing swap order matching the criteria
+    const {
+      user,
+      swap_order_id,
+      fiat_symbol,
+      token_symbol,
+      token_amount,
+      token_amount_formatted,
+      fiat_amount,
+      fiat_amount_formatted,
+      fee,
+      fee_formatted,
+    } = evt.data;
+
+    const swapOrderUuid = felt252ToUuid(swap_order_id);
+    console.log('swapOrderUuid', swapOrderUuid);
+
     const pendingSwapOrder = await this.prisma.swapOrder.findFirst({
       where: {
-        userId: user,
-        id: swapOrderId,
+        id: swapOrderUuid,
         status: { in: ['pending', 'processing'] },
-        fromCurrency,
-        toCurrency,
+        // fromCurrency: token_amount,
+        // toCurrency: fiat_amount,
         // fromAmount: {
         //   gte: fromAmount * 0.99,
         //   lte: fromAmount * 1.01,
@@ -481,9 +462,11 @@ export class LiquidityEventProcessorService {
       orderBy: { createdAt: 'asc' },
     });
 
+    console.log('pending order:', pendingSwapOrder);
+
     if (!pendingSwapOrder) {
       this.logger.warn(
-        `No pending/processing swap order found for ${user}: ${fromAmount} ${fromCurrency} → ${toCurrency}`,
+        `No pending/processing swap order found for ${user}: ${token_amount} ${token_symbol} → ${fiat_amount} ${fiat_symbol}`,
       );
       return null;
     }
@@ -496,12 +479,14 @@ export class LiquidityEventProcessorService {
       data: {
         status: 'completed',
         completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
-        toAmount,
-        fee,
+        toAmount: parseFloat(fiat_amount),
+        fee: parseFloat(fee),
         blockNumber: evt.blockNumber,
         transactionHash: evt.transactionHash,
       },
     });
+
+    console.log('updated swap order');
 
     // Create transaction record for completed swap
     await this.prisma.transaction.create({
@@ -509,10 +494,10 @@ export class LiquidityEventProcessorService {
         userId: pendingSwapOrder.userId,
         type: 'swap',
         status: 'completed',
-        amount: fromAmount,
-        currency: fromCurrency,
-        fee,
-        netAmount: toAmount,
+        amount: parseFloat(token_amount),
+        currency: token_symbol,
+        fee: parseFloat(fee),
+        netAmount: parseFloat(fiat_amount),
         reference: pendingSwapOrder.reference,
         swapOrderId: pendingSwapOrder.id,
         blockNumber: evt.blockNumber,
@@ -520,6 +505,8 @@ export class LiquidityEventProcessorService {
         completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
       },
     });
+
+    console.log('created transaction record for completed swap');
 
     return pendingSwapOrder.id;
   }

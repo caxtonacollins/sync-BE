@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { FiatAccount } from '@prisma/client';
 import axios from 'axios';
+import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 
 @Injectable()
 export class PaymentService {
@@ -8,7 +9,7 @@ export class PaymentService {
   private readonly flutterwaveSecretKey: string;
   private readonly flutterwaveBaseUrl: string;
 
-  constructor() {
+  constructor(private readonly flutterwaveService: FlutterwaveService) {
     this.flutterwaveSecretKey = process.env.FLUTTERWAVE_SECRET_KEY || '';
     this.flutterwaveBaseUrl = 'https://api.flutterwave.com/v3';
   }
@@ -19,33 +20,56 @@ export class PaymentService {
    */
   async initiatePayout(
     fiatAccount: FiatAccount,
-    amount: number,
+    amount: number,  // in USD
     currency: string,
   ) {
-    this.logger.log(
-      `Initiating payout of ${amount} ${currency} to account ${fiatAccount.accountNumber}`,
-    );
-
     try {
+      console.log("fiatAccount", fiatAccount);
+      console.log("amount", amount);
+      console.log("currency", currency);
+      const exchangeRateResponse = await this.flutterwaveService.getExchangeRate(
+        'USD',
+        currency,
+        amount,
+      );
+      console.log('exchangeRateResponse', exchangeRateResponse);
+      const payoutAmount = exchangeRateResponse.destination.amount;
       const payoutReference = `PAYOUT_${Date.now()}_${fiatAccount.id}`;
+
+      // Convert amount to smallest currency unit (kobo for NGN, cents for USD, etc.)
+      const amountInSubunit = Math.round(payoutAmount * 100);
+      
+      // First, verify the bank account details
+      const accountVerification = await this.verifyBankAccount(
+        fiatAccount.accountNumber,
+        fiatAccount.bankCode?.toString() || "",
+        currency
+      );
+
+      // Prepare transfer payload
+      const transferPayload = {
+        account_bank: fiatAccount.bankCode,
+        account_number: fiatAccount.accountNumber,
+        amount: amountInSubunit,
+        currency: currency.toUpperCase(),
+        narration: 'Swap payout from Sync',
+        reference: payoutReference,
+        callback_url: `${process.env.BACKEND_URL}/api/payment/webhook/flutterwave`,
+        debit_currency: currency.toUpperCase(),
+        beneficiary_name: accountVerification.account_name || 'Sync User',
+      };
+
+      this.logger.debug('Initiating transfer with payload:', transferPayload);
 
       const response = await axios.post(
         `${this.flutterwaveBaseUrl}/transfers`,
-        {
-          account_bank: fiatAccount.bankCode,
-          account_number: fiatAccount.accountNumber,
-          amount: amount,
-          currency: currency,
-          narration: 'Swap payout from Sync',
-          reference: payoutReference,
-          callback_url: `${process.env.BACKEND_URL}/api/payment/webhook/flutterwave`,
-          debit_currency: currency,
-        },
+        transferPayload,
         {
           headers: {
             Authorization: `Bearer ${this.flutterwaveSecretKey}`,
             'Content-Type': 'application/json',
           },
+          timeout: 20000, // 20 seconds timeout
         },
       );
 
@@ -57,11 +81,44 @@ export class PaymentService {
           data: response.data.data,
         };
       } else {
-        throw new Error(`Payout failed: ${response.data.message}`);
+        throw new Error(response.data.message || 'Payout initiation failed');
       }
     } catch (error) {
-      this.logger.error(`Payout failed: ${error.message}`, error.stack);
-      throw new BadRequestException(`Failed to initiate payout: ${error.message}`);
+      const errorMessage = error.response?.data?.message || error.message;
+      this.logger.error(`Payout failed: ${errorMessage}`, error.stack);
+      throw new BadRequestException(`Failed to initiate payout: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Verify bank account details before initiating transfer
+   */
+  private async verifyBankAccount(accountNumber: string, bankCode: string, currency: string) {
+    try {
+      this.logger.debug(`Verifying bank account: ${accountNumber} for bank code: ${bankCode}`);
+      const response = await axios.post(
+        `${this.flutterwaveBaseUrl}/accounts/resolve`,
+        {
+          account_number: accountNumber,
+          account_bank: bankCode,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.flutterwaveSecretKey}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (response.data.status !== 'success') {
+        throw new Error(response.data.message || 'Account verification failed');
+      }
+
+      return response.data.data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message;
+      this.logger.error(`Bank account verification failed: ${errorMessage}`);
+      throw new Error(`Invalid bank account details: ${errorMessage}`);
     }
   }
 

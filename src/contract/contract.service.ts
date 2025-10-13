@@ -393,7 +393,10 @@ export class ContractService {
     try {
       const accountAddress = await this.getAccountAddress(userFelt252Id);
 
+      console.log("accountAddress", accountAddress);
+
       const isRegistered = await this.isUserRegistered(accountAddress);
+      console.log("isRegistered", isRegistered);
 
       const dashboardData = {
         isRegistered,
@@ -706,7 +709,7 @@ export class ContractService {
 
     const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
 
-    const fiat = fiatSymbol.toUpperCase();
+    const fiat = "USD";
     const token = tokenSymbol.toUpperCase();
 
     // Token address mapping
@@ -738,7 +741,7 @@ export class ContractService {
     // Convert tokenAmount (human-readable) to smallest unit
     // const adjustedAmount = BigInt(Math.floor(Number(tokenAmount) * Math.pow(10, decimals)));
     const amountU256 = uint256.bnToUint256(BigInt(tokenAmount));
-    const tokenSymbolToUSD = `${token}/${fiat}`;
+    const tokenSymbolToUSD = `${token}/USD`;
     const supportedTokenAddress = await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
 
     try {
@@ -747,6 +750,7 @@ export class ContractService {
       // Calculate token amount after fee
       const fee = (BigInt(tokenAmount) * feeBps) / 10000n;
       const amountAfterFee = BigInt(tokenAmount) - fee;
+
       const pricePerToken = await this.getTokenAmountInUsd(supportedTokenAddress);
 
       // Calculate expected fiat amount using same formula as contract
@@ -771,7 +775,7 @@ export class ContractService {
       calldata: [
         userContractAddress,
         swapOrderIdToFelt,
-        fiat,
+        fiatSymbol,
         tokenSymbolToUSD,
         amountU256.low,
         amountU256.high,
