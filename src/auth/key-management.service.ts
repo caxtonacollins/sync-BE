@@ -18,7 +18,7 @@ export class KeyManagementService {
     this.encryptionKey = Buffer.from(masterKey, 'base64');
   }
 
-  async storePrivateKey(userId: string, privateKey: string): Promise<void> {
+  async storePrivateKey(userId: string, privateKey: string): Promise<string> {
     // Generate unique encryption key for this user
     const userKey = randomBytes(32);
     const iv = randomBytes(16);
@@ -50,6 +50,7 @@ export class KeyManagementService {
         masterAuthTag: masterAuthTag.toString('base64'),
       },
     });
+    return encryptedKey.toString('base64');
   }
 
   async getPrivateKey(userId: string): Promise<string> {

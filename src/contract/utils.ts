@@ -9,6 +9,7 @@ import {
   stark,
 } from 'starknet';
 import { promises as fs } from 'fs';
+import crypto from 'crypto';
 
 export function connectToStarknet() {
   if (!process.env.STARKNET_NODE_URL_8) throw Error;
@@ -143,6 +144,74 @@ export function uuidToFelt252(uuid: string) {
   return shortString.encodeShortString(feltUuid.slice(0, 31));
 }
 
-export function formatTokenAmount(value: bigint, decimals: number): number {
-  return Number(value) / 10 ** decimals;
+export function encryptPrivateKey(privateKey: string): string {
+  const algorithm = 'aes-256-gcm';
+  const keyLength = 32;
+  const ivLength = 16;
+  const saltLength = 64;
+
+  const masterKey = process.env.WALLET_ENCRYPTION_KEY;
+  if (!masterKey) {
+    throw new Error('WALLET_ENCRYPTION_KEY environment variable not set');
+  }
+
+  // Generate random salt and IV
+  const salt = crypto.randomBytes(saltLength);
+  const iv = crypto.randomBytes(ivLength);
+
+  // Derive key from master key using salt
+  const key = crypto.scryptSync(masterKey, salt, keyLength);
+
+  // Create cipher
+  const cipher = crypto.createCipheriv(algorithm, key, iv);
+
+  // Encrypt
+  let encrypted = cipher.update(privateKey, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+
+  // Get auth tag
+  const authTag = cipher.getAuthTag();
+
+  // Combine: salt:iv:authTag:encrypted
+  return `${salt.toString('hex')}:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
+
+export function decryptPrivateKey(encryptedData: string): string {
+  const algorithm = 'aes-256-gcm';
+  const keyLength = 32;
+
+  const masterKey = process.env.WALLET_ENCRYPTION_KEY;
+  if (!masterKey) {
+    throw new Error('WALLET_ENCRYPTION_KEY environment variable not set');
+  }
+
+  // Split the encrypted data
+  const parts = encryptedData.split(':');
+  if (parts.length !== 4) {
+    throw new Error('Invalid encrypted data format');
+  }
+
+  const [saltHex, ivHex, authTagHex, encrypted] = parts;
+
+  // Convert from hex
+  const salt = Buffer.from(saltHex, 'hex');
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+
+  // Derive the same key
+  const key = crypto.scryptSync(masterKey, salt, keyLength);
+
+  // Create decipher
+  const decipher = crypto.createDecipheriv(algorithm, key, iv);
+  decipher.setAuthTag(authTag);
+
+  // Decrypt
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
+}
+
+export function hashData(data: string): string {
+  return crypto.createHash('sha256').update(data).digest('hex');
 }

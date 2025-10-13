@@ -9,6 +9,7 @@ import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from 'src/monnify/monnify.service';
+import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
 import chalk from 'chalk';
 import { ContractService } from 'src/contract/contract.service';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
@@ -18,6 +19,7 @@ export class UserService {
   constructor(
     private prisma: PrismaService,
     private monnifyService: MonnifyService,
+    private flutterwaveService: FlutterwaveService,
     private readonly contractService: ContractService,
   ) { }
 
@@ -59,6 +61,8 @@ export class UserService {
             role: createUserDto.role,
             status: createUserDto.status,
             verificationStatus: createUserDto.verificationStatus,
+            bvn: createUserDto.bvn,
+            nin: createUserDto.nin,
           },
         });
 
@@ -68,43 +72,38 @@ export class UserService {
         // Create fiat accounts for each currency
         for (const currency of fiatCurrencies) {
           try {
-            // Only attempt to create Monnify account for NGN
+            // Create Flutterwave virtual account for NGN
             if (currency === 'NGN') {
-              const monnifyData =
-                await this.monnifyService.createReserveAccount(user);
+              const flutterwaveAccounts =
+                await this.flutterwaveService.createVirtualAccounts(user);
 
-              // Set the default account as the first account in the array
-              const defaultAccount = monnifyData.responseBody.accounts[0];
+              console.log(flutterwaveAccounts);
 
-              await tx.fiatAccount.create({
-                data: {
-                  userId: user.id,
-                  provider: 'monnify',
-                  currency: monnifyData.responseBody.currencyCode,
-                  isDefault: currency === 'NGN',
-                  accountNumber: defaultAccount.accountNumber,
-                  accountName: defaultAccount.accountName,
-                  bankName: defaultAccount.bankName,
-                  bankCode: defaultAccount.bankCode,
-                  // Store Monnify specific data
-                  contractCode: monnifyData.responseBody.contractCode,
-                  accountReference: monnifyData.responseBody.accountReference,
-                  reservationReference:
-                    monnifyData.responseBody.reservationReference,
-                  reservedAccountType:
-                    monnifyData.responseBody.reservedAccountType,
-                  collectionChannel: monnifyData.responseBody.collectionChannel,
-                  customerEmail: monnifyData.responseBody.customerEmail,
-                  customerName: monnifyData.responseBody.customerName,
-
-                  // Store all accounts as JSON
-                  accounts: monnifyData.responseBody.accounts,
-                },
-              });
+              // Process each Flutterwave account (usually one per currency)
+              for (const fwAccount of flutterwaveAccounts) {
+                if (fwAccount) {
+                  await tx.fiatAccount.create({
+                    data: {
+                      userId: user.id,
+                      provider: 'flutterwave',
+                      currency: fwAccount.currency || 'NGN',
+                      isDefault: true,
+                      accountNumber: fwAccount.account_number,
+                      accountName: fwAccount.account_name || `${user.firstName} ${user.lastName}`,
+                      bankName: fwAccount.bank_name,
+                      bankCode: fwAccount.bank_code,
+                      // Store Flutterwave specific data
+                      accountReference: fwAccount.order_ref,
+                      // Store full account details as JSON
+                      accounts: fwAccount,
+                    },
+                  });
+                  console.log(
+                    chalk.green(`Flutterwave account created for ${currency}`),
+                  );
+                }
+              }
             }
-            console.log(
-              chalk.green(`Monnify account created for ${currency}`),
-            );
           } catch (error) {
             console.error(`Failed to create ${currency} fiat account:`, error);
             // Continue with other currencies if one fails
@@ -129,12 +128,12 @@ export class UserService {
               userId: user.id,
               network: 'starknet',
               address: accountResult.accountAddress,
+              encryptedPrivateKey: accountResult.encryptedPrivateKey,
               currency: 'STRK',
               isDefault: true,
             },
           });
 
-          // Register user with liquidity bridge
           const defaultFiatAccount = await tx.fiatAccount.findFirst({
             where: { userId: user.id, isDefault: true },
           });
@@ -147,7 +146,7 @@ export class UserService {
           }
         } catch (contractError) {
           console.error('StarkNet account creation failed:', contractError);
-          // Continue with user creation even if crypto wallet setup fails
+          throw contractError
         }
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars

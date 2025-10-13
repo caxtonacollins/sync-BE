@@ -15,7 +15,10 @@ import { SwapOrderService } from './swap-order/swap-order.service';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { LiquidityPoolModule } from './liquidity-pool/liquidity-pool.module';
 import { FlutterwaveModule } from './flutterwave/flutterwave.module';
-
+import { TransferModule } from './transfer/transfer.module';
+import { PaymentModule } from './payment/payment.module';
+import { PaymentService } from './payment/payment.service';
+import { WalletService } from './wallet/wallet.service';
 @Module({
   imports: [
     UserModule,
@@ -29,8 +32,10 @@ import { FlutterwaveModule } from './flutterwave/flutterwave.module';
     ExchangeRateModule,
     LiquidityPoolModule,
     FlutterwaveModule,
+    TransferModule,
+    PaymentModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService, ContractService, SwapOrderService],
+  providers: [AppService, PrismaService],
 })
 export class AppModule {}

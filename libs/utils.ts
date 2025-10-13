@@ -12,3 +12,17 @@ export const generateReference = () => {
 
     return reference;
 };
+
+export const parseTokenAmount = (amount: string, decimals: number): bigint => {
+    const amountStr = amount.toString().trim();
+
+    // Split into whole and fractional parts
+    const [whole = '0', fraction = ''] = amountStr.split('.');
+
+    // Pad or truncate fraction to match decimals
+    const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
+
+    // Combine and convert to BigInt
+    const combined = whole + paddedFraction;
+    return BigInt(combined);
+};

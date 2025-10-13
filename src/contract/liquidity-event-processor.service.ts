@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SwapOrderService } from '../swap-order/swap-order.service';
 
 // Event name constants matching Cairo events
 const EVENT_NAMES = {
@@ -37,7 +38,11 @@ interface BatchEventPayload {
 export class LiquidityEventProcessorService {
   private readonly logger = new Logger(LiquidityEventProcessorService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => SwapOrderService))
+    private readonly swapOrderService?: SwapOrderService,
+  ) { }
 
   async process(payload: BatchEventPayload | EventPayload | EventPayload[]) {
     try {
@@ -182,7 +187,7 @@ export class LiquidityEventProcessorService {
 
   private async handleFiatLiquidityAdded(evt: EventPayload) {
     const { fiat_symbol, amount_formatted, amount } = evt.data;
-    const parsedAmount = parseFloat(amount_formatted || amount);
+    const parsedAmount = parseFloat(amount);
     await this.updateLiquidityPool(
       evt,
       fiat_symbol,
@@ -271,6 +276,7 @@ export class LiquidityEventProcessorService {
   private async handleFiatToTokenSwap(evt: EventPayload) {
     const {
       user,
+      swap_order_id,
       fiat_symbol,
       token_symbol,
       fiat_amount,
@@ -292,6 +298,7 @@ export class LiquidityEventProcessorService {
     // Find and complete matching pending swap order
     await this.completeNearestPendingOrder(
       user,
+      swap_order_id,
       fiat_symbol,
       token_symbol,
       fiatAmt,
@@ -301,9 +308,15 @@ export class LiquidityEventProcessorService {
     );
   }
 
+  /**
+   * Handle TokenToFiatSwapExecuted event from StarkNet
+   * This confirms the swap was successful on-chain
+   * After updating the order, trigger the fiat payout
+   */
   private async handleTokenToFiatSwap(evt: EventPayload) {
     const {
       user,
+      swap_order_id,
       fiat_symbol,
       token_symbol,
       fiat_amount,
@@ -319,12 +332,13 @@ export class LiquidityEventProcessorService {
     const feeAmt = parseFloat(fee_formatted || fee || '0');
 
     this.logger.log(
-      `Token→Fiat Swap: ${tokenAmt} ${token_symbol} → ${fiatAmt} ${fiat_symbol} | Fee: ${feeAmt}`,
+      `Token→Fiat Swap Confirmed just before completeNearestPendingOrder: ${tokenAmt} ${token_symbol} → ${fiatAmt} ${fiat_symbol} | Fee: ${feeAmt}`,
     );
 
-    // Find and complete matching pending swap order
-    await this.completeNearestPendingOrder(
+    
+    const completedOrderId = await this.completeNearestPendingOrder(
       user,
+      swap_order_id,
       token_symbol,
       fiat_symbol,
       tokenAmt,
@@ -332,6 +346,18 @@ export class LiquidityEventProcessorService {
       feeAmt,
       evt,
     );
+
+    if (completedOrderId && this.swapOrderService) {
+      try {
+        this.logger.log(`Triggering payout for swap order ${completedOrderId}`);
+        await this.swapOrderService.initiatePayoutForSwap(completedOrderId);
+      } catch (error) {
+        this.logger.error(
+          `Failed to trigger payout for swap ${completedOrderId}: ${error.message}`,
+          error.stack,
+        );
+      }
+    }
   }
 
   private async handleWithdrawalCompleted(evt: EventPayload) {
@@ -425,43 +451,48 @@ export class LiquidityEventProcessorService {
     }
   }
 
-  private async completeNearestPendingOrder(
+  /**
+   * Find and complete a pending swap order that matches the event data
+   * Returns the completed order ID for further processing (e.g., triggering payout)
+   */
+  private async  completeNearestPendingOrder(
     user: string,
+    swapOrderId: string,
     fromCurrency: string,
     toCurrency: string,
     fromAmount: number,
     toAmount: number,
     fee: number,
     evt: EventPayload,
-  ) {
-    // Find pending swap order matching the criteria
-    const pending = await this.prisma.swapOrder.findFirst({
+  ): Promise<string | null> {
+    // Find pending or processing swap order matching the criteria
+    const pendingSwapOrder = await this.prisma.swapOrder.findFirst({
       where: {
         userId: user,
-        status: 'pending',
+        id: swapOrderId,
+        status: { in: ['pending', 'processing'] },
         fromCurrency,
         toCurrency,
-        // Allow some tolerance for amount matching (e.g., due to rounding)
-        fromAmount: {
-          gte: fromAmount * 0.99,
-          lte: fromAmount * 1.01,
-        },
+        // fromAmount: {
+        //   gte: fromAmount * 0.99,
+        //   lte: fromAmount * 1.01,
+        // },
       },
       orderBy: { createdAt: 'asc' },
     });
 
-    if (!pending) {
+    if (!pendingSwapOrder) {
       this.logger.warn(
-        `No pending swap order found for ${user}: ${fromAmount} ${fromCurrency} → ${toCurrency}`,
+        `No pending/processing swap order found for ${user}: ${fromAmount} ${fromCurrency} → ${toCurrency}`,
       );
-      return;
+      return null;
     }
 
-    this.logger.log(`Completing swap order ${pending.id}`);
+    this.logger.log(`Completing swap order ${pendingSwapOrder.id}`);
 
-    // Update swap order status
+    // Update swap order status to completed
     await this.prisma.swapOrder.update({
-      where: { id: pending.id },
+      where: { id: pendingSwapOrder.id },
       data: {
         status: 'completed',
         completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
@@ -475,19 +506,21 @@ export class LiquidityEventProcessorService {
     // Create transaction record for completed swap
     await this.prisma.transaction.create({
       data: {
-        userId: pending.userId,
+        userId: pendingSwapOrder.userId,
         type: 'swap',
         status: 'completed',
         amount: fromAmount,
         currency: fromCurrency,
         fee,
         netAmount: toAmount,
-        reference: pending.reference,
-        swapOrderId: pending.id,
+        reference: pendingSwapOrder.reference,
+        swapOrderId: pendingSwapOrder.id,
         blockNumber: evt.blockNumber,
         transactionHash: evt.transactionHash,
         completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
       },
     });
+
+    return pendingSwapOrder.id;
   }
 }

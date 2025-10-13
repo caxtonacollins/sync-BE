@@ -3,17 +3,22 @@ import {
   Controller,
   Get,
   Param,
-  ParseUUIDPipe,
   Query,
   Patch,
+  Post,
+  UseGuards,
+  Req,
+  ParseUUIDPipe,
 } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { CreateFiatTransferDto } from './dto/create-fiat-transfer.dto';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiQuery,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { TransactionService } from './transaction.service';
 import { TxFilterDto } from './dto/tx-filter.dto';
@@ -106,5 +111,12 @@ export class TransactionController {
     @Body() updateDto: UpdateTxDto,
   ) {
     return this.transactionService.updateStatus(id, updateDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('fiat')
+  transferFiat(@Body() dto: CreateFiatTransferDto, @Req() req) {
+    const senderUserId = req.user.sub;
+    return this.transactionService.transferFiat(senderUserId, dto.recipientEmail, dto.amount, dto.currency);
   }
 }

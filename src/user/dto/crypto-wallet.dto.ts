@@ -20,6 +20,10 @@ export class CryptoWalletDto {
   @IsString()
   currency: string;
 
+  /** Encrypted private key */
+  @IsString()
+  encryptedPrivateKey: string;
+
   /** Marks this as the user’s primary wallet for the currency */
   @IsOptional()
   @IsBoolean()

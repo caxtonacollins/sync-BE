@@ -123,45 +123,4 @@ export class WalletController {
       throw error;
     }
   }
-
-  /**
-   * Bridge liquidity between fiat and crypto
-   */
-  @Post('bridge')
-  @HttpCode(HttpStatus.ACCEPTED)
-  async bridgeLiquidity(
-    @Request() req,
-    @Body(ValidationPipe) bridgeLiquidityDto: BridgeLiquidityDto,
-  ) {
-    try {
-      const userId = req.user.sub;
-
-      if (!userId) {
-        throw new BadRequestException('User ID is required');
-      }
-
-      // Additional business logic validation
-      if (bridgeLiquidityDto.fromType === bridgeLiquidityDto.toType) {
-        throw new BadRequestException(
-          'Cannot bridge between same wallet types',
-        );
-      }
-
-      if (bridgeLiquidityDto.fromCurrency === bridgeLiquidityDto.toCurrency) {
-        throw new BadRequestException('Cannot bridge between same currencies');
-      }
-
-      return await this.walletService.bridgeLiquidity(
-        userId,
-        bridgeLiquidityDto.fromType,
-        bridgeLiquidityDto.toType,
-        bridgeLiquidityDto.fromCurrency,
-        bridgeLiquidityDto.toCurrency,
-        bridgeLiquidityDto.amount,
-      );
-    } catch (error) {
-      this.logger.error('Failed to bridge liquidity:', error);
-      throw error;
-    }
-  }
 }

@@ -42,4 +42,8 @@ export class UpdateSwapOrderDto {
   @IsOptional()
   @IsDateString()
   updatedAt?: string;
+
+  @IsOptional()
+  @IsString()
+  transactionHash?: string;
 }

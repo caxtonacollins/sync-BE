@@ -27,6 +27,7 @@ class SwapFiatToTokenDto {
   fiatSymbol: string;
   tokenSymbol: string;
   fiatAmount: number;
+  swapOrderId: string;
 }
 
 class SwapTokenToFiatDto {
@@ -34,6 +35,7 @@ class SwapTokenToFiatDto {
   fiatSymbol: string;
   tokenSymbol: string;
   tokenAmount: string;
+  swapOrderId: string;
 }
 
 class MintTokenDto {
@@ -84,9 +86,8 @@ export class ContractController {
   @Get('amount_in_usd')
   getAmountInUsd(
     @Query('address') address: string,
-    @Query('amount') amount: string,
   ) {
-    return this.contractService.getTokenAmountInUsd(address, amount);
+    return this.contractService.getTokenAmountInUsd(address);
   }
 
   @Get('account_classhash')
@@ -186,6 +187,7 @@ export class ContractController {
       swapFiatToTokenDto.fiatSymbol,
       swapFiatToTokenDto.tokenSymbol,
       swapFiatToTokenDto.fiatAmount,
+      swapFiatToTokenDto.swapOrderId,
     );
   }
 
@@ -196,6 +198,7 @@ export class ContractController {
       swapTokenToFiatDto.fiatSymbol,
       swapTokenToFiatDto.tokenSymbol,
       swapTokenToFiatDto.tokenAmount,
+      swapTokenToFiatDto.swapOrderId,
     );
   }
 

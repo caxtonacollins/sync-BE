@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MonnifyService } from '../monnify/monnify.service';
@@ -48,6 +50,7 @@ export class WalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly monnifyService: MonnifyService,
+    @Inject(forwardRef(() => ContractService))
     private readonly contractService: ContractService,
   ) {}
 
@@ -83,6 +86,51 @@ export class WalletService {
     } catch (error) {
       this.logger.error(
         `Failed to get fiat accounts for user ${userId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  async getFiatAccountForUser(userId: string): Promise<FiatAccount | null> {
+    return this.prisma.fiatAccount.findFirst({
+      where: {
+        userId,
+        isActive: true,
+        isDefault: true, // Assuming we use the default account
+      },
+    });
+  }
+
+  async getCryptoWallets(userId: string) {
+    try {
+      const wallets = await this.prisma.cryptoWallet.findMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      return wallets.map((wallet) => ({
+        id: wallet.id,
+        name: `${wallet.user.firstName} ${wallet.user.lastName}`,
+        address: wallet.address,
+        balance: 0, // This will be replaced with actual balance from StarkNet later
+        currency: wallet.currency,
+        initials: `${wallet.user.firstName[0]}${wallet.user.lastName[0]}`,
+        isDefault: wallet.isDefault,
+      }));
+    } catch (error) {
+      this.logger.error(
+        `Failed to get crypto wallets for user ${userId}:`,
         error,
       );
       throw error;
@@ -266,7 +314,7 @@ export class WalletService {
       // Create StarkNet account
       const result = await this.contractService.createAccount(userId);
 
-      if (!result?.accountAddress) {
+      if (!result?.accountAddress || !result?.encryptedPrivateKey) {
         throw new Error('Failed to create StarkNet account');
       }
 
@@ -275,6 +323,7 @@ export class WalletService {
           userId,
           network: 'starknet',
           address: result.accountAddress,
+          encryptedPrivateKey: result.encryptedPrivateKey,
           currency,
           isDefault: currency === 'STRK',
         },
@@ -319,56 +368,6 @@ export class WalletService {
     } catch (error) {
       this.logger.error(
         `Failed to get transaction history for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Transfer between fiat and crypto (liquidity bridge simulation)
-   */
-  async bridgeLiquidity(
-    userId: string,
-    fromType: 'fiat' | 'crypto',
-    toType: 'fiat' | 'crypto',
-    fromCurrency: string,
-    toCurrency: string,
-    amount: number,
-  ): Promise<any> {
-    try {
-      // TODO: Implement actual liquidity bridging logic
-      // This is a placeholder for the liquidity bridge functionality
-
-      this.logger.log(
-        `Bridging liquidity for user ${userId}: ${amount} ${fromCurrency} -> ${toCurrency}`,
-      );
-
-      // Create swap order record
-      const swapOrder = await this.prisma.swapOrder.create({
-        data: {
-          userId,
-          fromCurrency,
-          toCurrency,
-          fromAmount: amount,
-          toAmount: amount * 0.98, // Mock 2% fee
-          rate: 0.98,
-          fee: amount * 0.02,
-          status: 'pending',
-          reference: `BRIDGE_${Date.now()}`,
-        },
-      });
-
-      return {
-        orderId: swapOrder.id,
-        status: 'pending',
-        estimatedTime: '2-5 minutes',
-        fee: swapOrder.fee,
-        expectedAmount: swapOrder.toAmount,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Failed to bridge liquidity for user ${userId}:`,
         error,
       );
       throw error;

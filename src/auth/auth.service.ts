@@ -109,7 +109,7 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '15m' },
+        { expiresIn: '59m' },
       ),
       this.jwtService.signAsync(
         { sub: user.id, email: user.email, role: user.role },
@@ -247,13 +247,13 @@ export class AuthService {
     const wallet = ethers.Wallet.createRandom();
 
     try {
-      // Store the encrypted private key
-      await this.keyManagementService.storePrivateKey(
+      // Store the encrypted private key and get the encrypted version
+      const encryptedKey = await this.keyManagementService.storePrivateKey(
         userId,
         wallet.privateKey,
       );
 
-      // Store the public address
+      // Store the public address with encrypted private key
       await this.prisma.cryptoWallet.create({
         data: {
           userId,
@@ -261,6 +261,7 @@ export class AuthService {
           network: 'ethereum',
           currency: 'ETH',
           isActive: true,
+          encryptedPrivateKey: encryptedKey,
         },
       });
 
@@ -276,13 +277,13 @@ export class AuthService {
     try {
       const wallet = new ethers.Wallet(privateKey);
 
-      // Store the encrypted private key
-      await this.keyManagementService.storePrivateKey(
+      // Store the encrypted private key and get the encrypted version
+      const encryptedKey = await this.keyManagementService.storePrivateKey(
         userId,
         wallet.privateKey,
       );
 
-      // Store the public address
+      // Store the public address with encrypted private key
       await this.prisma.cryptoWallet.create({
         data: {
           userId,
@@ -290,6 +291,7 @@ export class AuthService {
           network: 'ethereum',
           currency: 'ETH',
           isActive: true,
+          encryptedPrivateKey: encryptedKey,
         },
       });
 

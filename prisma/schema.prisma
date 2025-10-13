@@ -121,6 +121,7 @@ model CryptoWallet {
   user            User        @relation(fields: [userId], references: [id])
   network         String      // "ethereum", "bitcoin", "starknet", etc.
   address         String
+  encryptedPrivateKey  String   @db.Text
   currency        String      // "STRK", "ETH", "BTC", "USDC", etc.
   isDefault       Boolean     @default(false)
   isActive        Boolean     @default(true)
@@ -171,6 +172,7 @@ model SwapOrder {
   fromAmount      Float
   toAmount        Float
   rate            Float
+  swapType        SwapType?
   fee             Float
   status          String      // "pending", "completed", "failed", "partial"
   reference       String      @unique
@@ -186,6 +188,11 @@ model SwapOrder {
   @@index([status])
   @@index([fromCurrency, toCurrency])
   @@index([transactionHash])
+}
+
+enum SwapType {
+  TOKENTOFIAT
+  FIATTOTOKEN
 }
 
 model Session {

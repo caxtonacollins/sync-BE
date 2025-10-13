@@ -7,7 +7,9 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SwapOrderService } from './swap-order.service';
 import { CreateSwapOrderDto } from './dto/create-swap-order.dto';
 import { UpdateSwapOrderDto } from './dto/update-swap-order.dto';
@@ -19,7 +21,14 @@ export class SwapOrderController {
 
   @Post()
   create(@Body() dto: CreateSwapOrderDto) {
+    dto.status = 'pending';
     return this.swapOrderService.create(dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('execute')
+  execute(@Body() dto: CreateSwapOrderDto) {
+    return this.swapOrderService.executeSwap(dto);
   }
 
   @Get()

@@ -18,7 +18,6 @@ import {
   createKeyPair,
   createNewContractInstance,
   deployAccount,
-  formatTokenAmount,
   getClassAt,
   getDeployerWallet,
   uuidToFelt252,
@@ -54,8 +53,8 @@ export interface LiquidityBridgeResult {
 }
 
 @Injectable()
-export class EnhancedContractServicee {
-  private readonly logger = new Logger(EnhancedContractServicee.name);
+export class SuperContractServicee {
+  private readonly logger = new Logger(SuperContractServicee.name);
   private provider: RpcProvider;
   private liquidityContractAddress: string;
   private accountAddress: string;
@@ -84,73 +83,8 @@ export class EnhancedContractServicee {
     this.deployerAccount = getDeployerWallet();
   }
 
-
-  /**
-   * Execute liquidity bridge swap between fiat and crypto
-   * TODO: Integrate with StarkNet liquidity bridge contract swap function
-   */
-  async executeLiquidityBridge(
-    userAccountAddress: string,
-    fromToken: string,
-    toToken: string,
-    amount: string,
-  ): Promise<LiquidityBridgeResult> {
-    try {
-      this.logger.log(`Executing liquidity bridge: ${amount} ${fromToken} -> ${toToken}`);
-      
-      // TODO: Replace with actual contract call
-      // const amountUint256 = uint256.bnToUint256(amount);
-      // const fromTokenFelt = shortString.encodeShortString(fromToken);
-      // const toTokenFelt = shortString.encodeShortString(toToken);
-      // 
-      // const call = {
-      //   contractAddress: this.liquidityContractAddress,
-      //   entrypoint: 'execute_swap',
-      //   calldata: [userAccountAddress, fromTokenFelt, toTokenFelt, amountUint256.low, amountUint256.high],
-      // };
-      // 
-      // const account = this.getDeployerWallet();
-      // const { transaction_hash: txH } = await account.execute(call, {
-      //   maxFee: 10 ** 15,
-      // });
-
-      // Mock exchange rates (simplified)
-      const exchangeRates = {
-        'NGN-STRK': 0.00125, // 1 NGN = 0.00125 STRK
-        'STRK-NGN': 800,     // 1 STRK = 800 NGN
-        'NGN-ETH': 0.0000015625, // 1 NGN = 0.0000015625 ETH
-        'ETH-NGN': 640000,   // 1 ETH = 640,000 NGN
-      };
-
-      const rateKey = `${fromToken}-${toToken}`;
-      const rate = exchangeRates[rateKey] || 1;
-      const fee = parseFloat(amount) * 0.002; // 0.2% fee
-      const toAmount = (parseFloat(amount) - fee) * rate;
-
-      // Mock response for development
-      const mockResult: LiquidityBridgeResult = {
-        orderId: `BRIDGE_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-        fromToken,
-        toToken,
-        fromAmount: amount,
-        toAmount: toAmount.toString(),
-        exchangeRate: rate.toString(),
-        fee: fee.toString(),
-        status: 'pending',
-        transactionHash: `0x${Math.random().toString(16).substring(2, 66)}`,
-      };
-
-      this.logger.log(`Mock bridge executed: ${mockResult.orderId}`);
-      return mockResult;
-    } catch (error) {
-      this.logger.error(`Failed to execute liquidity bridge:`, error);
-      throw error;
-    }
-  }
-
   /**
    * Transfer tokens between StarkNet accounts
-   * TODO: Integrate with StarkNet ERC20 transfer function
    */
   async transferTokens(
     fromAccountAddress: string,
@@ -191,7 +125,6 @@ export class EnhancedContractServicee {
 
   /**
    * Get transaction status from StarkNet
-   * TODO: Integrate with StarkNet transaction status queries
    */
   async getTransactionStatus(transactionHash: string): Promise<{
     status: 'pending' | 'accepted_on_l2' | 'accepted_on_l1' | 'rejected';
@@ -229,7 +162,6 @@ export class EnhancedContractServicee {
 
   /**
    * Estimate gas fees for StarkNet transactions
-   * TODO: Integrate with StarkNet fee estimation
    */
   async estimateTransactionFee(
     contractAddress: string,
@@ -270,27 +202,5 @@ export class EnhancedContractServicee {
       this.logger.error(`Failed to estimate transaction fee:`, error);
       throw error;
     }
-  }
-
-  /**
-   * Get deployer wallet instance
-   */
-  private getDeployerWallet(): Account {
-    return new Account(this.provider, this.accountAddress, this.privateKey);
-  }
-
-  /**
-   * Validate StarkNet address format
-   */
-  private isValidStarkNetAddress(address: string): boolean {
-    return /^0x[0-9a-fA-F]{64}$/.test(address);
-  }
-
-  /**
-   * Format token amount with proper decimals
-   */
-  private formatTokenAmount(amount: string, decimals: number): string {
-    const divisor = Math.pow(10, decimals);
-    return (parseFloat(amount) / divisor).toString();
   }
 }
