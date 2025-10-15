@@ -12,16 +12,10 @@ import { UserModule } from '../user/user.module';
     PrismaModule,
     WalletModule,
     forwardRef(() => UserModule),
-    forwardRef(() => SwapOrderModule)
+    forwardRef(() => SwapOrderModule),
   ],
   controllers: [ContractController],
-  providers: [
-    ContractService,
-    LiquidityEventProcessorService
-  ],
-  exports: [
-    ContractService,
-    LiquidityEventProcessorService
-  ],
+  providers: [ContractService, LiquidityEventProcessorService],
+  exports: [ContractService, LiquidityEventProcessorService],
 })
 export class ContractModule {}

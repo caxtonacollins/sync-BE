@@ -11,6 +11,7 @@ import {
   UseGuards,
   Req,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -18,7 +19,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
-import { MonnifyService } from '../monnify/monnify.service';
+import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 import { ContractService } from 'src/contract/contract.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -44,7 +45,7 @@ interface RequestWithUser extends Request {
 export class UserController {
   constructor(
     private readonly userService: UserService,
-    private readonly monnifyService: MonnifyService,
+    private readonly flutterwaveService: FlutterwaveService,
     private readonly contractService: ContractService,
   ) {}
 
@@ -55,12 +56,20 @@ export class UserController {
       return await this.userService.createUser(createUserDto);
     } catch (error) {
       if (error.code === 'P2002') {
-        throw new Error('Email already in use. Please use a different email or login.');
+        throw new BadRequestException({
+          message: 'Email already in use',
+          field: 'email',
+          error: 'Email already in use. Please use a different email or login.',
+        });
       } else if (error instanceof Prisma.PrismaClientValidationError) {
-        throw new Error('Invalid user data. Please check your information and try again.');
+        throw new BadRequestException(
+          'Invalid user data. Please check your information and try again.',
+        );
       }
-      
-      throw new Error('Failed to create account. Please try again later.');
+
+      throw new BadRequestException(
+        'Failed to create account. Please try again later.',
+      );
     }
   }
 
@@ -80,10 +89,11 @@ export class UserController {
     @Query('swapOrders') swapOrders?: string,
   ) {
     try {
-
       // Users can only access their own data, admins can access any user's data
       if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
-        console.log('[UserController] Authorization failed - user can only access own data');
+        console.log(
+          '[UserController] Authorization failed - user can only access own data',
+        );
         throw new ForbiddenException('You can only access your own data');
       }
 
@@ -250,8 +260,9 @@ export class UserController {
 
   @Get('resolve/account/:accountNumber')
   async resolveAccount(@Param('accountNumber') accountNumber: string) {
-    const syncAccount = await this.userService.resolveAccountNumber(accountNumber);
-    const banks = await this.monnifyService.getNigerianBanks();
+    const syncAccount =
+      await this.userService.resolveAccountNumber(accountNumber);
+    const banks = await this.flutterwaveService.getBanks();
 
     if (syncAccount) {
       // SyncPayment account found - put it at the top

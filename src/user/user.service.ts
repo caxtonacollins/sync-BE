@@ -8,7 +8,6 @@ import * as bcrypt from 'bcrypt';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
-import { MonnifyService } from 'src/monnify/monnify.service';
 import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
 import chalk from 'chalk';
 import { ContractService } from 'src/contract/contract.service';
@@ -18,10 +17,9 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 export class UserService {
   constructor(
     private prisma: PrismaService,
-    private monnifyService: MonnifyService,
-    private flutterwaveService: FlutterwaveService,
+private flutterwaveService: FlutterwaveService,
     private readonly contractService: ContractService,
-  ) { }
+  ) {}
 
   private readonly SALT_ROUNDS = 12;
 
@@ -69,17 +67,14 @@ export class UserService {
         // 2. Create fiat accounts for supported currencies
         const fiatCurrencies = ['NGN']; // 'GHS', 'USD'
 
-        // Create fiat accounts for each currency
         for (const currency of fiatCurrencies) {
           try {
-            // Create Flutterwave virtual account for NGN
             if (currency === 'NGN') {
               const flutterwaveAccounts =
                 await this.flutterwaveService.createVirtualAccounts(user);
 
               console.log(flutterwaveAccounts);
 
-              // Process each Flutterwave account (usually one per currency)
               for (const fwAccount of flutterwaveAccounts) {
                 if (fwAccount) {
                   await tx.fiatAccount.create({
@@ -89,7 +84,9 @@ export class UserService {
                       currency: fwAccount.currency || 'NGN',
                       isDefault: true,
                       accountNumber: fwAccount.account_number,
-                      accountName: fwAccount.account_name || `${user.firstName} ${user.lastName}`,
+                      accountName:
+                        fwAccount.account_name ||
+                        `${user.firstName} ${user.lastName}`,
                       bankName: fwAccount.bank_name,
                       bankCode: fwAccount.bank_code,
                       // Store Flutterwave specific data
@@ -98,21 +95,23 @@ export class UserService {
                       accounts: fwAccount,
                     },
                   });
-                  console.log(
-                    chalk.green(`Flutterwave account created for ${currency}`),
-                  );
                 }
               }
             }
           } catch (error) {
             console.error(`Failed to create ${currency} fiat account:`, error);
-            // Continue with other currencies if one fails
+            if (currency === 'NGN') {
+              throw new Error(
+                `Failed to create Flutterwave virtual account: ${error.message}`,
+              );
+            }
           }
         }
 
         try {
-          // Create the StarkNet account
-          const accountResult = await this.contractService.createAccount(user.id);
+          const accountResult = await this.contractService.createAccount(
+            user.id,
+          );
           if (!accountResult) {
             throw new Error('Failed to create StarkNet account');
           }
@@ -146,7 +145,7 @@ export class UserService {
           }
         } catch (contractError) {
           console.error('StarkNet account creation failed:', contractError);
-          throw contractError
+          throw contractError;
         }
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -330,7 +329,7 @@ export class UserService {
         orderBy: { createdAt: 'desc' },
         include: {
           fiatAccount: true,
-          cryptoWallet: true, 
+          cryptoWallet: true,
           swapOrder: true,
         },
       }),
@@ -399,20 +398,29 @@ export class UserService {
   private verifyPin(pin: string, stored: string): boolean {
     const [salt, storedHash] = stored.split(':');
     const computed = scryptSync(pin, salt, 32).toString('hex');
-    return timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(computed, 'hex'));
+    return timingSafeEqual(
+      Buffer.from(storedHash, 'hex'),
+      Buffer.from(computed, 'hex'),
+    );
   }
 
   async setPaymentPin(userId: string, pin: string) {
     const hash = this.hashPin(pin);
     await this.prisma.user.update({
       where: { id: userId },
-      data: { paymentPinHash: hash, paymentPinAttempts: 0, paymentPinLockedUntil: null } as any,
+      data: {
+        paymentPinHash: hash,
+        paymentPinAttempts: 0,
+        paymentPinLockedUntil: null,
+      } as any,
     });
     return { success: true };
   }
 
   async verifyPaymentPin(userId: string, pin: string) {
-    const user: any = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user: any = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
     if (!user) throw new NotFoundException('User not found');
 
     if (user.paymentPinLockedUntil && user.paymentPinLockedUntil > new Date()) {
@@ -428,10 +436,13 @@ export class UserService {
       if (attempts >= 5) {
         lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
       }
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { paymentPinAttempts: lockedUntil ? 0 : attempts, paymentPinLockedUntil: lockedUntil } as any,
-    });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          paymentPinAttempts: lockedUntil ? 0 : attempts,
+          paymentPinLockedUntil: lockedUntil,
+        } as any,
+      });
       return { success: false, lockedUntil };
     }
 
@@ -444,7 +455,8 @@ export class UserService {
 
   async changePaymentPin(userId: string, oldPin: string, newPin: string) {
     const verify = await this.verifyPaymentPin(userId, oldPin);
-    if (!verify.success) return { success: false, lockedUntil: verify.lockedUntil };
+    if (!verify.success)
+      return { success: false, lockedUntil: verify.lockedUntil };
     const hash = this.hashPin(newPin);
     await this.prisma.user.update({
       where: { id: userId },
@@ -570,7 +582,7 @@ export class UserService {
         },
       },
     });
-    console.log("fiatAccount", fiatAccount);
+    console.log('fiatAccount', fiatAccount);
 
     if (fiatAccount) {
       // Internal SyncPayment account found

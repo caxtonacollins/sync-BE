@@ -8,12 +8,25 @@ import {
   Delete,
   Query,
   UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SwapOrderService } from './swap-order.service';
 import { CreateSwapOrderDto } from './dto/create-swap-order.dto';
 import { UpdateSwapOrderDto } from './dto/update-swap-order.dto';
 import { SwapOrderFilterDto } from './dto/swap-order-filter.dto';
+import { Request } from 'express';
+
+interface JwtUser {
+  userId: string;
+  email: string;
+  role: string;
+}
+
+interface RequestWithUser extends Request {
+  user: JwtUser;
+}
 
 @Controller('swap-order')
 export class SwapOrderController {
@@ -31,9 +44,20 @@ export class SwapOrderController {
     return this.swapOrderService.executeSwap(dto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
-  findAll(@Query() filter: SwapOrderFilterDto) {
+  findAll(@Query() filter: SwapOrderFilterDto, @Req() req: RequestWithUser) {
     try {
+      // Ensure users can only access their own swap orders
+      if (req.user.role !== 'ADMIN' && filter.userId && req.user.userId !== filter.userId) {
+        throw new ForbiddenException('You can only access your own swap orders');
+      }
+
+      // For non-admin users, force filter by their own userId
+      if (req.user.role !== 'ADMIN') {
+        filter.userId = req.user.userId;
+      }
+
       return this.swapOrderService.findAll(filter);
     } catch (error) {
       throw error;

@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsOptional,
   IsString,
@@ -15,12 +16,14 @@ export class SwapOrderFilterDto {
   @IsISO8601()
   toDate?: string;
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
-  page?: number = 1;
+  page: number = 1;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
-  limit?: number = 10;
+  limit: number = 10;
 
   @IsOptional()
   @IsString()

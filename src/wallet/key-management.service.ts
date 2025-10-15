@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Account, RpcProvider } from 'starknet';
 import { decryptPrivateKey } from '../contract/utils';
@@ -6,9 +11,9 @@ import { connectToStarknet } from '../contract/utils';
 
 /**
  * KeyManagementService
- * 
+ *
  * Handles secure retrieval and usage of user private keys for transaction signing.
- * 
+ *
  * SECURITY PRINCIPLES:
  * 1. Private keys are NEVER returned to the client
  * 2. Keys are only decrypted in memory when needed for signing
@@ -30,12 +35,15 @@ export class KeyManagementService {
   /**
    * Get a user's Account instance for signing transactions
    * This method decrypts the private key in memory and creates an Account object
-   * 
+   *
    * @param userId - The authenticated user's ID
    * @param walletAddress - Optional specific wallet address (defaults to default wallet)
    * @returns Account instance ready for signing transactions
    */
-  async getUserAccount(userId: string, walletAddress?: string): Promise<Account> {
+  async getUserAccount(
+    userId: string,
+    walletAddress?: string,
+  ): Promise<Account> {
     try {
       const wallet = await this.prisma.cryptoWallet.findFirst({
         where: {
@@ -51,7 +59,9 @@ export class KeyManagementService {
       }
 
       if (!wallet.encryptedPrivateKey) {
-        this.logger.error(`No encrypted private key found for wallet ${wallet.id}`);
+        this.logger.error(
+          `No encrypted private key found for wallet ${wallet.id}`,
+        );
         throw new NotFoundException('Private key not found for this wallet');
       }
 
@@ -59,7 +69,9 @@ export class KeyManagementService {
 
       const account = new Account(this.provider, wallet.address, privateKey);
 
-      this.logger.log(`Account accessed for user ${userId}, wallet ${wallet.address}`);
+      this.logger.log(
+        `Account accessed for user ${userId}, wallet ${wallet.address}`,
+      );
 
       return account;
     } catch (error) {
@@ -71,7 +83,7 @@ export class KeyManagementService {
   /**
    * Execute a transaction on behalf of the user
    * This is the secure way to sign transactions without exposing private keys
-   * 
+   *
    * @param userId - The authenticated user's ID
    * @param calls - Array of contract calls to execute
    * @param walletAddress - Optional specific wallet address
@@ -90,7 +102,9 @@ export class KeyManagementService {
         maxFee: 10 ** 15,
       });
 
-      this.logger.log(`Transaction executed for user ${userId}: ${transaction_hash}`);
+      this.logger.log(
+        `Transaction executed for user ${userId}: ${transaction_hash}`,
+      );
 
       const receipt = await this.provider.waitForTransaction(transaction_hash);
 
@@ -105,8 +119,10 @@ export class KeyManagementService {
         receipt,
       };
     } catch (error) {
-      this.logger.error(`Transaction execution failed for user ${userId}: ${error.message}`);
-      
+      this.logger.error(
+        `Transaction execution failed for user ${userId}: ${error.message}`,
+      );
+
       await this.createAuditLog(userId, 'TRANSACTION_FAILED', {
         error: error.message,
         walletAddress: walletAddress || 'default',
@@ -118,7 +134,7 @@ export class KeyManagementService {
 
   /**
    * Get user's wallet address without exposing private key
-   * 
+   *
    * @param userId - The authenticated user's ID
    * @returns Wallet address
    */
@@ -143,12 +159,15 @@ export class KeyManagementService {
 
   /**
    * Verify that a user owns a specific wallet address
-   * 
+   *
    * @param userId - The authenticated user's ID
    * @param walletAddress - The wallet address to verify
    * @returns boolean indicating ownership
    */
-  async verifyWalletOwnership(userId: string, walletAddress: string): Promise<boolean> {
+  async verifyWalletOwnership(
+    userId: string,
+    walletAddress: string,
+  ): Promise<boolean> {
     const wallet = await this.prisma.cryptoWallet.findFirst({
       where: {
         userId,
@@ -162,7 +181,7 @@ export class KeyManagementService {
 
   /**
    * Create an audit log entry for key access and usage
-   * 
+   *
    * @param userId - User ID
    * @param action - Action performed
    * @param metadata - Additional metadata
@@ -188,7 +207,7 @@ export class KeyManagementService {
 
   /**
    * Get all active wallets for a user (without private keys)
-   * 
+   *
    * @param userId - The authenticated user's ID
    * @returns Array of wallet information
    */

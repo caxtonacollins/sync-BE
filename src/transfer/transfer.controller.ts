@@ -10,14 +10,12 @@ export class TransferController {
   @UseGuards(JwtAuthGuard)
   @Post('token')
   transferToken(@Body() dto: CreateTransferDto, @Req() req) {
-    dto.userId = req.user.sub;
-    return this.transferService.transferToken(dto);
+    return this.transferService.transferToken(dto, req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('fiat')
   transferFiat(@Body() dto: CreateTransferDto, @Req() req) {
-    dto.userId = req.user.sub;
-    return this.transferService.transferFiat(dto);
+    return this.transferService.transferFiat(dto, req.user.sub);
   }
 }

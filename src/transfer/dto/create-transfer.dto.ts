@@ -12,6 +12,4 @@ export class CreateTransferDto {
   @IsString()
   @IsNotEmpty()
   token: string;
-
-  userId: string;
 }

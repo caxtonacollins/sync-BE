@@ -23,7 +23,6 @@ import {
 } from './utils';
 import erc20 from './abi/erc20.json';
 import chalk from 'chalk';
-import { log } from 'console';
 import { KeyManagementService } from '../wallet/key-management.service';
 import { UserService } from 'src/user/user.service';
 
@@ -108,14 +107,11 @@ export class ContractService {
 
       const account = this.getDeployerWallet();
 
-      log('account:', account);
-
       const { transaction_hash: txH } = await account.execute(call, {
         maxFee: 10 ** 15,
       });
 
       const txR = await this.provider.waitForTransaction(txH);
-      log(txR);
       if (txR.isSuccess()) {
         // Parse the account creation event
         const events = txR.value.events;
@@ -306,6 +302,28 @@ export class ContractService {
     if (txR.isSuccess()) {
       console.log('Paid fee =', txR.statusReceipt);
     }
+  };
+
+  transferToken = async (
+    userId: string,
+    toAddress: string,
+    amount: string,
+  ) => {
+    if (!userId) throw new Error('user id is required');
+    if (!toAddress) throw new Error('to address is required');
+    if (!amount) throw new Error('amount is required');
+
+    const tokenDecimals = await this.getTokenDecimals(this.strkTokenAddress);
+    const amountInDecimals = uint256.bnToUint256(BigInt(amount) ** BigInt(tokenDecimals));
+
+    const call = {
+      contractAddress: this.strkTokenAddress,
+      entrypoint: 'transfer',
+      calldata: [toAddress, amountInDecimals],
+    };
+
+    const txR = await this.executeUserTransaction(userId, [call]);
+    return txR;
   };
 
   computeAddress = () => {
