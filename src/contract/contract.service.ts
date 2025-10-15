@@ -9,14 +9,23 @@ import {
   stark,
   CallData,
   hash,
+<<<<<<< HEAD
   LibraryError,
+=======
+  uint256,
+  shortString,
+>>>>>>> f752d2d (deployment)
 } from 'starknet';
 import 'dotenv/config';
 import {
   connectToStarknet,
   createKeyPair,
   createNewContractInstance,
+<<<<<<< HEAD
   deployAccount,
+=======
+  encryptPrivateKey,
+>>>>>>> f752d2d (deployment)
   getClassAt,
   getDeployerWallet,
   uuidToFelt252,
@@ -215,31 +224,6 @@ export class ContractService {
       0,
     );
     return OZcontractAddress;
-  };
-
-  accountDeployment = async () => {
-    try {
-      console.log('Deploying account contract...');
-
-      await deployAccount();
-
-      console.log(
-        chalk.green(
-          `Account contract successfully deployed to Starknet testnet`,
-        ),
-      );
-    } catch (error) {
-      if (
-        error instanceof LibraryError &&
-        error.message.includes('balance is smaller')
-      ) {
-        console.log(chalk.red('Insufficient account balance for deployment'));
-        process.exit(1);
-      } else {
-        console.log(chalk.red('Deploy account transaction failed'));
-        process.exit(1);
-      }
-    }
   };
 
   getDeployerWallet = () => {

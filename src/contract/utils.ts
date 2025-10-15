@@ -32,53 +32,6 @@ export function createKeyPair() {
   };
 }
 
-export async function deployAccount() {
-  const provider = connectToStarknet();
-  const account = getDeployerWallet();
-  const accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
-  const { publicKey } = createKeyPair();
-  const userUniqueId = process.env.USER_UNIQUE_ID || 'default_user_id';
-  const maxQtyGasAuthorized = '2000';
-  const maxPriceAuthorizeForOneGas = '146814825511407';
-
-  const accountFactoryClass = await getClassAt(accountFactoryAddress);
-
-  await writeAbiToFile(accountFactoryClass, 'accountFactoryAbi');
-
-  const call = {
-    contractAddress: accountFactoryAddress,
-    entrypoint: 'create_account',
-    calldata: [publicKey, userUniqueId],
-  };
-
-  try {
-    const { transaction_hash: txH } = await account.execute(call, {
-      version: 3,
-      maxFee: 10 ** 15,
-      // feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-      // tip: 10 ** 13,
-      resourceBounds: {
-        l1_gas: {
-          max_amount: num.toHex(maxQtyGasAuthorized),
-          max_price_per_unit: num.toHex(maxPriceAuthorizeForOneGas),
-        },
-        l2_gas: {
-          max_amount: num.toHex(0),
-          max_price_per_unit: num.toHex(0),
-        },
-      },
-    });
-
-    const txR = await provider.waitForTransaction(txH);
-    if (txR.isSuccess()) {
-      console.log('Paid fee for account creation =', txR.statusReceipt);
-    }
-  } catch (error) {
-    console.error('Error during account creation:', error);
-    throw error;
-  }
-}
-
 export async function getClassAt(contractAddress: string) {
   const provider = connectToStarknet();
   return await provider.getClassAt(contractAddress);
