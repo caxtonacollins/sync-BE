@@ -334,6 +334,30 @@ export class ContractService {
     return new Account(this.provider, this.accountAddress, this.private_key);
   };
 
+  getSyncTokenBalance = async (address: string) => {
+    if (!this.syncTokenAddress)
+      throw new Error('SYNC_TOKEN_ADDRESS env variable is not set');
+
+    if (!address) throw new Error('user address is required');
+
+    const syncTokenClass = await getClassAt(this.syncTokenAddress);
+
+    await writeAbiToFile(syncTokenClass, 'syncTokenAbi');
+
+    try {
+      const syncTokenContract = createNewContractInstance(
+        syncTokenClass.abi,
+        this.syncTokenAddress,
+      );
+
+      const result = await syncTokenContract.balance_of(address);
+      return result;
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  };
+
   getAccountAddress = async (userAddress: string) => {
     if (!this.accountFactoryAddress)
       throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
