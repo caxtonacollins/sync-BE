@@ -328,7 +328,7 @@ export class SwapOrderService {
   }
 
   private isKnownToken(currency: string): boolean {
-    const knownTokens = ['ETH', 'STRK', 'USDC', 'USDT']; // Add more as needed
+    const knownTokens = ['ETH', 'STRK', 'USDC']; // Add more as needed
     return knownTokens.includes(currency.toUpperCase());
   }
 }

@@ -9,16 +9,14 @@ import { TransactionModule } from './transaction/transaction.module';
 import { ContractModule } from './contract/contract.module';
 import { WalletModule } from './wallet/wallet.module';
 import { MonnifyModule } from './monnify/monnify.module';
-import { ContractService } from './contract/contract.service';
 import { SwapOrderModule } from './swap-order/swap-order.module';
-import { SwapOrderService } from './swap-order/swap-order.service';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { LiquidityPoolModule } from './liquidity-pool/liquidity-pool.module';
 import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 import { TransferModule } from './transfer/transfer.module';
 import { PaymentModule } from './payment/payment.module';
-import { PaymentService } from './payment/payment.service';
-import { WalletService } from './wallet/wallet.service';
+import { SyncPayModule } from './syncpay/syncpay.module';
+
 @Module({
   imports: [
     UserModule,
@@ -34,6 +32,7 @@ import { WalletService } from './wallet/wallet.service';
     FlutterwaveModule,
     TransferModule,
     PaymentModule,
+    SyncPayModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

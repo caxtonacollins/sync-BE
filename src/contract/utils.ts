@@ -154,9 +154,7 @@ export function felt252ToUuid(felt: string): string {
 
   try {
     // Convert decimal string or hex to BigInt
-    const bigIntValue = felt.startsWith('0x')
-      ? BigInt(felt)
-      : BigInt(felt);
+    const bigIntValue = felt.startsWith('0x') ? BigInt(felt) : BigInt(felt);
 
     // Convert to hex string (without 0x prefix) and pad to 32 characters
     const hexString = num.toHex(bigIntValue).slice(2).padStart(32, '0');
@@ -167,7 +165,9 @@ export function felt252ToUuid(felt: string): string {
       16,
     )}-${hexString.slice(16, 20)}-${hexString.slice(20)}`;
   } catch (error) {
-    console.error(`Error converting felt252 to UUID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error(
+      `Error converting felt252 to UUID: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
     console.error('Input felt:', felt);
     throw error;
   }

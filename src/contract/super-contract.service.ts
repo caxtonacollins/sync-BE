@@ -63,7 +63,6 @@ export class SuperContractServicee {
   private syncTokenAddress: string;
   private strkTokenAddress: string;
   private usdcTokenAddress: string;
-  private usdtTokenAddress: string;
   private ethTokenAddress: string;
   private privateKey: string;
   private deployerAccount: Account;
@@ -77,7 +76,6 @@ export class SuperContractServicee {
     this.syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
     this.strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
     this.usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
-    this.usdtTokenAddress = process.env.USDT_TOKEN_ADDRESS || '';
     this.ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
     this.privateKey = process.env.DEPLOYER_PRIVATE_KEY || '';
     this.deployerAccount = getDeployerWallet();

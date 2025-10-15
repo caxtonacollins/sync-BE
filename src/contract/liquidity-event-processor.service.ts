@@ -189,7 +189,7 @@ export class LiquidityEventProcessorService {
   }
 
   private async handleFiatLiquidityAdded(evt: EventPayload) {
-    const { fiat_symbol, amount_formatted, amount } = evt.data;
+    const { fiat_symbol, amount } = evt.data;
     const parsedAmount = parseFloat(amount);
     await this.updateLiquidityPool(
       evt,

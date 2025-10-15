@@ -6,11 +6,17 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MonnifyService } from '../monnify/monnify.service';
 import { ContractModule } from '../contract/contract.module';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => ContractModule)],
+  imports: [PrismaModule, forwardRef(() => ContractModule), ExchangeRateModule],
   controllers: [WalletController],
-  providers: [WalletService, KeyManagementService, MonnifyService, PrismaService],
+  providers: [
+    WalletService,
+    KeyManagementService,
+    MonnifyService,
+    PrismaService,
+  ],
   exports: [WalletService, KeyManagementService],
 })
 export class WalletModule {}

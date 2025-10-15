@@ -10,7 +10,6 @@ import {
   hash,
   LibraryError,
   uint256,
-  BigNumberish,
   shortString,
 } from 'starknet';
 import 'dotenv/config';
@@ -21,7 +20,6 @@ import {
   deployAccount,
   encryptPrivateKey,
   getClassAt,
-  getDeployerWallet,
   uuidToFelt252,
   writeAbiToFile,
 } from './utils';
@@ -38,12 +36,31 @@ export class ContractService {
   private accountAddress: string;
   private accountFactoryAddress: string;
   private accountContractHash: string;
-  private syncTokenAddress: string;
-  private strkTokenAddress: string;
-  private usdcTokenAddress: string;
-  private usdtTokenAddress: string;
-  private ethTokenAddress: string;
-  private btcTokenAddress: string;
+  private readonly _syncTokenAddress: string;
+  private readonly _strkTokenAddress: string;
+  private readonly _usdcTokenAddress: string;
+  private readonly _ethTokenAddress: string;
+  private readonly _btcTokenAddress: string;
+
+  public get syncTokenAddress(): string {
+    return this._syncTokenAddress;
+  }
+
+  public get strkTokenAddress(): string {
+    return this._strkTokenAddress;
+  }
+
+  public get usdcTokenAddress(): string {
+    return this._usdcTokenAddress;
+  }
+
+  public get ethTokenAddress(): string {
+    return this._ethTokenAddress;
+  }
+
+  public get btcTokenAddress(): string {
+    return this._btcTokenAddress;
+  }
 
   private private_key: string;
 
@@ -58,12 +75,11 @@ export class ContractService {
     this.accountAddress = process.env.DEPLOYER_ADDRESS || '';
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
-    this.syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
-    this.strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
-    this.usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
-    this.usdtTokenAddress = process.env.USDT_TOKEN_ADDRESS || '';
-    this.ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
-    this.btcTokenAddress = process.env.BTC_TOKEN_ADDRESS || '';
+    this._syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
+    this._strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
+    this._usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
+    this._ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
+    this._btcTokenAddress = process.env.BTC_TOKEN_ADDRESS || '';
 
     this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
   }
@@ -94,7 +110,7 @@ export class ContractService {
 
       const account = this.getDeployerWallet();
 
-      log("account:", account);
+      log('account:', account);
 
       const { transaction_hash: txH } = await account.execute(call, {
         maxFee: 10 ** 15,
@@ -169,17 +185,14 @@ export class ContractService {
       if (txR.isSuccess()) {
         console.log('Paid fee =', txR.statusReceipt);
       }
-      return "success";
+      return 'success';
     } catch (error) {
       console.error(JSON.stringify(error, null, 2));
       throw error;
     }
   };
 
-  addFiatToLiquidity = async (
-    symbol: string,
-    amount: string,
-  ) => {
+  addFiatToLiquidity = async (symbol: string, amount: string) => {
     if (!symbol) throw new Error('symbol is required');
     if (!amount) throw new Error('amount is required');
 
@@ -195,8 +208,7 @@ export class ContractService {
     const call = {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'add_fiat_liquidity',
-      calldata: [symbolFelt, amountU256.low,
-        amountU256.high],
+      calldata: [symbolFelt, amountU256.low, amountU256.high],
     };
 
     const account = this.getDeployerWallet();
@@ -207,7 +219,6 @@ export class ContractService {
       feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
       tip: 10 ** 13,
       paymasterData: [],
-
     });
 
     const txR = await this.provider.waitForTransaction(txH);
@@ -216,10 +227,7 @@ export class ContractService {
     }
   };
 
-  addTokenToLiquidity = async (
-    symbol: string,
-    amount: string,
-  ) => {
+  addTokenToLiquidity = async (symbol: string, amount: string) => {
     if (!symbol) throw new Error('symbol is required');
     if (!amount) throw new Error('amount is required');
 
@@ -235,8 +243,7 @@ export class ContractService {
     const call = {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'add_token_liquidity',
-      calldata: [symbolFelt, amountU256.low,
-        amountU256.high],
+      calldata: [symbolFelt, amountU256.low, amountU256.high],
     };
 
     const account = this.getDeployerWallet();
@@ -349,7 +356,8 @@ export class ContractService {
   };
 
   getDeployerWallet = () => {
-    if (!this.provider || !this.accountAddress || !this.private_key) throw new Error("credentials required to deploy deployer's wallet");
+    if (!this.provider || !this.accountAddress || !this.private_key)
+      throw new Error("credentials required to deploy deployer's wallet");
     return new Account(this.provider, this.accountAddress, this.private_key);
   };
 
@@ -393,10 +401,10 @@ export class ContractService {
     try {
       const accountAddress = await this.getAccountAddress(userFelt252Id);
 
-      console.log("accountAddress", accountAddress);
+      console.log('accountAddress', accountAddress);
 
       const isRegistered = await this.isUserRegistered(accountAddress);
-      console.log("isRegistered", isRegistered);
+      console.log('isRegistered', isRegistered);
 
       const dashboardData = {
         isRegistered,
@@ -419,7 +427,6 @@ export class ContractService {
       SYNC: this.syncTokenAddress,
       STRK: this.strkTokenAddress,
       USDC: this.usdcTokenAddress,
-      USDT: this.usdtTokenAddress,
       ETH: this.ethTokenAddress,
       BTC: this.btcTokenAddress,
     };
@@ -434,7 +441,6 @@ export class ContractService {
       SYNC: 18,
       STRK: 18,
       USDC: 6,
-      USDT: 6,
       ETH: 18,
       BTC: 18,
     };
@@ -609,13 +615,7 @@ export class ContractService {
       address,
       decimalsPower,
     );
-
-    // const amountInUsd = (Number(pricePerToken) / 1_000_000);
-    // const amountInUsd = Math.floor((Number(pricePerToken) / 1_000_000) * 1000) / 1000;
-
-    // return amountInUsd;
     return pricePerToken;
-
   };
 
   swapFiatToToken = async (
@@ -704,12 +704,13 @@ export class ContractService {
     if (!fiatSymbol) throw new Error('fiatSymbol is required');
     if (!tokenSymbol) throw new Error('tokenSymbol is required');
     if (!tokenAmount) throw new Error('tokenAmount is required');
-    const user = await this.userService.getUserByCryptoAddress(userContractAddress);
+    const user =
+      await this.userService.getUserByCryptoAddress(userContractAddress);
     if (!user) throw new Error('User not found');
 
     const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
 
-    const fiat = "USD";
+    const fiat = 'USD';
     const token = tokenSymbol.toUpperCase();
 
     // Token address mapping
@@ -717,7 +718,6 @@ export class ContractService {
       SYNC: this.syncTokenAddress,
       STRK: this.strkTokenAddress,
       USDC: this.usdcTokenAddress,
-      USDT: this.usdtTokenAddress,
       ETH: this.ethTokenAddress,
       BTC: this.btcTokenAddress,
     };
@@ -731,7 +731,6 @@ export class ContractService {
       SYNC: 18,
       STRK: 18,
       USDC: 6,
-      USDT: 6,
       ETH: 18,
       BTC: 18,
     };
@@ -742,7 +741,8 @@ export class ContractService {
     // const adjustedAmount = BigInt(Math.floor(Number(tokenAmount) * Math.pow(10, decimals)));
     const amountU256 = uint256.bnToUint256(BigInt(tokenAmount));
     const tokenSymbolToUSD = `${token}/USD`;
-    const supportedTokenAddress = await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
+    const supportedTokenAddress =
+      await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
 
     try {
       const feeBpsResult = await this.getFeeBPS();
@@ -751,20 +751,22 @@ export class ContractService {
       const fee = (BigInt(tokenAmount) * feeBps) / 10000n;
       const amountAfterFee = BigInt(tokenAmount) - fee;
 
-      const pricePerToken = await this.getTokenAmountInUsd(supportedTokenAddress);
+      const pricePerToken = await this.getTokenAmountInUsd(
+        supportedTokenAddress,
+      );
 
       // Calculate expected fiat amount using same formula as contract
-      const decimalsPower = BigInt(Math.pow(10, (decimals)));
-      const calculatedFiatAmount = BigInt(amountAfterFee * BigInt(pricePerToken)) / decimalsPower;
+      const decimalsPower = BigInt(Math.pow(10, decimals));
+      const calculatedFiatAmount =
+        BigInt(amountAfterFee * BigInt(pricePerToken)) / decimalsPower;
 
       const availableFiat = await this.getFiatLiquidityBalance(fiat);
 
       if (availableFiat < calculatedFiatAmount) {
         throw new Error(
-          `Insufficient fiat liquidity. Available: ${availableFiat}, Required: ${calculatedFiatAmount}`
+          `Insufficient fiat liquidity. Available: ${availableFiat}, Required: ${calculatedFiatAmount}`,
         );
       }
-
     } catch (error) {
       throw new Error(`Pre-swap validation failed: ${error.message}`);
     }
@@ -812,7 +814,7 @@ export class ContractService {
   /**
    * Execute a transaction using user's credentials (private key)
    * This allows users to sign their own transactions for token approvals and swaps
-   * 
+   *
    * @param userId - The user's ID
    * @param calls - Array of contract calls to execute
    * @returns Transaction hash and receipt
@@ -833,25 +835,28 @@ export class ContractService {
     userId: string,
     tokenAddress: string,
     spenderAddress: string,
-    amount: bigint
+    amount: bigint,
   ) => {
     const call = {
       contractAddress: tokenAddress,
       entrypoint: 'approve',
       calldata: CallData.compile({
         spender: spenderAddress,
-        amount: { low: amount & BigInt('0xFFFFFFFFFFFFFFFF'), high: amount >> BigInt(128) }
-      })
+        amount: {
+          low: amount & BigInt('0xFFFFFFFFFFFFFFFF'),
+          high: amount >> BigInt(128),
+        },
+      }),
     };
 
     const result = await this.executeUserTransaction(userId, [call]);
     return result;
-  }
+  };
 
   approveTokenWithDeployerCredentials = async (
     tokenAddress: string,
     spenderAddress: string,
-    amount: bigint
+    amount: bigint,
   ) => {
     const account = this.getDeployerWallet();
 
@@ -860,16 +865,18 @@ export class ContractService {
       entrypoint: 'approve',
       calldata: CallData.compile({
         spender: spenderAddress,
-        amount: { low: amount & BigInt('0xFFFFFFFFFFFFFFFF'), high: amount >> BigInt(128) }
-      })
+        amount: {
+          low: amount & BigInt('0xFFFFFFFFFFFFFFFF'),
+          high: amount >> BigInt(128),
+        },
+      }),
     };
 
     const result = await account.execute(call);
     await this.provider.waitForTransaction(result.transaction_hash);
 
     return result;
-  }
-
+  };
 
   mintToken = async (receiverAddress: string, amount: string) => {
     if (!receiverAddress) throw new Error('receiverAddress is required');
@@ -987,7 +994,6 @@ export class ContractService {
       SYNC: this.syncTokenAddress,
       STRK: this.strkTokenAddress,
       USDC: this.usdcTokenAddress,
-      USDT: this.usdtTokenAddress,
       ETH: this.ethTokenAddress,
       BTC: this.btcTokenAddress,
     };
@@ -1001,23 +1007,20 @@ export class ContractService {
       SYNC: 18,
       STRK: 18,
       USDC: 6,
-      USDT: 6,
       ETH: 18,
       BTC: 18,
     };
 
     const decimals = decimalsMap[token] || 18;
-    const adjustedAmount = BigInt(Math.floor(Number(amount) * Math.pow(10, decimals)));
+    const adjustedAmount = BigInt(
+      Math.floor(Number(amount) * Math.pow(10, decimals)),
+    );
     const amountU256 = uint256.bnToUint256(adjustedAmount);
 
     return {
       contractAddress: tokenAddress,
       entrypoint: 'approve',
-      calldata: [
-        spenderAddress,
-        amountU256.low,
-        amountU256.high,
-      ],
+      calldata: [spenderAddress, amountU256.low, amountU256.high],
     };
   };
 
@@ -1085,9 +1088,7 @@ export class ContractService {
       this.liquidityContractAddress,
     );
 
-    const result = await liquidityContract.get_fiat_balance(
-      fiatSymbol,
-    );
+    const result = await liquidityContract.get_fiat_balance(fiatSymbol);
     return BigInt(result);
   };
 
@@ -1105,9 +1106,8 @@ export class ContractService {
 
     const symbolFelt = shortString.encodeShortString(symbol);
 
-    const result = await liquidityContract.get_supported_tokens_by_symbol(
-      symbolFelt,
-    );
+    const result =
+      await liquidityContract.get_supported_tokens_by_symbol(symbolFelt);
     return result;
   };
 

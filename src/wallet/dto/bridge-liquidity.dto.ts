@@ -14,14 +14,14 @@ export class BridgeLiquidityDto {
   toType: 'fiat' | 'crypto';
 
   @IsString()
-  @IsIn(['NGN', 'USD', 'STRK', 'ETH', 'USDC', 'USDT'], {
-    message: 'fromCurrency must be one of: NGN, USD, STRK, ETH, USDC, USDT',
+  @IsIn(['NGN', 'USD', 'STRK', 'ETH', 'USDC'], {
+    message: 'fromCurrency must be one of: NGN, USD, STRK, ETH, USDC',
   })
   fromCurrency: string;
 
   @IsString()
-  @IsIn(['NGN', 'USD', 'STRK', 'ETH', 'USDC', 'USDT'], {
-    message: 'toCurrency must be one of: NGN, USD, STRK, ETH, USDC, USDT',
+  @IsIn(['NGN', 'USD', 'STRK', 'ETH', 'USDC'], {
+    message: 'toCurrency must be one of: NGN, USD, STRK, ETH, USDC',
   })
   toCurrency: string;
 

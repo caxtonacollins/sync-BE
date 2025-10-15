@@ -249,6 +249,7 @@ model LiquidityPool {
   symbol          String      @unique // e.g., 'NGN', 'USDC'
   type            String      // 'fiat' or 'token'
   balance         Float       @default(0)
+  isActive        Boolean     @default(true)
   lastUpdated     DateTime    @updatedAt
   createdAt       DateTime    @default(now())
 

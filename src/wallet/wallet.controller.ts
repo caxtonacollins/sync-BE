@@ -15,7 +15,6 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Logger } from '@nestjs/common';
 import { CreateFiatAccountDto } from './dto/create-fiat-account.dto';
 import { CreateCryptoWalletDto } from './dto/create-crypto-wallet.dto';
-import { BridgeLiquidityDto } from './dto/bridge-liquidity.dto';
 
 @Controller('wallet')
 @UseGuards(JwtAuthGuard)
@@ -48,6 +47,7 @@ export class WalletController {
   async getSummary(@Request() req) {
     try {
       const userId = req.user.sub;
+      console.log('Fetching wallet summary for user:', userId);
       return await this.walletService.getWalletSummary(userId);
     } catch (error) {
       this.logger.error('Failed to get wallet summary:', error);

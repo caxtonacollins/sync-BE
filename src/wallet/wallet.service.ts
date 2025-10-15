@@ -10,6 +10,21 @@ import { MonnifyService } from '../monnify/monnify.service';
 import { Logger } from '@nestjs/common';
 import { FiatAccount, CryptoWallet } from '@prisma/client';
 import { ContractService } from 'src/contract/contract.service';
+import { ExchangeRateService } from '../exchange-rate/exchange-rate.service';
+
+export interface WalletSummaryResponse {
+  fiatBalanceNGN: number;
+  cryptoValueUSD: number;
+  syncTokenBalance: number;
+  ethTokenBalance: number;
+  strkTokenBalance: number;
+  usdcTokenBalance: number;
+  stakedSyncTokens: number;
+  totalPortfolioValueNGN: number;
+  transactionFeeDiscount: number;
+  activeLiquidityPools: number;
+  dailySettlementCount: number;
+}
 
 export interface UnifiedWalletBalance {
   userId: string;
@@ -52,6 +67,7 @@ export class WalletService {
     private readonly monnifyService: MonnifyService,
     @Inject(forwardRef(() => ContractService))
     private readonly contractService: ContractService,
+    private readonly exchangeRateService: ExchangeRateService,
   ) {}
 
   /**
@@ -161,18 +177,16 @@ export class WalletService {
 
       // Get fiat balances
       const fiatBalances = await Promise.all(
-        user.fiatAccounts.map(async (account) => {
-          let balance = 0;
+        // eslint-disable-next-line @typescript-eslint/await-thenable
+        user.fiatAccounts.map((account) => {
+          const balance = account.balance;
 
-          // TODO: Integrate with actual balance APIs
-          // For now, return mock balance based on currency
-          if (account.currency === 'NGN') {
-            balance = 50000; // Mock NGN balance
-          }
+          // Convert from kobo to naira for NGN accounts
+          const convertedBalance = account.currency === 'NGN' ? balance / 100 : balance;
 
           return {
             currency: account.currency,
-            balance,
+            balance: convertedBalance,
             accountId: account.id,
             provider: account.provider,
             isDefault: account.isDefault,
@@ -183,25 +197,14 @@ export class WalletService {
       // Get crypto balances
       const cryptoBalances = await Promise.all(
         user.cryptoWallets.map(async (wallet) => {
-          let balance = 0;
-
-          try {
-            // TODO: Integrate with StarkNet balance queries
-            // For now, return mock balance based on currency
-            if (wallet.currency === 'STRK') {
-              balance = 100; // Mock STRK balance
-            } else if (wallet.currency === 'ETH') {
-              balance = 0.5; // Mock ETH balance
-            }
-          } catch (error) {
-            this.logger.warn(
-              `Failed to fetch balance for wallet ${wallet.id}: ${error.message}`,
-            );
-          }
+          const balance = await this.contractService.getAccountBalance(
+            wallet.currency,
+            wallet.address,
+          );
 
           return {
             currency: wallet.currency,
-            balance,
+            balance: Number(balance.formatted) || 0,
             walletId: wallet.id,
             network: wallet.network,
             address: wallet.address,
@@ -210,25 +213,45 @@ export class WalletService {
         }),
       );
 
-      // Calculate total values (mock exchange rates)
-      const exchangeRates = {
-        NGN: 1,
-        USD: 1600, // 1 USD = 1600 NGN
-        STRK: 800, // 1 STRK = 800 NGN
-        ETH: 6400000, // 1 ETH = 6,400,000 NGN
-      };
+      // Get real-time exchange rates
+      const exchangeRates = await this.exchangeRateService.findAll();
+
+      // Create a map for quick rate lookups
+      const rateMap = new Map();
+      exchangeRates.forEach((rate) => {
+        const key = `${rate.fiatSymbol}_${rate.tokenSymbol}`;
+        rateMap.set(key, rate.rate);
+      });
 
       let totalValueNGN = 0;
 
+      // Calculate fiat balances in NGN
       fiatBalances.forEach(({ currency, balance }) => {
-        totalValueNGN += balance * (exchangeRates[currency] || 1);
+        if (currency === 'NGN') {
+          totalValueNGN += balance;
+        } else if (currency === 'USD') {
+          const usdToNgnRate = rateMap.get('NGN_USD');
+          if (usdToNgnRate) {
+            totalValueNGN += balance * usdToNgnRate;
+          }
+        }
       });
 
+      // Calculate crypto balances in NGN
       cryptoBalances.forEach(({ currency, balance }) => {
-        totalValueNGN += balance * (exchangeRates[currency] || 1);
+        const tokenToUsdRate = rateMap.get(`USD_${currency}`);
+        const usdToNgnRate = rateMap.get('NGN_USD');
+
+        if (tokenToUsdRate && usdToNgnRate) {
+          // Convert crypto to USD, then USD to NGN
+          const valueInUsd = Number(balance) * tokenToUsdRate;
+          const valueInNgn = valueInUsd * usdToNgnRate;
+          totalValueNGN += valueInNgn;
+        }
       });
 
-      const totalValueUSD = totalValueNGN / exchangeRates.USD;
+      // Calculate total in USD
+      const totalValueUSD = totalValueNGN / rateMap.get('NGN_USD');
 
       return {
         userId,
@@ -377,19 +400,103 @@ export class WalletService {
   /**
    * Get wallet summary for dashboard
    */
-  async getWalletSummary(userId: string): Promise<any> {
+  async getWalletSummary(userId: string): Promise<WalletSummaryResponse> {
     try {
       const balance = await this.getUnifiedBalance(userId);
-      const recentTransactions = await this.getTransactionHistory(userId, 5);
+
+      // Get default crypto wallet to check SYNC token balance
+      const defaultCryptoWallet = balance.cryptoBalances.find(
+        (w) => w.isDefault,
+      );
+      console.log("defaultCryptoWallet", defaultCryptoWallet);
+      const strkTokenBalance = defaultCryptoWallet
+        ? Number((
+          await this.contractService.getAccountBalance(
+            'STRK',
+            defaultCryptoWallet.address,
+          )
+        ).formatted) || 0
+        : 0;
+
+      // const syncTokenBalance = defaultCryptoWallet
+      //   ? (
+      //       await this.contractService.getAccountBalance(
+      //         defaultCryptoWallet.address,
+      //         'SYNC',
+      //       )
+      //     ).raw || 0
+      //   : 0;
+      const syncTokenBalance = 0
+
+      // const ethTokenBalance = defaultCryptoWallet
+      //   ? (
+      //       await this.contractService.getAccountBalance(
+      //         defaultCryptoWallet.address,
+      //         'ETH',
+      //       )
+      //     ).raw || 0
+      //   : 0;
+      const ethTokenBalance = 0
+
+      // const usdcTokenBalance = defaultCryptoWallet
+      //   ? (
+      //       await this.contractService.getAccountBalance(
+      //         defaultCryptoWallet.address,
+      //         'USDC',
+      //       )
+      //     ).raw || 0
+      //   : 0;
+      const usdcTokenBalance = 0
+
+      // // Get staked tokens
+      // const stakedSyncTokens = defaultCryptoWallet
+      //   ? (
+      //       await this.contractService.getAccountBalance(
+      //         defaultCryptoWallet.address,
+      //         'STAKED_SYNC',
+      //       )
+      //     ).raw || 0
+      //   : 0;
+      const stakedSyncTokens = 0
+
+      // Get active liquidity pools count
+      const activeLiquidityPools = await this.prisma.liquidityPool.count({
+        where: {
+          isActive: true,
+        },
+      });
+
+      // Get daily settlement count
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dailySettlementCount = await this.prisma.transaction.count({
+        where: {
+          userId,
+          type: 'SETTLEMENT',
+          status: 'COMPLETED',
+          createdAt: {
+            gte: today,
+          },
+        },
+      });
+
+      // // Calculate transaction fee discount based on staked tokens
+      // const transactionFeeDiscount =
+      //   this.calculateFeeDiscount(stakedSyncTokens);
+      const transactionFeeDiscount = 0
 
       return {
-        totalValueNGN: balance.totalValueNGN,
-        totalValueUSD: balance.totalValueUSD,
-        fiatAccountsCount: balance.fiatBalances.length,
-        cryptoWalletsCount: balance.cryptoBalances.length,
-        recentTransactions,
-        hasActiveFiat: balance.fiatBalances.some((f) => f.balance > 0),
-        hasActiveCrypto: balance.cryptoBalances.some((c) => c.balance > 0),
+        fiatBalanceNGN: balance.totalValueNGN,
+        cryptoValueUSD: balance.totalValueUSD,
+        syncTokenBalance,
+        ethTokenBalance,
+        strkTokenBalance,
+        usdcTokenBalance,
+        stakedSyncTokens,
+        totalPortfolioValueNGN: balance.totalValueNGN,
+        transactionFeeDiscount,
+        activeLiquidityPools,
+        dailySettlementCount,
       };
     } catch (error) {
       this.logger.error(
@@ -398,5 +505,14 @@ export class WalletService {
       );
       throw error;
     }
+  }
+
+  private calculateFeeDiscount(stakedTokens: number): number {
+    // Implement fee discount calculation logic based on staked tokens
+    // For example: 0.1% discount per 1000 tokens staked, up to 50%
+    const discountPerThousandTokens = 0.001; // 0.1%
+    const maxDiscount = 0.5; // 50%
+    const discount = (stakedTokens / 1000) * discountPerThousandTokens;
+    return Math.min(discount, maxDiscount);
   }
 }

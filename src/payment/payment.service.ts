@@ -24,15 +24,11 @@ export class PaymentService {
     currency: string,
   ) {
     try {
-      console.log("fiatAccount", fiatAccount);
-      console.log("amount", amount);
-      console.log("currency", currency);
       const exchangeRateResponse = await this.flutterwaveService.getExchangeRate(
         'USD',
         currency,
         amount,
       );
-      console.log('exchangeRateResponse', exchangeRateResponse);
       const payoutAmount = exchangeRateResponse.destination.amount;
       const payoutReference = `PAYOUT_${Date.now()}_${fiatAccount.id}`;
 
@@ -54,7 +50,7 @@ export class PaymentService {
         currency: currency.toUpperCase(),
         narration: 'Swap payout from Sync',
         reference: payoutReference,
-        callback_url: `${process.env.BACKEND_URL}/api/payment/webhook/flutterwave`,
+        callback_url: `${process.env.NEXT_PUBLIC_API_URL}/api/payment/webhook/flutterwave`,
         debit_currency: currency.toUpperCase(),
         beneficiary_name: accountVerification.account_name || 'Sync User',
       };
