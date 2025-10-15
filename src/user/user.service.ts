@@ -330,7 +330,7 @@ export class UserService {
         orderBy: { createdAt: 'desc' },
         include: {
           fiatAccount: true,
-          cryptoWallet: true,
+          cryptoWallet: true, 
           swapOrder: true,
         },
       }),
