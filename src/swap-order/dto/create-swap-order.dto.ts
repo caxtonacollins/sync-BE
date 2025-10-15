@@ -4,7 +4,13 @@ import {
   IsOptional,
   IsUUID,
   IsDateString,
+  IsEnum,
 } from 'class-validator';
+
+export enum SwapType {
+  TOKENTOFIAT = 'TOKENTOFIAT',
+  FIATTOTOKEN = 'FIATTOTOKEN',
+}
 
 export class CreateSwapOrderDto {
   @IsString()
@@ -17,6 +23,7 @@ export class CreateSwapOrderDto {
   fromAmount: number;
 
   @IsNumber()
+  @IsOptional()
   toAmount: number;
 
   @IsNumber()
@@ -43,4 +50,7 @@ export class CreateSwapOrderDto {
   @IsOptional()
   @IsDateString()
   updatedAt?: string;
+
+  @IsEnum(SwapType)
+  swapType: SwapType;
 }

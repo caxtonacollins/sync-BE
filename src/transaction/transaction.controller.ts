@@ -3,14 +3,29 @@ import {
   Controller,
   Get,
   Param,
-  ParseUUIDPipe,
   Query,
   Patch,
+  Post,
+  UseGuards,
+  Req,
+  ParseUUIDPipe,
 } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { CreateFiatTransferDto } from './dto/create-fiat-transfer.dto';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { TransactionService } from './transaction.service';
 import { TxFilterDto } from './dto/tx-filter.dto';
 import { UpdateTxDto } from './dto/update-tx.dto';
 
+@ApiTags('Transactions')
+@ApiBearerAuth()
 @Controller('tx')
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
@@ -26,6 +41,10 @@ export class TransactionController {
   // includeFiatAccount=true&
   // includeCryptoWallet=false
   @Get('user/:id')
+  @ApiOperation({ summary: 'Get transactions for a specific user' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'Returns user transactions' })
+  @ApiResponse({ status: 400, description: 'Invalid UUID' })
   async getTransactionsForUser(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: TxFilterDto,
@@ -42,8 +61,19 @@ export class TransactionController {
     });
   }
 
-  // GET /transactions?userId=abc-123&type=deposit&status=completed&page=2&limit=5
+  // GET /tx?userId=abc-123&type=deposit&status=completed&page=2&limit=5
   @Get()
+  @ApiOperation({ summary: 'Get all transactions' })
+  @ApiQuery({ name: 'userId', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'currency', required: false })
+  @ApiQuery({ name: 'page', required: false, type: 'number' })
+  @ApiQuery({ name: 'limit', required: false, type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all transactions based on query parameters',
+  })
   findAll(
     @Query('userId') userId?: string,
     @Query('status') status?: string,
@@ -63,15 +93,30 @@ export class TransactionController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get transaction by ID' })
+  @ApiParam({ name: 'id', description: 'Transaction ID' })
+  @ApiResponse({ status: 200, description: 'Returns transaction details' })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.transactionService.findOne(id);
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Update transaction' })
+  @ApiParam({ name: 'id', description: 'Transaction ID' })
+  @ApiResponse({ status: 200, description: 'Transaction updated successfully' })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateDto: UpdateTxDto,
   ) {
     return this.transactionService.updateStatus(id, updateDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('fiat')
+  transferFiat(@Body() dto: CreateFiatTransferDto, @Req() req) {
+    const senderUserId = req.user.sub;
+    return this.transactionService.transferFiat(senderUserId, dto.recipientEmail, dto.amount, dto.currency);
   }
 }

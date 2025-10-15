@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -11,14 +9,17 @@ import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { MonnifyService } from 'src/monnify/monnify.service';
-import { ContractService } from 'src/contract/contract.service';
+import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
 import chalk from 'chalk';
+import { ContractService } from 'src/contract/contract.service';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class UserService {
   constructor(
     private prisma: PrismaService,
     private monnifyService: MonnifyService,
+    private flutterwaveService: FlutterwaveService,
     private readonly contractService: ContractService,
   ) { }
 
@@ -60,6 +61,8 @@ export class UserService {
             role: createUserDto.role,
             status: createUserDto.status,
             verificationStatus: createUserDto.verificationStatus,
+            bvn: createUserDto.bvn,
+            nin: createUserDto.nin,
           },
         });
 
@@ -69,45 +72,37 @@ export class UserService {
         // Create fiat accounts for each currency
         for (const currency of fiatCurrencies) {
           try {
-            // Only attempt to create Monnify account for NGN
+            // Create Flutterwave virtual account for NGN
             if (currency === 'NGN') {
-              const monnifyData =
-                await this.monnifyService.createReserveAccount(user);
+              const flutterwaveAccounts =
+                await this.flutterwaveService.createVirtualAccounts(user);
 
-              // Set the default account as the first account in the array
-              const defaultAccount = monnifyData.responseBody.accounts[0];
+              console.log(flutterwaveAccounts);
 
-              await tx.fiatAccount.create({
-                data: {
-                  userId: user.id,
-                  provider: 'monnify',
-                  currency: monnifyData.responseBody.currencyCode,
-                  isDefault: currency === 'NGN',
-                  accountNumber: defaultAccount.accountNumber,
-                  accountName: defaultAccount.accountName,
-                  bankName: defaultAccount.bankName,
-                  bankCode: defaultAccount.bankCode,
-                  // Store Monnify specific data
-                  contractCode: monnifyData.responseBody.contractCode,
-                  accountReference: monnifyData.responseBody.accountReference,
-                  reservationReference:
-                    monnifyData.responseBody.reservationReference,
-                  reservedAccountType:
-                    monnifyData.responseBody.reservedAccountType,
-                  collectionChannel: monnifyData.responseBody.collectionChannel,
-                  customerEmail: monnifyData.responseBody.customerEmail,
-                  customerName: monnifyData.responseBody.customerName,
-
-                  // Store all accounts as JSON
-                  accounts: monnifyData.responseBody.accounts,
-
-                  // Store default account details for quick access
-                  // defaultBankCode: defaultAccount.bankCode,
-                  // defaultBankName: defaultAccount.bankName,
-                  // defaultAccountNumber: defaultAccount.accountNumber,
-                  // defaultAccountName: defaultAccount.accountName,
-                },
-              });
+              // Process each Flutterwave account (usually one per currency)
+              for (const fwAccount of flutterwaveAccounts) {
+                if (fwAccount) {
+                  await tx.fiatAccount.create({
+                    data: {
+                      userId: user.id,
+                      provider: 'flutterwave',
+                      currency: fwAccount.currency || 'NGN',
+                      isDefault: true,
+                      accountNumber: fwAccount.account_number,
+                      accountName: fwAccount.account_name || `${user.firstName} ${user.lastName}`,
+                      bankName: fwAccount.bank_name,
+                      bankCode: fwAccount.bank_code,
+                      // Store Flutterwave specific data
+                      accountReference: fwAccount.order_ref,
+                      // Store full account details as JSON
+                      accounts: fwAccount,
+                    },
+                  });
+                  console.log(
+                    chalk.green(`Flutterwave account created for ${currency}`),
+                  );
+                }
+              }
             }
           } catch (error) {
             console.error(`Failed to create ${currency} fiat account:`, error);
@@ -115,40 +110,43 @@ export class UserService {
           }
         }
 
-        // 3. Create Starknet wallets for supported tokens
-        const cryptoTokens = ['STRK']; //'ETH', 'USDC'
-
         try {
-          // Create the Starknet account and get its address from the event
-          const result = await this.contractService.createAccount(user.id);
+          // Create the StarkNet account
+          const accountResult = await this.contractService.createAccount(user.id);
+          if (!accountResult) {
+            throw new Error('Failed to create StarkNet account');
+          }
 
           console.log(
             chalk.green(
-              `Starknet account created successfully: ${JSON.stringify(result, null, 2)}`,
+              `StarkNet account created: ${accountResult.accountAddress}`,
             ),
           );
 
-          if (!result?.accountAddress) {
-            throw new Error(
-              'Failed to get Starknet account address from event',
+          await tx.cryptoWallet.create({
+            data: {
+              userId: user.id,
+              network: 'starknet',
+              address: accountResult.accountAddress,
+              encryptedPrivateKey: accountResult.encryptedPrivateKey,
+              currency: 'STRK',
+              isDefault: true,
+            },
+          });
+
+          const defaultFiatAccount = await tx.fiatAccount.findFirst({
+            where: { userId: user.id, isDefault: true },
+          });
+
+          if (defaultFiatAccount) {
+            await this.contractService.registerUserToLiquidity(
+              accountResult.accountAddress,
+              defaultFiatAccount.id,
             );
           }
-
-          // Create wallet records for each supported token
-          for (const currency of cryptoTokens) {
-            await tx.cryptoWallet.create({
-              data: {
-                userId: user.id,
-                network: 'starknet',
-                address: result.accountAddress,
-                currency,
-                isDefault: currency === 'STRK',
-              },
-            });
-          }
-        } catch (error) {
-          console.error('Failed to create Starknet accounts:', error);
-          // The transaction will still succeed even if crypto wallet creation fails
+        } catch (contractError) {
+          console.error('StarkNet account creation failed:', contractError);
+          throw contractError
         }
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -239,6 +237,23 @@ export class UserService {
     });
   }
 
+  async getUserByCryptoAddress(address: string) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        cryptoWallets: {
+          some: {
+            address,
+          },
+        },
+      },
+      include: {
+        cryptoWallets: true,
+      },
+    });
+
+    return user;
+  }
+
   async getByEmail(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user) {
@@ -315,7 +330,7 @@ export class UserService {
         orderBy: { createdAt: 'desc' },
         include: {
           fiatAccount: true,
-          cryptoWallet: true,
+          cryptoWallet: true, 
           swapOrder: true,
         },
       }),
@@ -372,6 +387,70 @@ export class UserService {
     });
 
     return user;
+  }
+
+  // --- Payment PIN management ---
+  private hashPin(pin: string): string {
+    const salt = randomBytes(16).toString('hex');
+    const hash = scryptSync(pin, salt, 32).toString('hex');
+    return `${salt}:${hash}`;
+  }
+
+  private verifyPin(pin: string, stored: string): boolean {
+    const [salt, storedHash] = stored.split(':');
+    const computed = scryptSync(pin, salt, 32).toString('hex');
+    return timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(computed, 'hex'));
+  }
+
+  async setPaymentPin(userId: string, pin: string) {
+    const hash = this.hashPin(pin);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinHash: hash, paymentPinAttempts: 0, paymentPinLockedUntil: null } as any,
+    });
+    return { success: true };
+  }
+
+  async verifyPaymentPin(userId: string, pin: string) {
+    const user: any = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.paymentPinLockedUntil && user.paymentPinLockedUntil > new Date()) {
+      return { success: false, lockedUntil: user.paymentPinLockedUntil };
+    }
+
+    if (!user.paymentPinHash) return { success: false };
+
+    const ok = this.verifyPin(pin, user.paymentPinHash);
+    if (!ok) {
+      const attempts = (user.paymentPinAttempts || 0) + 1;
+      let lockedUntil: Date | null = null;
+      if (attempts >= 5) {
+        lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinAttempts: lockedUntil ? 0 : attempts, paymentPinLockedUntil: lockedUntil } as any,
+    });
+      return { success: false, lockedUntil };
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinAttempts: 0, paymentPinLockedUntil: null } as any,
+    });
+    return { success: true };
+  }
+
+  async changePaymentPin(userId: string, oldPin: string, newPin: string) {
+    const verify = await this.verifyPaymentPin(userId, oldPin);
+    if (!verify.success) return { success: false, lockedUntil: verify.lockedUntil };
+    const hash = this.hashPin(newPin);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { paymentPinHash: hash } as any,
+    });
+    return { success: true };
   }
 
   async verifyUserKyc(
@@ -471,8 +550,41 @@ export class UserService {
           lockedUntil: true,
         },
       });
-      
+
       return deletedUser;
     });
+  }
+
+  async resolveAccountNumber(accountNumber: string) {
+    // Check if account exists in our database (SyncPayment internal account)
+    const fiatAccount = await this.prisma.fiatAccount.findFirst({
+      where: { accountNumber },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+    console.log("fiatAccount", fiatAccount);
+
+    if (fiatAccount) {
+      // Internal SyncPayment account found
+      return {
+        isSyncPayment: true,
+        accountNumber: fiatAccount.accountNumber,
+        accountName: fiatAccount.accountName,
+        bankName: 'SyncPayment',
+        bankCode: 'SYNC001',
+        user: fiatAccount.user,
+      };
+    }
+
+    // Not a SyncPayment account - return null to indicate external account
+    return null;
   }
 }

@@ -6,9 +6,16 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PrismaService } from './prisma/prisma.service';
 import { AuthModule } from './auth/auth.module';
 import { TransactionModule } from './transaction/transaction.module';
-import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { ContractModule } from './contract/contract.module';
-import { MonnifyService } from './monnify/monnify.service';
+import { WalletModule } from './wallet/wallet.module';
+import { MonnifyModule } from './monnify/monnify.module';
+import { SwapOrderModule } from './swap-order/swap-order.module';
+import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
+import { LiquidityPoolModule } from './liquidity-pool/liquidity-pool.module';
+import { FlutterwaveModule } from './flutterwave/flutterwave.module';
+import { TransferModule } from './transfer/transfer.module';
+import { PaymentModule } from './payment/payment.module';
+import { SyncPayModule } from './syncpay/syncpay.module';
 
 @Module({
   imports: [
@@ -16,10 +23,18 @@ import { MonnifyService } from './monnify/monnify.service';
     PrismaModule,
     AuthModule,
     TransactionModule,
-    ExchangeRateModule,
     ContractModule,
+    WalletModule,
+    MonnifyModule,
+    SwapOrderModule,
+    ExchangeRateModule,
+    LiquidityPoolModule,
+    FlutterwaveModule,
+    TransferModule,
+    PaymentModule,
+    SyncPayModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService, MonnifyService],
+  providers: [AppService, PrismaService],
 })
 export class AppModule {}

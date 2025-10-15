@@ -1,6 +1,13 @@
+import { IsNotEmpty, IsString, IsNumber } from "class-validator";
+
 export class CreateExchangeRateDto {
-  fromCurrency: string;
-  toCurrency: string;
-  rate: number;
-  expiresAt: Date;
+    @IsNotEmpty()
+    @IsString()
+    fiatSymbol: string;
+    @IsNotEmpty()
+    @IsString()
+    tokenSymbol: string;
+    @IsNotEmpty()
+    @IsNumber()
+    rate: number;
 }
