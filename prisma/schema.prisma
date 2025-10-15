@@ -48,6 +48,8 @@ model User {
   lastLogin           DateTime?
 
   // KYC Information
+  bvn                 String?
+  nin                 String?
   dateOfBirth        DateTime?
   address            String?
   city               String?
@@ -69,6 +71,11 @@ model User {
   twoFactorSecret    String?
   loginAttempts      Int                 @default(0)
   lockedUntil        DateTime?
+  
+  // Payment PIN security
+  paymentPinHash     String?
+  paymentPinAttempts Int                 @default(0)
+  paymentPinLockedUntil DateTime?
 
   // Relations
   transactions       Transaction[]
@@ -87,6 +94,9 @@ model FiatAccount {
   accountName     String
   bankName        String?
   bankCode        String?
+  balance         Float       @default(0)
+  availableBalance Float?     @default(0)
+  ledgerBalance   Float?      @default(0)
   currency        String      @default("NGN")
   isDefault       Boolean     @default(false)
   isActive        Boolean     @default(true)
@@ -111,6 +121,7 @@ model CryptoWallet {
   user            User        @relation(fields: [userId], references: [id])
   network         String      // "ethereum", "bitcoin", "starknet", etc.
   address         String
+  encryptedPrivateKey  String   @db.Text
   currency        String      // "STRK", "ETH", "BTC", "USDC", etc.
   isDefault       Boolean     @default(false)
   isActive        Boolean     @default(true)
@@ -135,6 +146,8 @@ model Transaction {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   completedAt     DateTime?
+  blockNumber     String?
+  transactionHash String?
 
   // Relations
   fiatAccountId   String?
@@ -143,6 +156,11 @@ model Transaction {
   cryptoWallet    CryptoWallet? @relation(fields: [cryptoWalletId], references: [id])
   swapOrderId     String?
   swapOrder       SwapOrder? @relation(fields: [swapOrderId], references: [id])
+
+  @@index([userId])
+  @@index([reference])
+  @@index([status])
+  @@index([transactionHash])
 }
 
 model SwapOrder {
@@ -152,16 +170,29 @@ model SwapOrder {
   fromCurrency    String
   toCurrency      String
   fromAmount      Float
-  toAmount        Float
-  rate            Float
-  fee             Float
-  status          String      // "pending", "completed", "failed", "partial"
+  toAmount        Float?
+  rate            Float?
+  swapType        SwapType?
+  fee             Float?
+  status          String      @default("pending")    // "pending", "completed", "failed", "partial"
   reference       String      @unique
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   completedAt     DateTime?
+  blockNumber     String?
+  transactionHash String?
 
   transactions    Transaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([fromCurrency, toCurrency])
+  @@index([transactionHash])
+}
+
+enum SwapType {
+  TOKENTOFIAT
+  FIATTOTOKEN
 }
 
 model Session {
@@ -213,12 +244,40 @@ model SystemSetting {
   updatedAt       DateTime    @updatedAt
 }
 
+model LiquidityPool {
+  id              String      @id @default(uuid())
+  symbol          String      @unique // e.g., 'NGN', 'USDC'
+  type            String      // 'fiat' or 'token'
+  balance         Float       @default(0)
+  isActive        Boolean     @default(true)
+  lastUpdated     DateTime    @updatedAt
+  createdAt       DateTime    @default(now())
+
+  history         PoolHistory[]
+}
+
+model PoolHistory {
+  id              String      @id @default(uuid())
+  poolId          String
+  pool            LiquidityPool @relation(fields: [poolId], references: [id])
+  amount          Float
+  type            String      // 'add' or 'remove'
+  transactionHash String
+  blockNumber     String
+  timestamp       DateTime
+
+  @@index([poolId])
+  @@index([transactionHash])
+}
+
 model ExchangeRate {
   id              String      @id @default(uuid())
-  fromCurrency    String
-  toCurrency      String
+  fiatSymbol      String
+  tokenSymbol     String
   rate            Float
-  expiresAt       DateTime
+  lastUpdated     DateTime    @updatedAt
   createdAt       DateTime    @default(now())
+
+  @@unique([fiatSymbol, tokenSymbol])
 }
 

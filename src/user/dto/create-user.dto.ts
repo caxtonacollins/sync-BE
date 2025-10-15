@@ -29,4 +29,12 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(VerificationStatus)
   verificationStatus?: VerificationStatus;
+
+  @IsOptional()
+  @IsString()
+  bvn?: string;
+
+  @IsOptional()
+  @IsString()
+  nin?: string;
 }

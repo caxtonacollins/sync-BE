@@ -1,51 +1,103 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
-import { ExchangeRateFilterDto } from './dto/exchange-rate-filter.dto';
-import { Prisma } from '@prisma/client';
+import { ContractService } from '../contract/contract.service';
+import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 
 @Injectable()
 export class ExchangeRateService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly contractService: ContractService,
+    private readonly flutterwaveService: FlutterwaveService,
+  ) {}
 
-  async create(dto: CreateExchangeRateDto) {
-    return this.prisma.exchangeRate.create({ data: dto });
+  create(data: CreateExchangeRateDto) {
+    return this.prisma.exchangeRate.create({ data });
   }
 
-  async findAll(filter: ExchangeRateFilterDto) {
-    const { page = 1, limit = 10, ...where } = filter;
-    const skip = (page - 1) * limit;
-    const prismaWhere: Prisma.ExchangeRateWhereInput = {};
+  async findAll() {
+    // Get rates from database
+    const syncRates = await this.prisma.exchangeRate.findMany();
 
-    if (where.fromCurrency) prismaWhere.fromCurrency = where.fromCurrency;
-    if (where.toCurrency) prismaWhere.toCurrency = where.toCurrency;
+    // Get Flutterwave rates (USD/NGN)
+    const fwRates = await this.flutterwaveService.getExchangeRate(
+      'USD',
+      'NGN',
+      100,
+    );
 
-    if (where.minRate || where.maxRate) {
-      prismaWhere.rate = {};
-      if (where.minRate) prismaWhere.rate.gte = where.minRate;
-      if (where.maxRate) prismaWhere.rate.lte = where.maxRate;
-    }
-
-    if (where.expiresBefore || where.expiresAfter) {
-      prismaWhere.expiresAt = {};
-      if (where.expiresBefore) prismaWhere.expiresAt.lte = where.expiresBefore;
-      if (where.expiresAfter) prismaWhere.expiresAt.gte = where.expiresAfter;
-    }
-
-    const [data, total] = await Promise.all([
-      this.prisma.exchangeRate.findMany({
-        where: prismaWhere,
-        skip,
-        take: limit,
-        orderBy: { expiresAt: 'desc' },
-      }),
-      this.prisma.exchangeRate.count({ where: prismaWhere }),
+    // Get token USD rates
+    const tokenRates = await Promise.all([
+      this.contractService.getTokenAmountInUsd(
+        this.contractService.syncTokenAddress,
+      ),
+      this.contractService.getTokenAmountInUsd(
+        this.contractService.strkTokenAddress,
+      ),
+      this.contractService.getTokenAmountInUsd(
+        this.contractService.usdcTokenAddress,
+      ),
+      this.contractService.getTokenAmountInUsd(
+        this.contractService.ethTokenAddress,
+      ),
+      this.contractService.getTokenAmountInUsd(
+        this.contractService.btcTokenAddress,
+      ),
     ]);
 
-    return { data, total, page, limit };
+    // Combine all rates
+    const exchangeRates = [
+      ...syncRates,
+      {
+        fiatSymbol: 'NGN',
+        tokenSymbol: 'USD',
+        rate: Number(fwRates.rate),
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'SYNC',
+        rate: Number(tokenRates[0]) / Math.pow(10, 18),
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'STRK',
+        rate: Number(tokenRates[1]) / Math.pow(10, 18),
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'USDC',
+        rate: Number(tokenRates[2]) / Math.pow(10, 6),
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'ETH',
+        rate: Number(tokenRates[3]) / Math.pow(10, 18),
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'BTC',
+        rate: Number(tokenRates[4]) / Math.pow(10, 18),
+      },
+    ];
+
+    return exchangeRates;
   }
 
-  async findOne(id: string) {
-    return this.prisma.exchangeRate.findUnique({ where: { id } });
+  findOne(fiatSymbol: string, tokenSymbol: string) {
+    return this.prisma.exchangeRate.findUnique({
+      where: { fiatSymbol_tokenSymbol: { fiatSymbol, tokenSymbol } },
+    });
+  }
+
+  update(id: string, data: CreateExchangeRateDto) {
+    return this.prisma.exchangeRate.update({
+      where: { id },
+      data,
+    });
+  }
+
+  remove(id: string) {
+    return this.prisma.exchangeRate.delete({ where: { id } });
   }
 }

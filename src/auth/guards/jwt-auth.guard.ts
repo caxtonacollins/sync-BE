@@ -19,4 +19,18 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
     return super.canActivate(context);
   }
+
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+    // You can throw an error based on either "info" or "err" arguments
+    if (err || !user) {
+      throw err || new Error('User not authenticated');
+    }
+
+    // Ensure user.sub exists for userId
+    if (!user.sub && user.userId) {
+      user.sub = user.userId;
+    }
+
+    return user;
+  }
 }

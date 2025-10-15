@@ -1,26 +1,12 @@
 [
   {
-    "type": "impl",
     "name": "LiquidityBridge",
-    "interface_name": "contracts::LiquidityBridge::ILiquidityBridge"
+    "type": "impl",
+    "interface_name": "isyncpayment::interfaces::iliquidityBridge::ILiquidityBridge"
   },
   {
-    "type": "struct",
-    "name": "core::integer::u256",
-    "members": [
-      {
-        "name": "low",
-        "type": "core::integer::u128"
-      },
-      {
-        "name": "high",
-        "type": "core::integer::u128"
-      }
-    ]
-  },
-  {
-    "type": "enum",
     "name": "core::bool",
+    "type": "enum",
     "variants": [
       {
         "name": "False",
@@ -33,12 +19,44 @@
     ]
   },
   {
+    "name": "core::integer::u256",
+    "type": "struct",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "name": "pragma_lib::types::DataType",
+    "type": "enum",
+    "variants": [
+      {
+        "name": "SpotEntry",
+        "type": "core::felt252"
+      },
+      {
+        "name": "FutureEntry",
+        "type": "(core::felt252, core::integer::u64)"
+      },
+      {
+        "name": "GenericEntry",
+        "type": "core::felt252"
+      }
+    ]
+  },
+  {
+    "name": "isyncpayment::interfaces::iliquidityBridge::ILiquidityBridge",
     "type": "interface",
-    "name": "contracts::LiquidityBridge::ILiquidityBridge",
     "items": [
       {
-        "type": "function",
         "name": "register_user",
+        "type": "function",
         "inputs": [
           {
             "name": "user",
@@ -53,40 +71,24 @@
         "state_mutability": "external"
       },
       {
+        "name": "is_user_registered",
         "type": "function",
-        "name": "add_fiat_liquidity",
         "inputs": [
           {
-            "name": "_fiat_symbol",
-            "type": "core::felt252"
-          },
-          {
-            "name": "_fiat_amount",
-            "type": "core::integer::u256"
+            "name": "_user",
+            "type": "core::starknet::contract_address::ContractAddress"
           }
         ],
-        "outputs": [],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "add_token_liquidity",
-        "inputs": [
+        "outputs": [
           {
-            "name": "_token_symbol",
-            "type": "core::felt252"
-          },
-          {
-            "name": "_token_amount",
-            "type": "core::integer::u256"
+            "type": "core::bool"
           }
         ],
-        "outputs": [],
-        "state_mutability": "external"
+        "state_mutability": "view"
       },
       {
-        "type": "function",
         "name": "process_fiat_deposit",
+        "type": "function",
         "inputs": [
           {
             "name": "_user",
@@ -109,8 +111,40 @@
         "state_mutability": "external"
       },
       {
+        "name": "add_fiat_liquidity",
         "type": "function",
+        "inputs": [
+          {
+            "name": "_fiat_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "_fiat_amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "name": "add_token_liquidity",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "_token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "_token_amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
         "name": "add_supported_token",
+        "type": "function",
         "inputs": [
           {
             "name": "_symbol",
@@ -125,128 +159,8 @@
         "state_mutability": "external"
       },
       {
-        "type": "function",
-        "name": "update_exchange_rate",
-        "inputs": [
-          {
-            "name": "_fiat_symbol",
-            "type": "core::felt252"
-          },
-          {
-            "name": "_token_symbol",
-            "type": "core::felt252"
-          },
-          {
-            "name": "_new_rate",
-            "type": "core::integer::u256"
-          }
-        ],
-        "outputs": [],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "set_fee",
-        "inputs": [
-          {
-            "name": "_new_fee_bps",
-            "type": "core::integer::u16"
-          }
-        ],
-        "outputs": [],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "get_exchange_rate",
-        "inputs": [
-          {
-            "name": "_fiat_symbol",
-            "type": "core::felt252"
-          },
-          {
-            "name": "_token_symbol",
-            "type": "core::felt252"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::integer::u256"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_token_balance",
-        "inputs": [
-          {
-            "name": "_token_symbol",
-            "type": "core::felt252"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::integer::u256"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_fiat_balance",
-        "inputs": [
-          {
-            "name": "_fiat_symbol",
-            "type": "core::felt252"
-          },
-          {
-            "name": "_token_symbol",
-            "type": "core::felt252"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::integer::u256"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "is_user_registered",
-        "inputs": [
-          {
-            "name": "_user",
-            "type": "core::starknet::contract_address::ContractAddress"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::bool"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_fiat_account_id",
-        "inputs": [
-          {
-            "name": "_user",
-            "type": "core::starknet::contract_address::ContractAddress"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::felt252"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
         "name": "lock_user_funds",
+        "type": "function",
         "inputs": [
           {
             "name": "_user",
@@ -265,8 +179,8 @@
         "state_mutability": "external"
       },
       {
-        "type": "function",
         "name": "confirm_withdrawal",
+        "type": "function",
         "inputs": [
           {
             "name": "_user",
@@ -289,8 +203,8 @@
         "state_mutability": "external"
       },
       {
-        "type": "function",
         "name": "remove_fiat_liquidity",
+        "type": "function",
         "inputs": [
           {
             "name": "_fiat_symbol",
@@ -305,12 +219,16 @@
         "state_mutability": "external"
       },
       {
-        "type": "function",
         "name": "swap_fiat_to_token",
+        "type": "function",
         "inputs": [
           {
             "name": "_user",
             "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "_swap_order_id",
+            "type": "core::felt252"
           },
           {
             "name": "_fiat_symbol",
@@ -327,15 +245,23 @@
         ],
         "outputs": [
           {
-            "type": "core::integer::u256"
+            "type": "core::bool"
           }
         ],
         "state_mutability": "external"
       },
       {
-        "type": "function",
         "name": "swap_token_to_fiat",
+        "type": "function",
         "inputs": [
+          {
+            "name": "_user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "_swap_order_id",
+            "type": "core::felt252"
+          },
           {
             "name": "_fiat_symbol",
             "type": "core::felt252"
@@ -351,25 +277,216 @@
         ],
         "outputs": [
           {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "name": "set_fee_bps",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "fee_bps",
+            "type": "core::integer::u16"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "name": "get_fiat_account_id",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "_user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::felt252"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_token_balance",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "_token_symbol",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
             "type": "core::integer::u256"
           }
         ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_fiat_balance",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "_fiat_symbol",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_asset_price_median",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "asset",
+            "type": "pragma_lib::types::DataType"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "(core::integer::u128, core::integer::u32)"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_token_amount_in_usd",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "token",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "token_amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_fee_bps",
+        "type": "function",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u16"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "update_pragma_oracle_address",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "new_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "name": "get_supported_tokens_by_symbol",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "_symbol",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_all_supported_tokens",
+        "type": "function",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::starknet::contract_address::ContractAddress>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_all_fiat_pools",
+        "type": "function",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "name": "get_all_token_pools",
+        "type": "function",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "name": "UpgradeableImpl",
+    "type": "impl",
+    "interface_name": "openzeppelin_upgrades::interface::IUpgradeable"
+  },
+  {
+    "name": "openzeppelin_upgrades::interface::IUpgradeable",
+    "type": "interface",
+    "items": [
+      {
+        "name": "upgrade",
+        "type": "function",
+        "inputs": [
+          {
+            "name": "new_class_hash",
+            "type": "core::starknet::class_hash::ClassHash"
+          }
+        ],
+        "outputs": [],
         "state_mutability": "external"
       }
     ]
   },
   {
-    "type": "impl",
     "name": "OwnableMixinImpl",
+    "type": "impl",
     "interface_name": "openzeppelin_access::ownable::interface::OwnableABI"
   },
   {
-    "type": "interface",
     "name": "openzeppelin_access::ownable::interface::OwnableABI",
+    "type": "interface",
     "items": [
       {
-        "type": "function",
         "name": "owner",
+        "type": "function",
         "inputs": [],
         "outputs": [
           {
@@ -379,8 +496,8 @@
         "state_mutability": "view"
       },
       {
-        "type": "function",
         "name": "transfer_ownership",
+        "type": "function",
         "inputs": [
           {
             "name": "new_owner",
@@ -391,15 +508,15 @@
         "state_mutability": "external"
       },
       {
-        "type": "function",
         "name": "renounce_ownership",
+        "type": "function",
         "inputs": [],
         "outputs": [],
         "state_mutability": "external"
       },
       {
-        "type": "function",
         "name": "transferOwnership",
+        "type": "function",
         "inputs": [
           {
             "name": "newOwner",
@@ -410,8 +527,8 @@
         "state_mutability": "external"
       },
       {
-        "type": "function",
         "name": "renounceOwnership",
+        "type": "function",
         "inputs": [],
         "outputs": [],
         "state_mutability": "external"
@@ -419,8 +536,8 @@
     ]
   },
   {
-    "type": "constructor",
     "name": "constructor",
+    "type": "constructor",
     "inputs": [
       {
         "name": "owner",
@@ -431,380 +548,477 @@
         "type": "core::starknet::contract_address::ContractAddress"
       },
       {
-        "name": "account_factory",
+        "name": "initial_fee_basis_points",
+        "type": "core::integer::u16"
+      },
+      {
+        "name": "pragma_oracle_address",
         "type": "core::starknet::contract_address::ContractAddress"
       },
       {
-        "name": "initial_fee_basis_points",
-        "type": "core::integer::u16"
+        "name": "supported_assets",
+        "type": "core::array::Array::<core::starknet::contract_address::ContractAddress>"
+      },
+      {
+        "name": "supported_feed_ids",
+        "type": "core::array::Array::<core::felt252>"
       }
     ]
   },
   {
-    "type": "event",
+    "kind": "struct",
     "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
-    "kind": "struct",
+    "type": "event",
     "members": [
       {
+        "kind": "key",
         "name": "previous_owner",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "key"
+        "type": "core::starknet::contract_address::ContractAddress"
       },
       {
+        "kind": "key",
         "name": "new_owner",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "key"
+        "type": "core::starknet::contract_address::ContractAddress"
       }
     ]
   },
   {
-    "type": "event",
+    "kind": "struct",
     "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
-    "kind": "struct",
+    "type": "event",
     "members": [
       {
+        "kind": "key",
         "name": "previous_owner",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "key"
+        "type": "core::starknet::contract_address::ContractAddress"
       },
       {
+        "kind": "key",
         "name": "new_owner",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "key"
+        "type": "core::starknet::contract_address::ContractAddress"
       }
     ]
   },
   {
-    "type": "event",
+    "kind": "enum",
     "name": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
-    "kind": "enum",
+    "type": "event",
     "variants": [
       {
+        "kind": "nested",
         "name": "OwnershipTransferred",
-        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
-        "kind": "nested"
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred"
       },
       {
+        "kind": "nested",
         "name": "OwnershipTransferStarted",
-        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
-        "kind": "nested"
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted"
       }
     ]
   },
   {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::FiatLiquidityAdded",
     "kind": "struct",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+    "type": "event",
     "members": [
       {
-        "name": "provider",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "amount",
-        "type": "core::integer::u256",
-        "kind": "data"
+        "kind": "data",
+        "name": "class_hash",
+        "type": "core::starknet::class_hash::ClassHash"
       }
     ]
   },
   {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::tokenLiquidityAdded",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "provider",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "token_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::FiatLiquidityRemoved",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "provider",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::FiatDeposit",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "user",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_account_id",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      },
-      {
-        "name": "transaction_id",
-        "type": "core::felt252",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::FiatToTokenSwapExecuted",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "user",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "token_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      },
-      {
-        "name": "token_amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      },
-      {
-        "name": "fee",
-        "type": "core::integer::u128",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::TokenToFiatSwapExecuted",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "user",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "token_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      },
-      {
-        "name": "token_amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      },
-      {
-        "name": "fee",
-        "type": "core::integer::u128",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::ExchangeRateUpdated",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "fiat_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "token_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "new_rate",
-        "type": "core::integer::u256",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::TokenRegistered",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "token_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "token_address",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::UserRegistered",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "user",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_account_id",
-        "type": "core::felt252",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::WithdrawalCompleted",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "user",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "data"
-      },
-      {
-        "name": "token_symbol",
-        "type": "core::felt252",
-        "kind": "data"
-      },
-      {
-        "name": "amount",
-        "type": "core::integer::u256",
-        "kind": "data"
-      },
-      {
-        "name": "fiat_reference",
-        "type": "core::felt252",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "contracts::LiquidityBridge::LiquidityBridge::Event",
     "kind": "enum",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+    "type": "event",
     "variants": [
       {
+        "kind": "nested",
+        "name": "Upgraded",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::FiatLiquidityAdded",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "provider",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "amount",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::TokenLiquidityAdded",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "provider",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "amount",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::FiatLiquidityRemoved",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "provider",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "amount",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::FiatDeposit",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_account_id",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "kind": "data",
+        "name": "transaction_id",
+        "type": "core::felt252"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::FiatToTokenSwapExecuted",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "swap_order_id",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "kind": "data",
+        "name": "token_amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "kind": "data",
+        "name": "fee",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::TokenToFiatSwapExecuted",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "swap_order_id",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "kind": "data",
+        "name": "token_amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "kind": "data",
+        "name": "fee",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::ExchangeRateUpdated",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "new_rate",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::TokenRegistered",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "token_address",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::UserRegistered",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_account_id",
+        "type": "core::felt252"
+      }
+    ]
+  },
+  {
+    "kind": "struct",
+    "name": "isyncpayment::events::liquidityBridgeEvents::WithdrawalCompleted",
+    "type": "event",
+    "members": [
+      {
+        "kind": "key",
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "kind": "data",
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "kind": "data",
+        "name": "amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "kind": "data",
+        "name": "fiat_reference",
+        "type": "core::felt252"
+      }
+    ]
+  },
+  {
+    "kind": "enum",
+    "name": "isyncpayment::liquidityBridge::liquidityBridge::LiquidityBridge::Event",
+    "type": "event",
+    "variants": [
+      {
+        "kind": "flat",
         "name": "OwnableEvent",
-        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
-        "kind": "flat"
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::Event"
       },
       {
+        "kind": "nested",
+        "name": "UpgradeableEvent",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event"
+      },
+      {
+        "kind": "nested",
         "name": "FiatLiquidityAdded",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::FiatLiquidityAdded",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::FiatLiquidityAdded"
       },
       {
-        "name": "tokenLiquidityAdded",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::tokenLiquidityAdded",
-        "kind": "nested"
+        "kind": "nested",
+        "name": "TokenLiquidityAdded",
+        "type": "isyncpayment::events::liquidityBridgeEvents::TokenLiquidityAdded"
       },
       {
+        "kind": "nested",
         "name": "FiatLiquidityRemoved",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::FiatLiquidityRemoved",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::FiatLiquidityRemoved"
       },
       {
+        "kind": "nested",
         "name": "FiatDeposit",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::FiatDeposit",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::FiatDeposit"
       },
       {
+        "kind": "nested",
         "name": "FiatToTokenSwapExecuted",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::FiatToTokenSwapExecuted",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::FiatToTokenSwapExecuted"
       },
       {
+        "kind": "nested",
         "name": "TokenToFiatSwapExecuted",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::TokenToFiatSwapExecuted",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::TokenToFiatSwapExecuted"
       },
       {
+        "kind": "nested",
         "name": "ExchangeRateUpdated",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::ExchangeRateUpdated",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::ExchangeRateUpdated"
       },
       {
+        "kind": "nested",
         "name": "TokenRegistered",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::TokenRegistered",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::TokenRegistered"
       },
       {
+        "kind": "nested",
         "name": "UserRegistered",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::UserRegistered",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::UserRegistered"
       },
       {
+        "kind": "nested",
         "name": "WithdrawalCompleted",
-        "type": "contracts::LiquidityBridge::LiquidityBridge::WithdrawalCompleted",
-        "kind": "nested"
+        "type": "isyncpayment::events::liquidityBridgeEvents::WithdrawalCompleted"
       }
     ]
   }

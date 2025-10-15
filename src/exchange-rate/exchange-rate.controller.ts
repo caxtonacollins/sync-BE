@@ -1,24 +1,17 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { ExchangeRateService } from './exchange-rate.service';
-import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
-import { ExchangeRateFilterDto } from './dto/exchange-rate-filter.dto';
 
 @Controller('exchange-rate')
 export class ExchangeRateController {
   constructor(private readonly exchangeRateService: ExchangeRateService) {}
 
-  @Post()
-  create(@Body() dto: CreateExchangeRateDto) {
-    return this.exchangeRateService.create(dto);
-  }
-
   @Get()
-  findAll(@Query() filter: ExchangeRateFilterDto) {
-    return this.exchangeRateService.findAll(filter);
+  findAll() {
+    return this.exchangeRateService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.exchangeRateService.findOne(id);
+  @Get(':fiatSymbol/:tokenSymbol')
+  findOne(@Param('fiatSymbol') fiatSymbol: string, @Param('tokenSymbol') tokenSymbol: string) {
+    return this.exchangeRateService.findOne(fiatSymbol, tokenSymbol);
   }
 }
