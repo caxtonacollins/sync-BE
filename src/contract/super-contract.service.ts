@@ -1,29 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  Account,
-  RPC,
-  ec,
-  RpcProvider,
-  stark,
-  CallData,
-  hash,
-  LibraryError,
-  uint256,
-  BigNumberish,
-  shortString,
-} from 'starknet';
+import { Account, RpcProvider } from 'starknet';
 import 'dotenv/config';
-import {
-  connectToStarknet,
-  createKeyPair,
-  createNewContractInstance,
-  deployAccount,
-  getClassAt,
-  getDeployerWallet,
-  uuidToFelt252,
-  writeAbiToFile,
-} from './utils';
-import erc20 from './abi/erc20.json';
+import { connectToStarknet, getDeployerWallet } from './utils';
 
 export interface StarkNetAccountCreationResult {
   transactionHash: string;
@@ -69,7 +47,8 @@ export class SuperContractServicee {
 
   constructor() {
     this.provider = connectToStarknet();
-    this.liquidityContractAddress = process.env.LIQUIDITY_CONTRACT_ADDRESS || '';
+    this.liquidityContractAddress =
+      process.env.LIQUIDITY_CONTRACT_ADDRESS || '';
     this.accountAddress = process.env.ACCOUNT_ADDRESS || '';
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
@@ -91,17 +70,19 @@ export class SuperContractServicee {
     amount: string,
   ): Promise<{ transactionHash: string; status: string }> {
     try {
-      this.logger.log(`Transferring ${amount} tokens from ${fromAccountAddress} to ${toAccountAddress}`);
-      
+      this.logger.log(
+        `Transferring ${amount} tokens from ${fromAccountAddress} to ${toAccountAddress}`,
+      );
+
       // TODO: Replace with actual contract call
       // const amountUint256 = uint256.bnToUint256(amount);
-      // 
+      //
       // const call = {
       //   contractAddress: tokenAddress,
       //   entrypoint: 'transfer',
       //   calldata: [toAccountAddress, amountUint256.low, amountUint256.high],
       // };
-      // 
+      //
       // const account = new Account(this.provider, fromAccountAddress, privateKey);
       // const { transaction_hash: txH } = await account.execute(call, {
       //   maxFee: 10 ** 15,
@@ -131,7 +112,7 @@ export class SuperContractServicee {
   }> {
     try {
       this.logger.log(`Checking transaction status: ${transactionHash}`);
-      
+
       // TODO: Replace with actual StarkNet query
       // const txReceipt = await this.provider.getTransactionReceipt(transactionHash);
       // return {
@@ -141,9 +122,14 @@ export class SuperContractServicee {
       // };
 
       // Mock response for development
-      const mockStatuses = ['pending', 'accepted_on_l2', 'accepted_on_l1'] as const;
-      const randomStatus = mockStatuses[Math.floor(Math.random() * mockStatuses.length)];
-      
+      const mockStatuses = [
+        'pending',
+        'accepted_on_l2',
+        'accepted_on_l1',
+      ] as const;
+      const randomStatus =
+        mockStatuses[Math.floor(Math.random() * mockStatuses.length)];
+
       const mockResult = {
         status: randomStatus,
         blockNumber: Math.floor(Math.random() * 1000000),
@@ -172,14 +158,14 @@ export class SuperContractServicee {
   }> {
     try {
       this.logger.log(`Estimating fee for ${contractAddress}:${entrypoint}`);
-      
+
       // TODO: Replace with actual fee estimation
       // const call = {
       //   contractAddress,
       //   entrypoint,
       //   calldata,
       // };
-      // 
+      //
       // const feeEstimate = await this.provider.estimateFee(call, this.deployerAccount.address);
       // return {
       //   gasConsumed: feeEstimate.gas_consumed,

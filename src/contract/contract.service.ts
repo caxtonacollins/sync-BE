@@ -8,32 +8,15 @@ import {
   stark,
   CallData,
   hash,
-<<<<<<< HEAD
-  LibraryError,
-<<<<<<< HEAD
-=======
   uint256,
   shortString,
->>>>>>> f752d2d (deployment)
-=======
-  uint256,
-  shortString,
->>>>>>> 07a84d45994a75f84945e727045420decca6eaf7
 } from 'starknet';
 import 'dotenv/config';
 import {
   connectToStarknet,
   createKeyPair,
   createNewContractInstance,
-<<<<<<< HEAD
-  deployAccount,
-<<<<<<< HEAD
-=======
   encryptPrivateKey,
->>>>>>> f752d2d (deployment)
-=======
-  encryptPrivateKey,
->>>>>>> 07a84d45994a75f84945e727045420decca6eaf7
   getClassAt,
   uuidToFelt252,
   writeAbiToFile,
