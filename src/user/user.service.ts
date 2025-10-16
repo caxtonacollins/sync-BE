@@ -44,6 +44,7 @@ private flutterwaveService: FlutterwaveService,
   }
 
   async createUser(createUserDto: CreateUserDto) {
+    console.log("Creating user...", createUserDto)
     return this.prisma.$transaction(
       async (tx) => {
         // 1. Hash password and create user

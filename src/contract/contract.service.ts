@@ -314,7 +314,8 @@ export class ContractService {
     if (!amount) throw new Error('amount is required');
 
     const tokenDecimals = await this.getTokenDecimals(this.strkTokenAddress);
-    const amountInDecimals = uint256.bnToUint256(BigInt(amount) ** BigInt(tokenDecimals));
+    const decimalsPower = BigInt(10) ** BigInt(tokenDecimals);
+    const amountInDecimals = uint256.bnToUint256(BigInt(amount) * decimalsPower);
 
     const call = {
       contractAddress: this.strkTokenAddress,

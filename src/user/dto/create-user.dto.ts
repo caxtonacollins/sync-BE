@@ -8,6 +8,7 @@ import {
   Matches,
   Length,
 } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 import { AccountStatus, UserRole, VerificationStatus } from '@prisma/client';
 import {
   NIGERIAN_PHONE_REGEX,
@@ -18,11 +19,25 @@ import {
 } from '../../shared/validators';
 
 export class CreateUserDto {
+  @ApiProperty({
+    description: 'User email address',
+    example: 'user@example.com',
+    format: 'email',
+    minLength: 5,
+    maxLength: 100,
+  })
   @IsEmail()
   @MinLength(5)
   @MaxLength(100)
   email: string;
 
+  @ApiProperty({
+    description:
+      'User password - must contain uppercase, lowercase, number, and special character',
+    example: 'StrongP@ss123',
+    minLength: PASSWORD_VALIDATORS.MIN_LENGTH,
+    writeOnly: true,
+  })
   @IsString()
   @MinLength(PASSWORD_VALIDATORS.MIN_LENGTH)
   @Matches(PASSWORD_VALIDATORS.UPPERCASE, {
