@@ -7,18 +7,8 @@ import { AccountFactoryContractService } from './account-factory-contract.servic
 import { LiquidityPoolContractService } from './liquidity-pool-contract.service';
 import { TokenContractService } from './token-contract.service';
 import {
-  connectToStarknet,
-  createKeyPair,
-  createNewContractInstance,
-  encryptPrivateKey,
-  getClassAt,
-  uuidToFelt252,
-  writeAbiToFile,
+  connectToStarknet
 } from './utils';
-import erc20 from './abi/erc20.json';
-import chalk from 'chalk';
-import { KeyManagementService } from '../wallet/key-management.service';
-import { UserService } from 'src/user/user.service';
 
 /**
  * Main Contract Service - Orchestrates all specialized contract services
