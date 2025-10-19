@@ -17,10 +17,36 @@ export interface ExchangeRateResponse {
 @Injectable()
 export class FlutterwaveService {
   private readonly currencies = ['NGN']; //'GBP', 'USD', 'EUR'
-
   private readonly baseUrl = 'https://api.flutterwave.com/v3';
+  private readonly headers: Record<string, string>;
 
-  constructor() {}
+  constructor() {
+    this.headers = {
+      'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  /**
+   * Fetches the list of banks from Flutterwave
+   * @returns Promise with the list of banks
+   */
+  async getBanks() {
+    try {
+      const response = await axios.get(`${this.baseUrl}/banks/NG`, {
+        headers: this.headers,
+      });
+      
+      return response.data.data.map(bank => ({
+        name: bank.name,
+        code: bank.code,
+        isSyncPayment: false
+      }));
+    } catch (error) {
+      console.error('Error fetching banks from Flutterwave:', error.response?.data || error.message);
+      throw new Error('Failed to fetch banks. Please try again later.');
+    }
+  }
 
   /**
    * Fetches the exchange rate between two currencies

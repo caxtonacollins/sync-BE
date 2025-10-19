@@ -12,6 +12,8 @@ async function main() {
   // Hash passwords
   const password = await bcrypt.hash('password', 12);
 
+  console.log('Seeding database...');
+
   // Create users with different roles and statuses
   const users = await Promise.all([
     // Admin users

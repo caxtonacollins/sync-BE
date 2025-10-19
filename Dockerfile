@@ -1,16 +1,32 @@
-# syntax=docker/dockerfile:1
-FROM node:20-alpine
+FROM node:22-alpine AS builder
 
-WORKDIR /usr/src/app
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-COPY package.json yarn.lock ./
+WORKDIR /app
 
-RUN yarn install
+COPY package.json pnpm-lock.yaml ./
+COPY prisma ./prisma
+COPY libs ./libs
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
 
-COPY . .
+RUN pnpm install --frozen-lockfile
+RUN npx prisma generate
+RUN pnpm build
 
-RUN yarn build
+FROM node:22-alpine AS runtime
 
-EXPOSE 3000
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-CMD ["yarn", "start:dev"]
+WORKDIR /app
+
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/libs ./libs
+COPY --from=builder /app/src ./src
+
+ENV NODE_ENV=production
+
+CMD ["node", "dist/src/main.js"]

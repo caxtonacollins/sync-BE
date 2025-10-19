@@ -1,28 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  Account,
-  RPC,
-  ec,
-  RpcProvider,
-  stark,
-  CallData,
-  hash,
-  LibraryError,
-  uint256,
-  BigNumberish,
-  shortString,
-} from 'starknet';
+import { Account, RpcProvider } from 'starknet';
 import 'dotenv/config';
-import {
-  connectToStarknet,
-  createKeyPair,
-  createNewContractInstance,
-  getClassAt,
-  getDeployerWallet,
-  uuidToFelt252,
-  writeAbiToFile,
-} from './utils';
-import erc20 from './abi/erc20.json';
+import { connectToStarknet, getDeployerWallet } from './utils';
 
 export interface StarkNetAccountCreationResult {
   transactionHash: string;

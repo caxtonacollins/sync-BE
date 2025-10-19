@@ -2,11 +2,23 @@
 import { Injectable } from '@nestjs/common';
 import { RpcProvider, Account } from 'starknet';
 import 'dotenv/config';
-import { connectToStarknet } from './utils';
 import { AccountContractService } from './account-contract.service';
 import { AccountFactoryContractService } from './account-factory-contract.service';
 import { LiquidityPoolContractService } from './liquidity-pool-contract.service';
 import { TokenContractService } from './token-contract.service';
+import {
+  connectToStarknet,
+  createKeyPair,
+  createNewContractInstance,
+  encryptPrivateKey,
+  getClassAt,
+  uuidToFelt252,
+  writeAbiToFile,
+} from './utils';
+import erc20 from './abi/erc20.json';
+import chalk from 'chalk';
+import { KeyManagementService } from '../wallet/key-management.service';
+import { UserService } from 'src/user/user.service';
 
 /**
  * Main Contract Service - Orchestrates all specialized contract services
