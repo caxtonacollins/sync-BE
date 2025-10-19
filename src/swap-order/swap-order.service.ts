@@ -11,6 +11,7 @@ import { UserService } from 'src/user/user.service';
 import { PaymentService } from 'src/payment/payment.service';
 import { uint256 } from 'starknet';
 import { parseTokenAmount } from 'libs/utils';
+import { RegistrationStatus } from 'src/types';
 
 @Injectable()
 export class SwapOrderService {
@@ -139,7 +140,7 @@ export class SwapOrderService {
     const userOnchainDashboardData = await this.contractService.getUserDashboardData(userId);
     const { isRegistered,
       accountAddress,
-    } = userOnchainDashboardData;
+    } = userOnchainDashboardData as RegistrationStatus;
 
     if (!isRegistered) {
       throw new Error('User is not registered to contract');
