@@ -1,6 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { Injectable } from '@nestjs/common';
 import { Account, RpcProvider, ec, stark, hash, CallData } from 'starknet';
 import {
   connectToStarknet,
@@ -20,7 +18,7 @@ export class AccountContractService {
   private accountAddress: string;
   private private_key: string;
 
-  constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {
+  constructor() {
     this.provider = connectToStarknet();
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
@@ -80,8 +78,6 @@ export class AccountContractService {
         // The account address is in the second position of the data array
         const accountAddress = accountCreatedEvent.data[1];
 
-        // Invalidate cache for this user
-        await this.invalidateAccountCache(user_unique_id);
 
         return {
           transactionHash: txH,
@@ -97,20 +93,12 @@ export class AccountContractService {
   }
 
   /**
-   * Get account address for a user with Redis caching
+   * Get account address for a user
    */
   async getAccountAddress(userAddress: string) {
     if (!this.accountFactoryAddress)
       throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
     if (!userAddress) throw new Error('user address is required');
-
-    // Check Redis cache first
-    const cacheKey = `account:address:${userAddress}`;
-    const cachedAddress = await this.cacheManager.get<string>(cacheKey);
-    if (cachedAddress) {
-      console.log(`[Cache Hit] Account address for ${userAddress}`);
-      return cachedAddress;
-    }
 
     const AccountClass = await getClassAt(this.accountFactoryAddress);
     await writeAbiToFile(AccountClass, 'accountFactoryAbi');
@@ -125,12 +113,7 @@ export class AccountContractService {
       const feltValue = Array.isArray(result) ? result[0] : result;
 
       // Convert decimal string to hex
-      const hexValue = '0x' + BigInt(feltValue as string).toString(16);
-
-      // Cache the result in Redis (TTL: 5 minutes)
-      await this.cacheManager.set(cacheKey, hexValue, 300000);
-
-      return hexValue;
+      return '0x' + BigInt(feltValue as string).toString(16);
     } catch (error) {
       console.log(error);
       throw error;
@@ -138,20 +121,12 @@ export class AccountContractService {
   }
 
   /**
-   * Get user dashboard data with caching
+   * Get user dashboard data
    */
   async getUserDashboardData(userAddress: string) {
     if (!userAddress) throw new Error('user address is required');
 
     const userFelt252Id = uuidToFelt252(userAddress);
-
-    // Check cache first
-    const cacheKey = `dashboard:${userAddress}`;
-    const cachedData = await this.cacheManager.get(cacheKey);
-    if (cachedData) {
-      console.log(`[Cache Hit] Dashboard data for ${userAddress}`);
-      return cachedData;
-    }
 
     try {
       const accountAddress = await this.getAccountAddress(userFelt252Id);
@@ -159,14 +134,9 @@ export class AccountContractService {
 
       // Note: isRegistered check would need to be imported from liquidity service
       // For now, we'll return basic data
-      const dashboardData = {
+      return {
         accountAddress: accountAddress?.toString() || null,
       };
-
-      // Cache the result (TTL: 1 minute)
-      await this.cacheManager.set(cacheKey, dashboardData, 60000);
-
-      return dashboardData;
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       throw new Error('Failed to fetch dashboard data');
@@ -197,19 +167,9 @@ export class AccountContractService {
    * Get deployer wallet instance
    */
   getDeployerWallet() {
-    if (!this.provider || !this.accountAddress || !this.private_key)
+    if (!this.provider || !this.accountAddress || !this.private_key) {
       throw new Error("credentials required to deploy deployer's wallet");
+    }
     return new Account(this.provider, this.accountAddress, this.private_key);
-  }
-
-  /**
-   * Invalidate account cache
-   */
-  async invalidateAccountCache(userAddress: string) {
-    const cacheKeys = [
-      `account:address:${userAddress}`,
-      `dashboard:${userAddress}`,
-    ];
-    await Promise.all(cacheKeys.map((key) => this.cacheManager.del(key)));
   }
 }

@@ -1,6 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { Injectable } from '@nestjs/common';
 import { RpcProvider, uint256, CallData } from 'starknet';
 import { connectToStarknet, createNewContractInstance } from './utils';
 import erc20 from './abi/erc20.json';
@@ -18,7 +16,7 @@ export class TokenContractService {
   private readonly tokenAddressMap: Record<string, string>;
   private readonly decimalsMap: Record<string, number>;
 
-  constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {
+  constructor() {
     this.provider = connectToStarknet();
     this._syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
     this._strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
@@ -62,21 +60,12 @@ export class TokenContractService {
   get btcTokenAddress(): string {
     return this._btcTokenAddress;
   }
-
   /**
    * Get token balance for a specific address with Redis caching
    */
-  async getAccountBalance(symbol: string, userAddress: string): Promise<TokenBalance> {
+  async getAccountBalance(symbol: string, accountAddress: string): Promise<string> {
     if (!symbol) throw new Error('symbol is required');
-    if (!userAddress) throw new Error('userAddress is required');
-
-    // Check Redis cache first
-    const cacheKey = `balance:${userAddress}:${symbol}`;
-    const cachedBalance = await this.cacheManager.get(cacheKey);
-    if (cachedBalance) {
-      console.log(`[Cache Hit] Balance for ${symbol} at ${userAddress}`);
-      return cachedBalance as TokenBalance;
-    }
+    if (!accountAddress) throw new Error('accountAddress is required');
 
     const tokenAddress = this.tokenAddressMap[symbol.toUpperCase()];
     if (!tokenAddress) {
@@ -85,29 +74,19 @@ export class TokenContractService {
 
     try {
       const tokenContract = createNewContractInstance(erc20, tokenAddress);
-      const balance = await tokenContract.balance_of(userAddress);
+      const balance = await tokenContract.balance_of(accountAddress);
       const decimals = this.decimalsMap[symbol.toUpperCase()] || 18;
 
       // Convert from smallest unit to human-readable format
       const balanceFormatted = Number(balance) / Math.pow(10, decimals);
 
-      const result = {
-        raw: balance.toString(),
-        formatted: balanceFormatted.toString(),
-        symbol: symbol.toUpperCase(),
-        decimals: decimals,
-      };
-
-      // Cache the result in Redis (TTL: 30 seconds)
-      await this.cacheManager.set(cacheKey, result, 30000);
-
-      return result;
+      return balanceFormatted.toString();
     } catch (error) {
       console.error(
-        `Error fetching balance for ${symbol} for account ${userAddress}:`,
+        `Error fetching balance for ${symbol} for account ${accountAddress}:`,
         error,
       );
-      throw error;
+      throw error; // Re-throw the error to be handled by the caller
     }
   }
 
@@ -119,18 +98,30 @@ export class TokenContractService {
       throw new Error('symbols array is required');
     if (!userAddress) throw new Error('userAddress is required');
 
-    const balancePromises = symbols.map((symbol) =>
-      this.getAccountBalance(symbol, userAddress).catch((error) => {
+    const balancePromises = symbols.map(async (symbol) => {
+      try {
+        const rawBalance = await this.getAccountBalance(symbol, userAddress);
+        const decimals = this.decimalsMap[symbol.toUpperCase()] || 18;
+        const formattedBalance = (parseFloat(rawBalance) / Math.pow(10, decimals)).toString();
+        
+        return {
+          symbol,
+          balance: rawBalance,
+          raw: rawBalance,
+          formatted: formattedBalance,
+          decimals: decimals
+        } as TokenBalance;
+      } catch (error) {
         console.error(
           `Error fetching balance for ${symbol} for account ${userAddress}:`,
           error,
         );
         return null;
-      }),
-    );
+      }
+    });
 
     const results = await Promise.all(balancePromises);
-    return results.filter((result) => result !== null);
+    return results.filter((result): result is TokenBalance => result !== null);
   }
 
   /**
@@ -187,21 +178,5 @@ export class TokenContractService {
     return this.decimalsMap[symbol.toUpperCase()] || 18;
   }
 
-  /**
-   * Invalidate cache for a specific user and token
-   */
-  async invalidateBalanceCache(userAddress: string, symbol: string) {
-    const cacheKey = `balance:${userAddress}:${symbol}`;
-    await this.cacheManager.del(cacheKey);
-  }
-
-  /**
-   * Invalidate all balance caches for a user
-   */
-  async invalidateAllBalanceCaches(userAddress: string) {
-    const symbols = Object.keys(this.tokenAddressMap);
-    await Promise.all(
-      symbols.map((symbol) => this.invalidateBalanceCache(userAddress, symbol)),
-    );
-  }
+  // Cache invalidation is now handled by the CacheInterceptor
 }

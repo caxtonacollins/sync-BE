@@ -1,48 +1,10 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseInterceptors } from '@nestjs/common';
 import { ContractService } from './contract.service';
 import { LiquidityEventProcessorService } from './liquidity-event-processor.service';
+import { CreateAccountDto, SetLiquidityContractAddressDto, SetAccountClassHashDto, UpgradeAccountFactoryDto, TransferOwnershipDto, SwapFiatToTokenDto, SwapTokenToFiatDto, MintTokenDto } from './dto';
+import { CacheInterceptor } from '@nestjs/cache-manager';
 
-// --- DTOs ---
-class CreateAccountDto {
-  fiatAccountId: string;
-  userContractAddress: string;
-}
-
-class SetLiquidityContractAddressDto {
-  address: string;
-}
-
-class SetAccountClassHashDto {
-  classHash: string;
-}
-
-class UpgradeAccountFactoryDto extends SetAccountClassHashDto { }
-
-class TransferOwnershipDto {
-  newOwnerAddress: string;
-}
-
-class SwapFiatToTokenDto {
-  userContractAddress: string;
-  fiatSymbol: string;
-  tokenSymbol: string;
-  fiatAmount: number;
-  swapOrderId: string;
-}
-
-class SwapTokenToFiatDto {
-  userContractAddress: string;
-  fiatSymbol: string;
-  tokenSymbol: string;
-  tokenAmount: string;
-  swapOrderId: string;
-}
-
-class MintTokenDto {
-  receiverAddress: string;
-  amount: string;
-}
-
+@UseInterceptors(CacheInterceptor)
 @Controller('contract')
 export class ContractController {
   constructor(
