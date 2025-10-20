@@ -141,11 +141,10 @@ export class FlutterwaveService {
           return null;
         });
 
-      if (response.status === 'success') {
+      if (response?.status === 'success') {
         console.log(`Virtual account created for ${user.email} in ${currency}`);
         return response.data;
       } else {
-        console.error('Flutterwave account creation failed:', response.message);
         return null;
       }
     } catch (error) {
@@ -156,7 +155,7 @@ export class FlutterwaveService {
       } else {
         console.error(`Error: ${error.message}`);
       }
-      throw new Error('Failed to create virtual account.');
+      throw new Error('Failed to create virtual account.', error);
     }
   }
 

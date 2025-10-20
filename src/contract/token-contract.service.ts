@@ -82,7 +82,7 @@ export class TokenContractService {
 
       return balanceFormatted.toString();
     } catch (error) {
-      console.error(
+      console.error(  
         `Error fetching balance for ${symbol} for account ${accountAddress}:`,
         error,
       );

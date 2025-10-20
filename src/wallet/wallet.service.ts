@@ -204,7 +204,7 @@ export class WalletService {
 
           return {
             currency: wallet.currency,
-            balance: Number(balance.formatted) || 0,
+            balance: Number(balance) || 0,
             walletId: wallet.id,
             network: wallet.network,
             address: wallet.address,

@@ -152,10 +152,10 @@ export class SwapOrderService {
 
     // Step 2: Verify token balance
     const balance = await this.contractService.getAccountBalance(fromCurrency, accountAddress);
-    this.logger.log(`User balance: ${balance.formatted} ${fromCurrency}`);
+    this.logger.log(`User balance: ${balance} ${fromCurrency}`);
 
-    if (parseFloat(balance.formatted) < fromAmount) {
-      throw new Error(`Insufficient token balance. Required: ${fromAmount}, Available: ${balance.formatted}`);
+    if (parseFloat(balance) < fromAmount) {
+      throw new Error(`Insufficient token balance. Required: ${fromAmount}, Available: ${balance}`);
     }
 
     // Step 3: Verify user has fiat account for payout

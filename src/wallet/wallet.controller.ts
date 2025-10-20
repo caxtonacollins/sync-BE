@@ -9,12 +9,14 @@ import {
   HttpCode,
   ValidationPipe,
   BadRequestException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Logger } from '@nestjs/common';
 import { CreateFiatAccountDto } from './dto/create-fiat-account.dto';
 import { CreateCryptoWalletDto } from './dto/create-crypto-wallet.dto';
+import { CacheInterceptor } from '@nestjs/cache-manager';
 
 @Controller('wallet')
 @UseGuards(JwtAuthGuard)
@@ -44,6 +46,7 @@ export class WalletController {
    * Get wallet summary for dashboard
    */
   @Get('summary')
+  @UseInterceptors(CacheInterceptor)
   async getSummary(@Request() req) {
     try {
       const userId = req.user.sub;

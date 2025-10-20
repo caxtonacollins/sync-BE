@@ -1,5 +1,10 @@
+import { IsOptional } from "class-validator";
+
 export class CreateAccountDto {
+  @IsOptional()
   fiatAccountId: string;
+
+  @IsOptional()
   userContractAddress: string;
 }
 

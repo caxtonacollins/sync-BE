@@ -22,6 +22,11 @@ export class FlutterwaveController {
     return this.flutterwaveService.getVirtualAccount(ref);
   }
 
+  @Get('get-exchange-rate')
+  async getExchangeRate(@Query('sourceCurrency') sourceCurrency: string, @Query('destinationCurrency') destinationCurrency: string, @Query('amount') amount: number) {
+    return this.flutterwaveService.getExchangeRate(sourceCurrency, destinationCurrency, amount);
+  }
+
   @Put('virtual-account/:orderRef/bvn')
   async updateBVN(
     @Param('orderRef') orderRef: string,

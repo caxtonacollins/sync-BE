@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
 import { ContractService } from '../contract/contract.service';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
+import axios from 'axios';
 
 @Injectable()
 export class ExchangeRateService {
@@ -84,9 +85,78 @@ export class ExchangeRateService {
     return exchangeRates;
   }
 
+  async getExchangeRates() {
+    // Get rates from database
+    const syncRates = await this.prisma.exchangeRate.findMany();
+
+    // Get Flutterwave rates (USD/NGN)
+    const fwRates = await this.flutterwaveService.getExchangeRate(
+      'NGN',
+      'USD',
+      1
+    );
+
+    // CoinGecko coin IDs for tokens
+    const coinIds = 'starknet,ethereum,usd-coin,bitcoin';
+
+    // Fetch all token prices in a single API call (more efficient)
+    const tokenRatesResponse = await axios.get(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`
+    );
+
+    const { data: tokenPrices } = tokenRatesResponse;
+
+    // Note: SYNC token might not be available on CoinGecko
+    // Using a placeholder of 0 if not found
+    const syncPrice = tokenPrices.sync?.usd || 0;
+
+    // Combine all rates
+    const exchangeRates = [
+      ...syncRates,
+      {
+        fiatSymbol: 'NGN',
+        tokenSymbol: 'USD',
+        rate: Number(fwRates.rate),
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'SYNC',
+        rate: syncPrice, // CoinGecko price or 0 if not available
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'STRK',
+        rate: tokenPrices.starknet?.usd || 0,
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'USDC',
+        rate: tokenPrices['usd-coin']?.usd || 0,
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'ETH',
+        rate: tokenPrices.ethereum?.usd || 0,
+      },
+      {
+        fiatSymbol: 'USD',
+        tokenSymbol: 'BTC',
+        rate: tokenPrices.bitcoin?.usd || 0,
+      },
+    ];
+
+    return exchangeRates;
+  }
+
   findOne(fiatSymbol: string, tokenSymbol: string) {
     return this.prisma.exchangeRate.findUnique({
       where: { fiatSymbol_tokenSymbol: { fiatSymbol, tokenSymbol } },
+      select: {
+        id: true,
+        fiatSymbol: true,
+        tokenSymbol: true,
+        rate: true,
+      },
     });
   }
 

@@ -7,11 +7,16 @@ export class ExchangeRateController {
 
   @Get()
   findAll() {
-    return this.exchangeRateService.findAll();
+    return this.exchangeRateService.getExchangeRates();
   }
 
   @Get(':fiatSymbol/:tokenSymbol')
   findOne(@Param('fiatSymbol') fiatSymbol: string, @Param('tokenSymbol') tokenSymbol: string) {
     return this.exchangeRateService.findOne(fiatSymbol, tokenSymbol);
+  }
+
+  @Get('getExchangeRates')
+  getExchangeRates() {
+    return this.exchangeRateService.getExchangeRates();
   }
 }
