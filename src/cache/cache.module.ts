@@ -9,13 +9,13 @@ import { redisStore } from 'cache-manager-redis-store';
       useFactory: async () => {
         const store = await redisStore({
           socket: {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
+            host: process.env.REDISHOST || 'localhost',
+            port: parseInt(process.env.REDISPORT || '6379'),
           },
           isGlobal: true,
-          password: process.env.REDIS_PASSWORD || undefined,
+          password: process.env.REDISPASSWORD || undefined,
           database: parseInt(process.env.REDIS_DB || '0'),
-          ttl: parseInt(process.env.REDIS_TTL || '60'), // Default TTL in seconds
+          ttl: parseInt(process.env.REDIS_TTL || '60'),
         });
 
         return {
