@@ -16,9 +16,11 @@ import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 import { TransferModule } from './transfer/transfer.module';
 import { PaymentModule } from './payment/payment.module';
 import { SyncPayModule } from './syncpay/syncpay.module';
+import { CacheModule } from './cache/cache.module';
 
 @Module({
   imports: [
+    CacheModule,
     UserModule,
     PrismaModule,
     AuthModule,

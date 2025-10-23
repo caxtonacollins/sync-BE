@@ -13,14 +13,13 @@ import { ContractService } from 'src/contract/contract.service';
 import { ExchangeRateService } from '../exchange-rate/exchange-rate.service';
 
 export interface WalletSummaryResponse {
-  fiatBalanceNGN: number;
-  cryptoValueUSD: number;
+  totalBalanceNGN: number;
+  totalBalanceUSD: number;
   syncTokenBalance: number;
   ethTokenBalance: number;
   strkTokenBalance: number;
   usdcTokenBalance: number;
   stakedSyncTokens: number;
-  totalPortfolioValueNGN: number;
   transactionFeeDiscount: number;
   activeLiquidityPools: number;
   dailySettlementCount: number;
@@ -138,6 +137,7 @@ export class WalletService {
       return wallets.map((wallet) => ({
         id: wallet.id,
         name: `${wallet.user.firstName} ${wallet.user.lastName}`,
+        isRegisteredToLiquidity: wallet.isRegisteredToLiquidity,
         address: wallet.address,
         balance: 0,
         currency: wallet.currency,
@@ -153,10 +153,6 @@ export class WalletService {
     }
   }
 
-  /**
-   * Get unified wallet balance for a user
-   * Combines both fiat and crypto balances in a single response
-   */
   async getUnifiedBalance(userId: string): Promise<UnifiedWalletBalance> {
     try {
       const user = await this.prisma.user.findUnique({
@@ -188,33 +184,40 @@ export class WalletService {
             currency: account.currency,
             balance: convertedBalance,
             accountId: account.id,
+            accountNumber: account.accountNumber,
+            bankName: account.bankName,
             provider: account.provider,
             isDefault: account.isDefault,
           };
         }),
       );
 
-      // Get crypto balances
+      // Get crypto balances - Fetch all token balances for each wallet
       const cryptoBalances = await Promise.all(
         user.cryptoWallets.map(async (wallet) => {
-          const balance = await this.contractService.getAccountBalance(
-            wallet.currency,
+          // Fetch balances for multiple tokens in parallel
+          const tokenBalances = await this.contractService.getMultipleAccountBalances(
+            ['USDC', 'STRK', 'SYNC', 'ETH'],
             wallet.address,
           );
 
-          return {
-            currency: wallet.currency,
-            balance: Number(balance.formatted) || 0,
+          // Map token balances to the format expected by the frontend
+          return tokenBalances.map((tokenBalance) => ({
+            currency: tokenBalance.symbol,
+            balance: Number(tokenBalance.formatted) || 0,
             walletId: wallet.id,
             network: wallet.network,
             address: wallet.address,
             isDefault: wallet.isDefault,
-          };
+          }));
         }),
       );
 
+      // Flatten the array of arrays
+      const flattenedCryptoBalances = cryptoBalances.flat();
+
       // Get real-time exchange rates
-      const exchangeRates = await this.exchangeRateService.findAll();
+      const exchangeRates = await this.exchangeRateService.getExchangeRates();
 
       // Create a map for quick rate lookups
       const rateMap = new Map();
@@ -238,7 +241,7 @@ export class WalletService {
       });
 
       // Calculate crypto balances in NGN
-      cryptoBalances.forEach(({ currency, balance }) => {
+      flattenedCryptoBalances.forEach(({ currency, balance }) => {
         const tokenToUsdRate = rateMap.get(`USD_${currency}`);
         const usdToNgnRate = rateMap.get('NGN_USD');
 
@@ -256,7 +259,7 @@ export class WalletService {
       return {
         userId,
         fiatBalances,
-        cryptoBalances,
+        cryptoBalances: flattenedCryptoBalances,
         totalValueUSD,
         totalValueNGN,
       };
@@ -360,9 +363,6 @@ export class WalletService {
     }
   }
 
-  /**
-   * Get transaction history for unified wallet
-   */
   async getTransactionHistory(
     userId: string,
     limit: number = 50,
@@ -397,103 +397,73 @@ export class WalletService {
     }
   }
 
-  /**
-   * Get wallet summary for dashboard
-   */
   async getWalletSummary(userId: string): Promise<WalletSummaryResponse> {
     try {
       const balance = await this.getUnifiedBalance(userId);
 
-      // Get default crypto wallet to check SYNC token balance
+      // Get default crypto wallet to check token balances
       const defaultCryptoWallet = balance.cryptoBalances.find(
         (w) => w.isDefault,
       );
-      console.log("defaultCryptoWallet", defaultCryptoWallet);
-      const strkTokenBalance = defaultCryptoWallet
-        ? Number((
-          await this.contractService.getAccountBalance(
-            'STRK',
-            defaultCryptoWallet.address,
-          )
-        ).formatted) || 0
-        : 0;
 
-      // const syncTokenBalance = defaultCryptoWallet
-      //   ? (
-      //       await this.contractService.getAccountBalance(
-      //         defaultCryptoWallet.address,
-      //         'SYNC',
-      //       )
-      //     ).raw || 0
-      //   : 0;
-      const syncTokenBalance = 0
+      let tokenBalances = {
+        STRK: 0,
+        SYNC: 0,
+        ETH: 0,
+        USDC: 0,
+      };
 
-      // const ethTokenBalance = defaultCryptoWallet
-      //   ? (
-      //       await this.contractService.getAccountBalance(
-      //         defaultCryptoWallet.address,
-      //         'ETH',
-      //       )
-      //     ).raw || 0
-      //   : 0;
-      const ethTokenBalance = 0
+      if (defaultCryptoWallet) {
+        // Use batch method to fetch all token balances in parallel
+        const balances = await this.contractService.getMultipleAccountBalances(
+          ['STRK', 'SYNC', 'ETH', 'USDC'],
+          defaultCryptoWallet.address,
+        );
 
-      // const usdcTokenBalance = defaultCryptoWallet
-      //   ? (
-      //       await this.contractService.getAccountBalance(
-      //         defaultCryptoWallet.address,
-      //         'USDC',
-      //       )
-      //     ).raw || 0
-      //   : 0;
-      const usdcTokenBalance = 0
+        // Map results to token balances
+        balances.forEach((balance) => {
+          if (balance) {
+            tokenBalances[balance.symbol as keyof typeof tokenBalances] =
+              Number(balance.formatted) || 0;
+          }
+        });
+      }
 
-      // // Get staked tokens
-      // const stakedSyncTokens = defaultCryptoWallet
-      //   ? (
-      //       await this.contractService.getAccountBalance(
-      //         defaultCryptoWallet.address,
-      //         'STAKED_SYNC',
-      //       )
-      //     ).raw || 0
-      //   : 0;
-      const stakedSyncTokens = 0
+      const stakedSyncTokens = 0;
 
-      // Get active liquidity pools count
-      const activeLiquidityPools = await this.prisma.liquidityPool.count({
-        where: {
-          isActive: true,
-        },
-      });
-
-      // Get daily settlement count
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dailySettlementCount = await this.prisma.transaction.count({
-        where: {
-          userId,
-          type: 'SETTLEMENT',
-          status: 'COMPLETED',
-          createdAt: {
-            gte: today,
+      // Batch database queries in parallel
+      const [activeLiquidityPools, dailySettlementCount] = await Promise.all([
+        this.prisma.liquidityPool.count({
+          where: {
+            isActive: true,
           },
-        },
-      });
+        }),
+        this.prisma.transaction.count({
+          where: {
+            userId,
+            type: 'SETTLEMENT',
+            status: 'COMPLETED',
+            createdAt: {
+              gte: (() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return today;
+              })(),
+            },
+          },
+        }),
+      ]);
 
-      // // Calculate transaction fee discount based on staked tokens
-      // const transactionFeeDiscount =
-      //   this.calculateFeeDiscount(stakedSyncTokens);
-      const transactionFeeDiscount = 0
+      const transactionFeeDiscount = 0;
 
       return {
-        fiatBalanceNGN: balance.totalValueNGN,
-        cryptoValueUSD: balance.totalValueUSD,
-        syncTokenBalance,
-        ethTokenBalance,
-        strkTokenBalance,
-        usdcTokenBalance,
+        totalBalanceNGN: balance.totalValueNGN,
+        totalBalanceUSD: balance.totalValueUSD,
+        syncTokenBalance: tokenBalances.SYNC,
+        ethTokenBalance: tokenBalances.ETH,
+        strkTokenBalance: tokenBalances.STRK,
+        usdcTokenBalance: tokenBalances.USDC,
         stakedSyncTokens,
-        totalPortfolioValueNGN: balance.totalValueNGN,
         transactionFeeDiscount,
         activeLiquidityPools,
         dailySettlementCount,

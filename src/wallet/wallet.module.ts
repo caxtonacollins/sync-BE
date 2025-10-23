@@ -1,21 +1,25 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { WalletService } from './wallet.service';
-import { WalletController } from './wallet.controller';
 import { KeyManagementService } from './key-management.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MonnifyService } from '../monnify/monnify.service';
 import { ContractModule } from '../contract/contract.module';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { WalletController } from './wallet.controller';
+import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => ContractModule), ExchangeRateModule],
+  imports: [
+    PrismaModule, 
+    forwardRef(() => ContractModule),
+    forwardRef(() => ExchangeRateModule)
+  ],
   controllers: [WalletController],
   providers: [
     WalletService,
     KeyManagementService,
     MonnifyService,
-    PrismaService,
+    FlutterwaveService
   ],
   exports: [WalletService, KeyManagementService],
 })

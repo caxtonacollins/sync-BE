@@ -2,6 +2,7 @@ import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SwapOrderService } from '../swap-order/swap-order.service';
 import { felt252ToUuid } from './utils';
+import { ExchangeRateService } from '../exchange-rate/exchange-rate.service';
 
 // Event name constants matching Cairo events
 const EVENT_NAMES = {
@@ -39,13 +40,17 @@ interface BatchEventPayload {
 export class LiquidityEventProcessorService {
   private readonly logger = new Logger(LiquidityEventProcessorService.name);
   private readonly swapOrderService: SwapOrderService;
+  private readonly exchangeRateService: ExchangeRateService
 
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => SwapOrderService))
     swapOrderService: SwapOrderService,
+    @Inject(forwardRef(() => ExchangeRateService))
+    exchangeRateService: ExchangeRateService,
   ) {
     this.swapOrderService = swapOrderService;
+    this.exchangeRateService = exchangeRateService;
   }
 
   async process(payload: BatchEventPayload | EventPayload | EventPayload[]) {
@@ -400,29 +405,21 @@ export class LiquidityEventProcessorService {
   }
 
   private async handleUserRegistered(evt: EventPayload) {
-    const { user, fiat_account_id } = evt.data;
+    const { user: token_account_id, fiat_account_id: user_id } = evt.data;
 
-    this.logger.log(`User Registered: ${user} | Account: ${fiat_account_id}`);
+    const userUuid = felt252ToUuid(user_id);
+    this.logger.log(`User Registered: ${token_account_id} | Account: ${userUuid}`);
 
-    const wallet = await this.prisma.cryptoWallet.findFirst({
-      where: { address: user },
+    await this.prisma.cryptoWallet.updateMany({
+      where: { address: token_account_id },
+      data: {
+        isRegisteredToLiquidity: true,
+      },
     });
 
-    if (wallet) {
-      await this.prisma.fiatAccount.updateMany({
-        where: { id: fiat_account_id, userId: wallet.userId },
-        data: {
-          // You might want to add a field to FiatAccount to mark it as contract-linked
-        },
-      });
-      this.logger.log(
-        `Linked fiat account ${fiat_account_id} to user ${wallet.userId}`,
-      );
-    } else {
-      this.logger.warn(
-        `Could not find user for wallet address ${user} to link fiat account.`,
-      );
-    }
+    this.logger.log(
+      `Linked crypto wallet ${token_account_id} to user ${userUuid}`,
+    );
   }
 
   /**
@@ -438,31 +435,27 @@ export class LiquidityEventProcessorService {
       fiat_symbol,
       token_symbol,
       token_amount,
-      token_amount_formatted,
-      fiat_amount,
-      fiat_amount_formatted,
       fee,
-      fee_formatted,
     } = evt.data;
 
+    // get exchange rate
+    const tokenSymbolWithoutUSD = token_symbol.replace(/\/usd$/i, '');
+
+    const exchangeRate = await this.exchangeRateService.getExchangeRateFor([tokenSymbolWithoutUSD.toLowerCase(), fiat_symbol.toLowerCase()]);
+    // convert to fiat amount
+    const tokenRate = exchangeRate[tokenSymbolWithoutUSD.toLowerCase()];
+    const fiatRate = exchangeRate[fiat_symbol.toLowerCase()];
+    const fiat_amount = (token_amount / Math.pow(10, 18)) * tokenRate * fiatRate;
+
     const swapOrderUuid = felt252ToUuid(swap_order_id);
-    console.log('swapOrderUuid', swapOrderUuid);
 
     const pendingSwapOrder = await this.prisma.swapOrder.findFirst({
       where: {
         id: swapOrderUuid,
-        status: { in: ['pending', 'processing'] },
-        // fromCurrency: token_amount,
-        // toCurrency: fiat_amount,
-        // fromAmount: {
-        //   gte: fromAmount * 0.99,
-        //   lte: fromAmount * 1.01,
-        // },
+        status: { in: ['pending', 'processing', 'payout_failed'] },
       },
       orderBy: { createdAt: 'asc' },
     });
-
-    console.log('pending order:', pendingSwapOrder);
 
     if (!pendingSwapOrder) {
       this.logger.warn(
@@ -479,7 +472,7 @@ export class LiquidityEventProcessorService {
       data: {
         status: 'completed',
         completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
-        toAmount: parseFloat(fiat_amount),
+        toAmount: fiat_amount,
         fee: parseFloat(fee),
         blockNumber: evt.blockNumber,
         transactionHash: evt.transactionHash,
@@ -497,7 +490,7 @@ export class LiquidityEventProcessorService {
         amount: parseFloat(token_amount),
         currency: token_symbol,
         fee: parseFloat(fee),
-        netAmount: parseFloat(fiat_amount),
+        netAmount: fiat_amount,
         reference: pendingSwapOrder.reference,
         swapOrderId: pendingSwapOrder.id,
         blockNumber: evt.blockNumber,

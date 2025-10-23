@@ -27,6 +27,7 @@ export class CreateSwapOrderDto {
   toAmount: number;
 
   @IsNumber()
+  @IsOptional()
   rate: number;
 
   @IsNumber()

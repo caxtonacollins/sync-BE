@@ -1,637 +1,120 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import {
-  Account,
-  RPC,
-  ec,
-  RpcProvider,
-  stark,
-  CallData,
-  hash,
-  uint256,
-  shortString,
-} from 'starknet';
+import { Injectable } from '@nestjs/common';
+import { RpcProvider, Account, Uint256 } from 'starknet';
 import 'dotenv/config';
+import { AccountContractService } from './account-contract.service';
+import { AccountFactoryContractService } from './account-factory-contract.service';
+import { LiquidityPoolContractService } from './liquidity-pool-contract.service';
+import { TokenContractService } from './token-contract.service';
 import {
-  connectToStarknet,
-  createKeyPair,
-  createNewContractInstance,
-  encryptPrivateKey,
-  getClassAt,
-  uuidToFelt252,
-  writeAbiToFile,
+  connectToStarknet
 } from './utils';
-import erc20 from './abi/erc20.json';
-import chalk from 'chalk';
-import { KeyManagementService } from '../wallet/key-management.service';
-import { UserService } from 'src/user/user.service';
 
+/**
+ * Main Contract Service - Orchestrates all specialized contract services
+ * This service delegates to specialized services for better separation of concerns
+ */
 @Injectable()
 export class ContractService {
   private provider: RpcProvider;
-  private liquidityContractAddress: string;
   private accountAddress: string;
-  private accountFactoryAddress: string;
-  private accountContractHash: string;
-  private readonly _syncTokenAddress: string;
-  private readonly _strkTokenAddress: string;
-  private readonly _usdcTokenAddress: string;
-  private readonly _ethTokenAddress: string;
-  private readonly _btcTokenAddress: string;
-
-  public get syncTokenAddress(): string {
-    return this._syncTokenAddress;
-  }
-
-  public get strkTokenAddress(): string {
-    return this._strkTokenAddress;
-  }
-
-  public get usdcTokenAddress(): string {
-    return this._usdcTokenAddress;
-  }
-
-  public get ethTokenAddress(): string {
-    return this._ethTokenAddress;
-  }
-
-  public get btcTokenAddress(): string {
-    return this._btcTokenAddress;
-  }
-
   private private_key: string;
 
   constructor(
-    private readonly keyManagementService: KeyManagementService,
-    @Inject(forwardRef(() => UserService))
-    private readonly userService: UserService,
+    private readonly accountContractService: AccountContractService,
+    private readonly accountFactoryService: AccountFactoryContractService,
+    private readonly liquidityPoolService: LiquidityPoolContractService,
+    private readonly tokenService: TokenContractService,
   ) {
     this.provider = connectToStarknet();
-    this.liquidityContractAddress =
-      process.env.LIQUIDITY_CONTRACT_ADDRESS || '';
     this.accountAddress = process.env.DEPLOYER_ADDRESS || '';
-    this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
-    this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
-    this._syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
-    this._strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
-    this._usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
-    this._ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
-    this._btcTokenAddress = process.env.BTC_TOKEN_ADDRESS || '';
-
     this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
   }
 
+  // ==================== Token Address Getters ====================
+  public get syncTokenAddress(): string {
+    return this.tokenService.syncTokenAddress;
+  }
+
+  public get strkTokenAddress(): string {
+    return this.tokenService.strkTokenAddress;
+  }
+
+  public get usdcTokenAddress(): string {
+    return this.tokenService.usdcTokenAddress;
+  }
+
+  public get ethTokenAddress(): string {
+    return this.tokenService.ethTokenAddress;
+  }
+
+  public get btcTokenAddress(): string {
+    return this.tokenService.btcTokenAddress;
+  }
+
+  // ==================== Account Contract Methods ====================
   createAccount = async (user_unique_id: string) => {
-    if (!user_unique_id) throw new Error('user unique id is required');
-    if (!this.accountFactoryAddress)
-      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
-
-    const userFelt252Id = uuidToFelt252(user_unique_id);
-
-    try {
-      const accountFactoryClass = await this.provider.getClassAt(
-        this.accountFactoryAddress,
-      );
-
-      await writeAbiToFile(accountFactoryClass, 'accountFactoryAbi');
-
-      const { privateKey, publicKey } = createKeyPair();
-
-      const encryptedPrivateKey = encryptPrivateKey(privateKey);
-
-      const call = {
-        contractAddress: this.accountFactoryAddress,
-        entrypoint: 'create_account',
-        calldata: [publicKey, userFelt252Id],
-      };
-
-      const account = this.getDeployerWallet();
-
-      const { transaction_hash: txH } = await account.execute(call, {
-        maxFee: 10 ** 15,
-      });
-
-      const txR = await this.provider.waitForTransaction(txH);
-      if (txR.isSuccess()) {
-        // Parse the account creation event
-        const events = txR.value.events;
-        const accountCreatedEvent = events?.find(
-          (event) =>
-            event.keys[0] ===
-            '0x1d9ca8a89626bead91b5cb4275a622219e9443975b34f3fdbc683e8621231a9',
-        );
-
-        if (!accountCreatedEvent) {
-          throw new Error(
-            'Account creation event not found in transaction receipt',
-          );
-        }
-
-        // The account address is in the second position of the data array
-        const accountAddress = accountCreatedEvent.data[1];
-
-        return {
-          transactionHash: txH,
-          accountAddress,
-          encryptedPrivateKey,
-          receipt: txR,
-        };
-      }
-    } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
-      throw error;
-    }
+    return this.accountContractService.createAccount(user_unique_id);
   };
 
+  getAccountAddress = async (userAddress: string) => {
+    return this.accountContractService.getAccountAddress(userAddress);
+  };
+
+  getUserDashboardData = async (userAddress: string) => {
+    return this.accountContractService.getUserDashboardData(userAddress);
+  };
+
+  computeAddress = () => {
+    return this.accountContractService.computeAddress();
+  };
+
+  // ==================== Account Factory Methods ====================
+  setAccountClassHash = async (classHash: string) => {
+    return this.accountFactoryService.setAccountClassHash(classHash);
+  };
+
+  getAccountClassHash = async () => {
+    return this.accountFactoryService.getAccountClassHash();
+  };
+
+  transferFactoryOwnership = async (newOwnerAddress: string) => {
+    return this.accountFactoryService.transferFactoryOwnership(newOwnerAddress);
+  };
+
+  upgradeAccountFactory = async (classHash: string) => {
+    return this.accountFactoryService.upgradeAccountFactory(classHash);
+  };
+
+  // ==================== Liquidity Pool Methods ====================
   registerUserToLiquidity = async (
     userContractAddress: string,
     fiatAccountId: string,
   ) => {
-    try {
-      if (!userContractAddress) throw new Error('user address is required');
-      if (!fiatAccountId) throw new Error('fiat account id is required');
-
-      const fiatAccountIdFelt = uuidToFelt252(fiatAccountId);
-
-      const liquidityClass = await this.provider.getClassAt(
-        this.liquidityContractAddress,
-      );
-      if (!liquidityClass.abi)
-        throw new Error('No ABI found for liquidity contract');
-
-      const call = {
-        contractAddress: this.liquidityContractAddress,
-        entrypoint: 'register_user',
-        calldata: [userContractAddress, fiatAccountIdFelt],
-      };
-
-      const account = this.getDeployerWallet();
-
-      const { transaction_hash: txH } = await account.execute(call, {
-        version: 3,
-        maxFee: 10 ** 15,
-        feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-        tip: 10 ** 13,
-        paymasterData: [],
-      });
-
-      const txR = await this.provider.waitForTransaction(txH);
-      if (txR.isSuccess()) {
-        console.log('Paid fee =', txR.statusReceipt);
-      }
-      return 'success';
-    } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
-      throw error;
-    }
-  };
-
-  addFiatToLiquidity = async (symbol: string, amount: string) => {
-    if (!symbol) throw new Error('symbol is required');
-    if (!amount) throw new Error('amount is required');
-
-    const symbolFelt = uuidToFelt252(symbol);
-    const amountU256 = uint256.bnToUint256(BigInt(amount));
-
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
+    return this.liquidityPoolService.registerUserToLiquidity(
+      userContractAddress,
+      fiatAccountId,
     );
-    if (!liquidityClass.abi)
-      throw new Error('No ABI found for liquidity contract');
-
-    const call = {
-      contractAddress: this.liquidityContractAddress,
-      entrypoint: 'add_fiat_liquidity',
-      calldata: [symbolFelt, amountU256.low, amountU256.high],
-    };
-
-    const account = this.getDeployerWallet();
-
-    const { transaction_hash: txH } = await account.execute(call, {
-      version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-      tip: 10 ** 13,
-      paymasterData: [],
-    });
-
-    const txR = await this.provider.waitForTransaction(txH);
-    if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
-    }
-  };
-
-  addTokenToLiquidity = async (symbol: string, amount: string) => {
-    if (!symbol) throw new Error('symbol is required');
-    if (!amount) throw new Error('amount is required');
-
-    const amountU256 = uint256.bnToUint256(BigInt(amount));
-    const symbolFelt = uuidToFelt252(symbol);
-
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
-    if (!liquidityClass.abi)
-      throw new Error('No ABI found for liquidity contract');
-
-    const call = {
-      contractAddress: this.liquidityContractAddress,
-      entrypoint: 'add_token_liquidity',
-      calldata: [symbolFelt, amountU256.low, amountU256.high],
-    };
-
-    const account = this.getDeployerWallet();
-
-    const { transaction_hash: txH } = await account.execute(call, {
-      version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-      tip: 10 ** 13,
-      paymasterData: [],
-    });
-
-    const txR = await this.provider.waitForTransaction(txH);
-    if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
-    }
   };
 
   isUserRegistered = async (userContractAddress: string) => {
-    if (!this.liquidityContractAddress)
-      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
+    return this.liquidityPoolService.isUserRegistered(userContractAddress);
+  };
 
-    if (!userContractAddress) throw new Error('user address is required');
+  addFiatToLiquidity = async (symbol: string, amount: string) => {
+    return this.liquidityPoolService.addFiatToLiquidity(symbol, amount);
+  };
 
-    const liquidityClass = await getClassAt(this.liquidityContractAddress);
-
-    await writeAbiToFile(liquidityClass, 'liquidityAbi');
-
-    const liquidityContract = createNewContractInstance(
-      liquidityClass.abi,
-      this.liquidityContractAddress,
-    );
-
-    const result =
-      await liquidityContract.is_user_registered(userContractAddress);
-    return result;
+  addTokenToLiquidity = async (symbol: string, amount: string) => {
+    return this.liquidityPoolService.addTokenToLiquidity(symbol, amount);
   };
 
   addSupportedToken = async (symbol: string, address: string) => {
-    if (!symbol) throw new Error('symbol is required');
-    if (!address) throw new Error('address is required');
-
-    const symbolFelt = shortString.encodeShortString(symbol);
-
-    // const liquidityClass = await getClassAt(this.liquidityContractAddress);
-
-    // await writeAbiToFile(liquidityClass, 'liquidityAbi');
-
-    const call = {
-      contractAddress: this.liquidityContractAddress,
-      entrypoint: 'add_supported_token',
-      calldata: [symbolFelt, address],
-    };
-
-    const account = this.getDeployerWallet();
-
-    const { transaction_hash: txH } = await account.execute(call, {
-      maxFee: 10 ** 15,
-    });
-
-    const txR = await this.provider.waitForTransaction(txH);
-    if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
-    }
-  };
-
-  transferToken = async (
-    userId: string,
-    toAddress: string,
-    amount: string,
-  ) => {
-    if (!userId) throw new Error('user id is required');
-    if (!toAddress) throw new Error('to address is required');
-    if (!amount) throw new Error('amount is required');
-
-    const tokenDecimals = await this.getTokenDecimals(this.strkTokenAddress);
-    const decimalsPower = BigInt(10) ** BigInt(tokenDecimals);
-    const amountInDecimals = uint256.bnToUint256(BigInt(amount) * decimalsPower);
-
-    const call = {
-      contractAddress: this.strkTokenAddress,
-      entrypoint: 'transfer',
-      calldata: [toAddress, amountInDecimals],
-    };
-
-    const txR = await this.executeUserTransaction(userId, [call]);
-    return txR;
-  };
-
-  computeAddress = () => {
-    // new Open Zeppelin account v0.8.1
-    // Generate public and private key pair.
-    const privateKey = stark.randomAddress();
-    const starkKeyPub = ec.starkCurve.getStarkKey(privateKey);
-
-    const OZaccountClassHash = this.accountContractHash;
-    // Calculate future address of the account
-    const OZaccountConstructorCallData = CallData.compile({
-      publicKey: starkKeyPub,
-    });
-    const OZcontractAddress = hash.calculateContractAddressFromHash(
-      starkKeyPub,
-      OZaccountClassHash,
-      OZaccountConstructorCallData,
-      0,
-    );
-    return OZcontractAddress;
-  };
-
-  getDeployerWallet = () => {
-    if (!this.provider || !this.accountAddress || !this.private_key)
-      throw new Error("credentials required to deploy deployer's wallet");
-    return new Account(this.provider, this.accountAddress, this.private_key);
-  };
-
-  getSyncTokenBalance = async (address: string) => {
-    if (!this.syncTokenAddress)
-      throw new Error('SYNC_TOKEN_ADDRESS env variable is not set');
-
-    if (!address) throw new Error('user address is required');
-
-    const syncTokenClass = await getClassAt(this.syncTokenAddress);
-
-    await writeAbiToFile(syncTokenClass, 'syncTokenAbi');
-
-    try {
-      const syncTokenContract = createNewContractInstance(
-        syncTokenClass.abi,
-        this.syncTokenAddress,
-      );
-
-      const result = await syncTokenContract.balance_of(address);
-      return result;
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
-  };
-
-  getAccountAddress = async (userAddress: string) => {
-    if (!this.accountFactoryAddress)
-      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
-
-    if (!userAddress) throw new Error('user address is required');
-
-    const AccountClass = await getClassAt(this.accountFactoryAddress);
-
-    await writeAbiToFile(AccountClass, 'accountFactoryAbi');
-
-    try {
-      const accountContract = createNewContractInstance(
-        AccountClass.abi,
-        this.accountFactoryAddress,
-      );
-
-      const result = await accountContract.get_account(userAddress);
-      const feltValue = Array.isArray(result) ? result[0] : result;
-
-      // Convert decimal string to hex
-      const hexValue = '0x' + BigInt(feltValue as string).toString(16);
-      return hexValue;
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
-  };
-
-  setLiquidityContractAddress = (address: string) => {
-    this.liquidityContractAddress = address;
-  };
-
-  getUserDashboardData = async (userAddress: string) => {
-    if (!userAddress) throw new Error('user address is required');
-
-    const userFelt252Id = uuidToFelt252(userAddress);
-
-    try {
-      const accountAddress = await this.getAccountAddress(userFelt252Id);
-
-      console.log('accountAddress', accountAddress);
-
-      const isRegistered = await this.isUserRegistered(accountAddress);
-      console.log('isRegistered', isRegistered);
-
-      const dashboardData = {
-        isRegistered,
-        accountAddress: accountAddress?.toString() || null,
-      };
-
-      return dashboardData;
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      throw new Error('Failed to fetch dashboard data');
-    }
-  };
-
-  getAccountBalance = async (symbol: string, userAddress: string) => {
-    if (!symbol) throw new Error('symbol is required');
-    if (!userAddress) throw new Error('userAddress is required');
-
-    // Map symbols to their contract addresses on Starknet
-    const tokenAddressMap: { [key: string]: string } = {
-      SYNC: this.syncTokenAddress,
-      STRK: this.strkTokenAddress,
-      USDC: this.usdcTokenAddress,
-      ETH: this.ethTokenAddress,
-      BTC: this.btcTokenAddress,
-    };
-
-    const tokenAddress = tokenAddressMap[symbol.toUpperCase()];
-    if (!tokenAddress) {
-      throw new Error(`Token with symbol ${symbol} not supported`);
-    }
-
-    // Different tokens have different decimal places
-    const decimalsMap: { [key: string]: number } = {
-      SYNC: 18,
-      STRK: 18,
-      USDC: 6,
-      ETH: 18,
-      BTC: 18,
-    };
-
-    try {
-      const tokenContract = createNewContractInstance(erc20, tokenAddress);
-
-      const balance = await tokenContract.balance_of(userAddress);
-      const decimals = decimalsMap[symbol.toUpperCase()] || 18;
-
-      // Convert from smallest unit to human-readable format
-      const balanceFormatted = Number(balance) / Math.pow(10, decimals);
-
-      return {
-        raw: balance.toString(),
-        formatted: balanceFormatted.toString(),
-        symbol: symbol.toUpperCase(),
-        decimals: decimals,
-      };
-    } catch (error) {
-      console.error(
-        `Error fetching balance for ${symbol} for account ${userAddress}:`,
-        error,
-      );
-      throw error;
-    }
-  };
-
-  // Set account class hash in account factory
-  setAccountClassHash = async (classHash: string) => {
-    if (!classHash) throw new Error('class hash is required');
-    this.accountContractHash = classHash;
-
-    const call = {
-      contractAddress: this.accountFactoryAddress,
-      entrypoint: 'set_account_class_hash',
-      calldata: [classHash],
-    };
-
-    const account = this.getDeployerWallet();
-
-    await account.execute(call);
-
-    console.log('Account class hash set successfully');
-  };
-
-  getAccountClassHash = async () => {
-    if (!this.accountFactoryAddress)
-      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
-    const accountFactoryClass = await this.provider.getClassAt(
-      this.accountFactoryAddress,
-    );
-    if (!accountFactoryClass.abi)
-      throw new Error('No ABI found for account factory contract');
-    const accountFactoryContract = createNewContractInstance(
-      accountFactoryClass.abi,
-      this.accountFactoryAddress,
-    );
-    const result = await accountFactoryContract.get_account_class_hash();
-    // result is probably { account_class_hash: string } or just a felt
-    const feltValue = Array.isArray(result) ? result[0] : result;
-
-    // Convert decimal string to hex
-    const hexValue = '0x' + BigInt(feltValue as string).toString(16);
-
-    return hexValue;
-  };
-
-  transferFactoryOwnership = async (newOwnerAddress: string) => {
-    if (!this.accountFactoryAddress)
-      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
-    if (!newOwnerAddress) throw new Error('newOwnerAddress is required');
-
-    try {
-      const call = {
-        contractAddress: this.accountFactoryAddress,
-        entrypoint: 'transfer_ownership',
-        calldata: [newOwnerAddress],
-      };
-
-      const account = this.getDeployerWallet();
-
-      const { transaction_hash: txH } = await account.execute(call, {
-        maxFee: 10 ** 15,
-      });
-
-      const txR = await this.provider.waitForTransaction(txH);
-
-      if (txR.isSuccess()) {
-        console.log(`Successfully transferred ownership to ${newOwnerAddress}`);
-        return {
-          transactionHash: txH,
-          receipt: txR,
-        };
-      } else {
-        throw new Error('Ownership transfer transaction failed');
-      }
-    } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
-      throw error;
-    }
-  };
-
-  transferLiquidityOwnership = async (newOwnerAddress: string) => {
-    if (!this.liquidityContractAddress)
-      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
-    if (!newOwnerAddress) throw new Error('newOwnerAddress is required');
-
-    try {
-      console.log(
-        `Transferring ownership of liquidity contract ${this.liquidityContractAddress} to ${newOwnerAddress}`,
-      );
-
-      const call = {
-        contractAddress: this.liquidityContractAddress,
-        entrypoint: 'transfer_ownership',
-        calldata: [newOwnerAddress],
-      };
-
-      const account = this.getDeployerWallet(); // This must be the current owner
-
-      console.log(
-        chalk.blue('Executing liquidity ownership transfer transaction...'),
-      );
-
-      const { transaction_hash: txH } = await account.execute(call, {
-        maxFee: 10 ** 15,
-      });
-
-      console.log(chalk.green('Transaction hash:'), txH);
-      console.log(chalk.blue('Waiting for transaction confirmation...'));
-      const txR = await this.provider.waitForTransaction(txH);
-
-      if (txR.isSuccess()) {
-        console.log(
-          chalk.green(
-            `Successfully transferred liquidity ownership to ${newOwnerAddress}`,
-          ),
-        );
-        return {
-          transactionHash: txH,
-          receipt: txR,
-        };
-      } else {
-        throw new Error('Liquidity ownership transfer transaction failed');
-      }
-    } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
-      throw error;
-    }
+    return this.liquidityPoolService.addSupportedToken(symbol, address);
   };
 
   getTokenAmountInUsd = async (address: string) => {
-    if (!this.liquidityContractAddress)
-      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
-    if (!address) throw new Error('address is required');
-
-    const decimals = await this.getTokenDecimals(address);
-
-    const decimalsPower = BigInt(10) ** BigInt(decimals);
-
-    const liquidityClass = await getClassAt(this.liquidityContractAddress);
-
-    await writeAbiToFile(liquidityClass, 'liquidityAbi');
-
-    const liquidityContract = createNewContractInstance(
-      liquidityClass.abi,
-      this.liquidityContractAddress,
-    );
-
-    const pricePerToken = await liquidityContract.get_token_amount_in_usd(
-      address,
-      decimalsPower,
-    );
-    return pricePerToken;
+    return this.liquidityPoolService.getTokenAmountInUsd(address);
   };
 
   swapFiatToToken = async (
@@ -641,73 +124,15 @@ export class ContractService {
     fiatAmount: number,
     swapOrderId: string,
   ) => {
-    if (!userContractAddress)
-      throw new Error('userContractAddress is required');
-    if (!fiatSymbol) throw new Error('fiatSymbol is required');
-    if (!tokenSymbol) throw new Error('tokenSymbol is required');
-    if (!fiatAmount) throw new Error('fiatAmount is required');
-
-    const fiatSymbolFelt = shortString.encodeShortString(fiatSymbol);
-    const tokenSymbolFelt = shortString.encodeShortString(tokenSymbol);
-    const amountU256 = uint256.bnToUint256(BigInt(fiatAmount));
-    const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
-
-    const call = {
-      contractAddress: this.liquidityContractAddress,
-      entrypoint: 'swap_fiat_to_token',
-      calldata: [
-        userContractAddress,
-        swapOrderIdToFelt,
-        fiatSymbolFelt,
-        tokenSymbolFelt,
-        amountU256.low,
-        amountU256.high,
-      ],
-    };
-
-    try {
-      const account = this.getDeployerWallet();
-
-      const { transaction_hash: txH } = await account.execute(call, {
-        // version: 3,
-        maxFee: 10 ** 15,
-        // feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-        // tip: 10 ** 13,
-        // paymasterData: [],
-      });
-
-      const txR = await this.provider.waitForTransaction(txH);
-
-      if (txR.isSuccess()) {
-        console.log(
-          chalk.green(
-            `Successfully swapped fiat to token for user ${userContractAddress}`,
-          ),
-        );
-        return {
-          transactionHash: txH,
-          receipt: txR,
-        };
-      } else {
-        throw new Error('Swap transaction failed');
-      }
-    } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
-      throw error;
-    }
+    return this.liquidityPoolService.swapFiatToToken(
+      userContractAddress,
+      fiatSymbol,
+      tokenSymbol,
+      fiatAmount,
+      swapOrderId,
+    );
   };
 
-  /**
-   * Swap token to fiat using user's credentials
-   * This method uses the user's private key to sign the transaction
-   * The user must have previously approved the liquidity contract to spend their tokens
-   *
-   * @param userId - The user's ID
-   * @param fiatSymbol - Fiat currency symbol (e.g., 'NGN')
-   * @param tokenSymbol - Token symbol (e.g., 'STRK', 'USDC')
-   * @param tokenAmount - Amount of tokens to swap (human-readable)
-   * @returns Transaction hash and details
-   */
   swapTokenToFiat = async (
     userContractAddress: string,
     fiatSymbol: string,
@@ -715,158 +140,65 @@ export class ContractService {
     tokenAmount: string,
     swapOrderId: string,
   ) => {
-    if (!userContractAddress)
-      throw new Error('userContractAddress is required');
-    if (!fiatSymbol) throw new Error('fiatSymbol is required');
-    if (!tokenSymbol) throw new Error('tokenSymbol is required');
-    if (!tokenAmount) throw new Error('tokenAmount is required');
-    const user =
-      await this.userService.getUserByCryptoAddress(userContractAddress);
-    if (!user) throw new Error('User not found');
-
-    const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
-
-    const fiat = 'USD';
-    const token = tokenSymbol.toUpperCase();
-
-    // Token address mapping
-    const tokenAddressMap: Record<string, string> = {
-      SYNC: this.syncTokenAddress,
-      STRK: this.strkTokenAddress,
-      USDC: this.usdcTokenAddress,
-      ETH: this.ethTokenAddress,
-      BTC: this.btcTokenAddress,
-    };
-
-    const tokenAddress = tokenAddressMap[token];
-    if (!tokenAddress)
-      throw new Error(`Token ${token} not supported for swap.`);
-
-    // Token decimals mapping
-    const decimalsMap: Record<string, number> = {
-      SYNC: 18,
-      STRK: 18,
-      USDC: 6,
-      ETH: 18,
-      BTC: 18,
-    };
-
-    const decimals = decimalsMap[token] || 18;
-
-    // Convert tokenAmount (human-readable) to smallest unit
-    // const adjustedAmount = BigInt(Math.floor(Number(tokenAmount) * Math.pow(10, decimals)));
-    const amountU256 = uint256.bnToUint256(BigInt(tokenAmount));
-    const tokenSymbolToUSD = `${token}/USD`;
-    const supportedTokenAddress =
-      await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
-
-    try {
-      const feeBpsResult = await this.getFeeBPS();
-      const feeBps = BigInt(feeBpsResult);
-      // Calculate token amount after fee
-      const fee = (BigInt(tokenAmount) * feeBps) / 10000n;
-      const amountAfterFee = BigInt(tokenAmount) - fee;
-
-      const pricePerToken = await this.getTokenAmountInUsd(
-        supportedTokenAddress,
-      );
-
-      // Calculate expected fiat amount using same formula as contract
-      const decimalsPower = BigInt(Math.pow(10, decimals));
-      const calculatedFiatAmount =
-        BigInt(amountAfterFee * BigInt(pricePerToken)) / decimalsPower;
-
-      const availableFiat = await this.getFiatLiquidityBalance(fiat);
-
-      if (availableFiat < calculatedFiatAmount) {
-        throw new Error(
-          `Insufficient fiat liquidity. Available: ${availableFiat}, Required: ${calculatedFiatAmount}`,
-        );
-      }
-    } catch (error) {
-      throw new Error(`Pre-swap validation failed: ${error.message}`);
-    }
-
-    const swapCall = {
-      contractAddress: this.liquidityContractAddress,
-      entrypoint: 'swap_token_to_fiat',
-      calldata: [
-        userContractAddress,
-        swapOrderIdToFelt,
-        fiatSymbol,
-        tokenSymbolToUSD,
-        amountU256.low,
-        amountU256.high,
-      ],
-    };
-
-    try {
-      const account = this.getDeployerWallet();
-      await this.approveTokenWithUserCredentials(
-        user.id,
-        tokenAddress,
-        this.liquidityContractAddress,
-        BigInt(tokenAmount),
-      );
-
-      const txResponse = await account.execute(swapCall);
-      console.log(`[Swap] Transaction submitted:`, txResponse.transaction_hash);
-
-      return {
-        txHash: txResponse.transaction_hash,
-        status: 'pending',
-        details: {
-          from: token,
-          to: fiat,
-          amount: tokenAmount,
-        },
-      };
-    } catch (error) {
-      console.error(`[Swap] Failed ${token}->${fiat} swap:`, error);
-      throw new Error(`Swap failed: ${error.message}`);
-    }
+    const tokenAddress = this.tokenService.getTokenAddress(tokenSymbol);
+    return this.liquidityPoolService.swapTokenToFiat(
+      userContractAddress,
+      fiatSymbol,
+      tokenSymbol,
+      tokenAmount,
+      swapOrderId,
+      tokenAddress,
+    );
   };
 
-  /**
-   * Execute a transaction using user's credentials (private key)
-   * This allows users to sign their own transactions for token approvals and swaps
-   *
-   * @param userId - The user's ID
-   * @param calls - Array of contract calls to execute
-   * @returns Transaction hash and receipt
-   */
-  async executeUserTransaction(
-    userId: string,
-    calls: any[],
-  ): Promise<{ transactionHash: string; receipt?: any }> {
-    try {
-      return await this.keyManagementService.executeTransaction(userId, calls);
-    } catch (error) {
-      console.error(`Failed to execute user transaction for ${userId}:`, error);
-      throw error;
-    }
-  }
+  getFeeBPS = async () => {
+    return this.liquidityPoolService.getFeeBPS();
+  };
+
+  getFiatLiquidityBalance = async (fiatSymbol: string) => {
+    return this.liquidityPoolService.getFiatLiquidityBalance(fiatSymbol);
+  };
+
+  getSupportedTokenBySymbol = async (symbol: string) => {
+    return this.liquidityPoolService.getSupportedTokenBySymbol(symbol);
+  };
+
+  transferLiquidityOwnership = async (newOwnerAddress: string) => {
+    return this.liquidityPoolService.transferLiquidityOwnership(
+      newOwnerAddress,
+    );
+  };
+
+  upgradeLiquidityContract = async (classHash: string) => {
+    return this.liquidityPoolService.upgradeLiquidityContract(classHash);
+  };
+
+  upgradePragmaOracleAddress = async (contractAddress: string) => {
+    return this.liquidityPoolService.upgradePragmaOracleAddress(
+      contractAddress,
+    );
+  };
+
+  setLiquidityContractAddress = (address: string) => {
+    return this.liquidityPoolService.setLiquidityContractAddress(address);
+  };
+
+  executeUserTransaction = async (userId: string, calls: any[]) => {
+    return this.liquidityPoolService.executeUserTransaction(userId, calls);
+  };
 
   approveTokenWithUserCredentials = async (
     userId: string,
     tokenAddress: string,
     spenderAddress: string,
-    amount: bigint,
+    amount: Uint256,
   ) => {
-    const call = {
-      contractAddress: tokenAddress,
-      entrypoint: 'approve',
-      calldata: CallData.compile({
-        spender: spenderAddress,
-        amount: {
-          low: amount & BigInt('0xFFFFFFFFFFFFFFFF'),
-          high: amount >> BigInt(128),
-        },
-      }),
-    };
-
-    const result = await this.executeUserTransaction(userId, [call]);
-    return result;
+    return this.liquidityPoolService.approveTokenWithUserCredentials(
+      userId,
+      tokenAddress,
+      spenderAddress,
+      amount,
+    );
   };
 
   approveTokenWithDeployerCredentials = async (
@@ -874,129 +206,35 @@ export class ContractService {
     spenderAddress: string,
     amount: bigint,
   ) => {
-    const account = this.getDeployerWallet();
-
-    const call = {
-      contractAddress: tokenAddress,
-      entrypoint: 'approve',
-      calldata: CallData.compile({
-        spender: spenderAddress,
-        amount: {
-          low: amount & BigInt('0xFFFFFFFFFFFFFFFF'),
-          high: amount >> BigInt(128),
-        },
-      }),
-    };
-
-    const result = await account.execute(call);
-    await this.provider.waitForTransaction(result.transaction_hash);
-
-    return result;
+    return this.liquidityPoolService.approveTokenWithDeployerCredentials(
+      tokenAddress,
+      spenderAddress,
+      amount,
+    );
   };
 
   mintToken = async (receiverAddress: string, amount: string) => {
-    if (!receiverAddress) throw new Error('receiverAddress is required');
-    if (!amount) throw new Error('amount is required');
-
-    const call = {
-      contractAddress: this.syncTokenAddress,
-      entrypoint: 'mint',
-      calldata: [receiverAddress, uint256.bnToUint256(amount)],
-    };
-
-    try {
-      const account = this.getDeployerWallet();
-
-      const { transaction_hash: txH } = await account.execute(call, {
-        maxFee: 10 ** 15,
-      });
-
-      const txR = await this.provider.waitForTransaction(txH);
-
-      if (txR.isSuccess()) {
-        console.log(
-          chalk.green(`Successfully minted token for user ${receiverAddress}`),
-        );
-        return {
-          transactionHash: txH,
-          receipt: txR,
-        };
-      } else {
-        throw new Error('Mint transaction failed');
-      }
-    } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
-      throw error;
-    }
+    return this.liquidityPoolService.mintToken(
+      receiverAddress,
+      amount,
+      this.syncTokenAddress,
+    );
   };
 
-  upgradeAccountFactory = async (classHash: string) => {
-    if (!classHash) throw new Error('class hash is required');
-    if (!this.accountFactoryAddress)
-      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
-
-    if (!this.private_key || !this.accountAddress)
-      throw new Error('account credentials required');
-
-    const accountFactoryClass = await this.provider.getClassAt(
-      this.accountFactoryAddress,
-    );
-    if (!accountFactoryClass.abi)
-      throw new Error('No ABI found for account factory contract');
-
-    const call = {
-      contractAddress: this.accountFactoryAddress,
-      entrypoint: 'upgrade',
-      calldata: [classHash],
-    };
-
-    const account = this.getDeployerWallet();
-
-    const { transaction_hash: txH } = await account.execute(call, {
-      version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-      tip: 10 ** 13,
-      paymasterData: [],
-    });
-
-    const txR = await this.provider.waitForTransaction(txH);
-    if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
-    }
+  // ==================== Token Contract Methods ====================
+  getAccountBalance = async (symbol: string, userAddress: string) => {
+    return this.tokenService.getAccountBalance(symbol, userAddress);
   };
 
-  upgradePragmaOracleAddress = async (contractAddress: string) => {
-    if (!contractAddress) throw new Error('contract address is required');
-    if (!this.private_key || !this.accountAddress)
-      throw new Error('account credentials required');
+  getMultipleAccountBalances = async (
+    symbols: string[],
+    userAddress: string,
+  ) => {
+    return this.tokenService.getMultipleAccountBalances(symbols, userAddress);
+  };
 
-    const contractClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
-    if (!contractClass.abi)
-      throw new Error('No ABI found for account factory contract');
-
-    const call = {
-      contractAddress: this.liquidityContractAddress,
-      entrypoint: 'update_pragma_oracle_address',
-      calldata: [contractAddress],
-    };
-
-    const account = this.getDeployerWallet();
-
-    const { transaction_hash: txH } = await account.execute(call, {
-      version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-      tip: 10 ** 13,
-      paymasterData: [],
-    });
-
-    const txR = await this.provider.waitForTransaction(txH);
-    if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
-    }
+  getSyncTokenBalance = async (address: string) => {
+    return this.tokenService.getSyncTokenBalance(address);
   };
 
   getApproveTokenCalldata = (
@@ -1004,146 +242,22 @@ export class ContractService {
     spenderAddress: string,
     amount: string,
   ) => {
-    const token = tokenSymbol.toUpperCase();
-
-    const tokenAddressMap: Record<string, string> = {
-      SYNC: this.syncTokenAddress,
-      STRK: this.strkTokenAddress,
-      USDC: this.usdcTokenAddress,
-      ETH: this.ethTokenAddress,
-      BTC: this.btcTokenAddress,
-    };
-
-    const tokenAddress = tokenAddressMap[token];
-    if (!tokenAddress) {
-      throw new Error(`Token ${token} not supported`);
-    }
-
-    const decimalsMap: Record<string, number> = {
-      SYNC: 18,
-      STRK: 18,
-      USDC: 6,
-      ETH: 18,
-      BTC: 18,
-    };
-
-    const decimals = decimalsMap[token] || 18;
-    const adjustedAmount = BigInt(
-      Math.floor(Number(amount) * Math.pow(10, decimals)),
+    return this.tokenService.getApproveTokenCalldata(
+      tokenSymbol,
+      spenderAddress,
+      amount,
     );
-    const amountU256 = uint256.bnToUint256(adjustedAmount);
-
-    return {
-      contractAddress: tokenAddress,
-      entrypoint: 'approve',
-      calldata: [spenderAddress, amountU256.low, amountU256.high],
-    };
-  };
-
-  upgradeLiquidityContract = async (classHash: string) => {
-    if (!classHash) throw new Error('class hash is required');
-    if (!this.liquidityContractAddress)
-      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
-
-    if (!this.private_key || !this.accountAddress)
-      throw new Error('account credentials required');
-
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
-    if (!liquidityClass.abi)
-      throw new Error('No ABI found for liquidity contract');
-
-    const call = {
-      contractAddress: this.liquidityContractAddress,
-      entrypoint: 'upgrade',
-      calldata: [classHash],
-    };
-
-    const account = this.getDeployerWallet();
-
-    const { transaction_hash: txH } = await account.execute(call, {
-      version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
-      tip: 10 ** 13,
-      paymasterData: [],
-    });
-
-    const txR = await this.provider.waitForTransaction(txH);
-    if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
-    }
-  };
-
-  getFeeBPS = async () => {
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
-    if (!liquidityClass.abi)
-      throw new Error('No ABI found for liquidity contract');
-
-    const liquidityContract = createNewContractInstance(
-      liquidityClass.abi,
-      this.liquidityContractAddress,
-    );
-
-    const result = await liquidityContract.get_fee_bps();
-    return BigInt(result);
-  };
-
-  getFiatLiquidityBalance = async (fiatSymbol: string) => {
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
-    if (!liquidityClass.abi)
-      throw new Error('No ABI found for liquidity contract');
-
-    const liquidityContract = createNewContractInstance(
-      liquidityClass.abi,
-      this.liquidityContractAddress,
-    );
-
-    const result = await liquidityContract.get_fiat_balance(fiatSymbol);
-    return BigInt(result);
-  };
-
-  getSupportedTokenBySymbol = async (symbol: string) => {
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
-    if (!liquidityClass.abi)
-      throw new Error('No ABI found for liquidity contract');
-
-    const liquidityContract = createNewContractInstance(
-      liquidityClass.abi,
-      this.liquidityContractAddress,
-    );
-
-    const symbolFelt = shortString.encodeShortString(symbol);
-
-    const result =
-      await liquidityContract.get_supported_tokens_by_symbol(symbolFelt);
-    return result;
   };
 
   getTokenDecimals = async (tokenAddress: string) => {
-    if (!this.accountFactoryAddress)
-      throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
+    // Default to 18 decimals for now
+    return 18;
+  };
 
-    const AccountClass = await getClassAt(this.accountFactoryAddress);
-
-    try {
-      const accountContract = createNewContractInstance(
-        AccountClass.abi,
-        this.accountFactoryAddress,
-      );
-
-      // const result = await accountContract.decimals(tokenAddress);
-      return 18;
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
+  // ==================== Deployer Wallet ====================
+  getDeployerWallet = () => {
+    if (!this.provider || !this.accountAddress || !this.private_key)
+      throw new Error("credentials required to deploy deployer's wallet");
+    return new Account(this.provider, this.accountAddress, this.private_key);
   };
 }
