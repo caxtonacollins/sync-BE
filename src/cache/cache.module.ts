@@ -7,10 +7,19 @@ import { redisStore } from 'cache-manager-redis-store';
   imports: [
     NestCacheModule.registerAsync({
       useFactory: async () => {
-        const redisUrl = process.env.REDIS_PUBLIC_URL || process.env.REDIS_URL;
-        
+        console.log('Redis Config:', {
+          host: process.env.REDISHOST,
+          port: process.env.REDISPORT,
+          hasPassword: !!process.env.REDISPASSWORD,
+        });
+
         const store = await redisStore({
-          url: redisUrl || 'redis://localhost:6379',
+          socket: {
+            host: process.env.REDISHOST || 'localhost',
+            port: parseInt(process.env.REDISPORT || '6379'),
+          },
+          password: process.env.REDISPASSWORD,
+          username: process.env.REDISUSER || 'default',
           isGlobal: true,
           database: parseInt(process.env.REDIS_DB || '0'),
           ttl: parseInt(process.env.REDIS_TTL || '60'),
