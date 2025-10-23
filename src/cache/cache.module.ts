@@ -7,31 +7,37 @@ import { redisStore } from 'cache-manager-redis-store';
   imports: [
     NestCacheModule.registerAsync({
       useFactory: async () => {
-        console.log('Redis Config:', {
-          host: process.env.REDISHOST,
-          port: process.env.REDISPORT,
-          hasPassword: !!process.env.REDISPASSWORD,
-        });
+        const redisUrl = process.env.REDIS_URL;
 
-        const store = await redisStore({
-          socket: {
-            host: process.env.REDISHOST || 'localhost',
-            port: parseInt(process.env.REDISPORT || '6379'),
-          },
-          password: process.env.REDISPASSWORD,
-          username: process.env.REDISUSER || 'default',
-          isGlobal: true,
-          database: parseInt(process.env.REDIS_DB || '0'),
-          ttl: parseInt(process.env.REDIS_TTL || '60'),
-        });
+        if (!redisUrl) {
+          console.warn('REDIS_URL not set, using in-memory cache');
+          return {
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          };
+        }
 
-        return {
-          store: store as any,
-          ttl: parseInt(process.env.REDIS_TTL || '60'),
-        };
+        console.log('Connecting to Redis:', redisUrl.replace(/:[^:@]+@/, ':****@')); // Log without password
+
+        try {
+          const store = await redisStore({
+            url: redisUrl,
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          });
+
+          return {
+            store: store as any,
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          };
+        } catch (error) {
+          console.error('Failed to connect to Redis, falling back to in-memory cache:', error);
+          // Fallback to in-memory cache on connection error
+          return {
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          };
+        }
       },
     }),
   ],
   exports: [NestCacheModule],
 })
-export class CacheModule {}
+export class CacheModule { }
