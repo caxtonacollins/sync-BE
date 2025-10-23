@@ -6,13 +6,15 @@ import { ContractModule } from '../contract/contract.module';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 import { WalletModule } from '../wallet/wallet.module';
 import { UserModule } from '../user/user.module';
+import { PragmaModule } from './pragma.module';
 
 @Module({
   imports: [
     PrismaModule,
-    ContractModule,
+    forwardRef(() => ContractModule),
     forwardRef(() => WalletModule),
     forwardRef(() => UserModule),
+    PragmaModule,
   ],
   controllers: [ExchangeRateController],
   providers: [ExchangeRateService, FlutterwaveService],

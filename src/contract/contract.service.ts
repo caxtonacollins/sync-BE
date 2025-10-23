@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable } from '@nestjs/common';
-import { RpcProvider, Account } from 'starknet';
+import { RpcProvider, Account, Uint256 } from 'starknet';
 import 'dotenv/config';
 import { AccountContractService } from './account-contract.service';
 import { AccountFactoryContractService } from './account-factory-contract.service';
@@ -191,7 +191,7 @@ export class ContractService {
     userId: string,
     tokenAddress: string,
     spenderAddress: string,
-    amount: bigint,
+    amount: Uint256,
   ) => {
     return this.liquidityPoolService.approveTokenWithUserCredentials(
       userId,

@@ -9,9 +9,6 @@ import { SwapOrderFilterDto } from './dto/swap-order-filter.dto';
 import { Prisma } from '@prisma/client';
 import { UserService } from 'src/user/user.service';
 import { PaymentService } from 'src/payment/payment.service';
-import { uint256 } from 'starknet';
-import { parseTokenAmount } from 'libs/utils';
-import { RegistrationStatus } from 'src/types';
 
 @Injectable()
 export class SwapOrderService {
@@ -90,7 +87,6 @@ export class SwapOrderService {
   }
 
   async executeSwap(dto: CreateSwapOrderDto) {
-    // TODO: more validation here (e.g., check if currencies are supported)
     const swapOrder = await this.create(dto);
 
     try {
@@ -110,14 +106,6 @@ export class SwapOrderService {
     return swapOrder;
   }
 
-  /**
-   * Execute Token-to-Fiat swap
-   * Step 1: Validate user and balances
-   * Step 2: Initiate swap on StarkNet contract
-   * Step 3: Update order status to 'processing'
-   * Step 4: Wait for event confirmation (handled by LiquidityEventProcessorService)
-   * Step 5: Payout is triggered by event handler after confirmation
-   */
   private async executeTokenToFiatSwap(swapOrder: any) {
     const {
       id: swapOrderId,
@@ -128,43 +116,24 @@ export class SwapOrderService {
     } = swapOrder;
     this.logger.log(`Executing Token-to-Fiat swap for order ${swapOrder.id}`);
 
-    // const fromAmountBigInt = parseTokenAmount(fromAmount, 18);
-    // console.log('fromAmountBigInt', fromAmountBigInt);
-
-    // Step 1: Validate user registration and account status
     const cryptoWallet = await this.walletService.getCryptoWallets(userId);
     if (!cryptoWallet || cryptoWallet.length === 0) {
       throw new Error('User does not have a crypto wallet');
     }
 
-    const userOnchainDashboardData = await this.contractService.getUserDashboardData(userId);
-    const { isRegistered,
-      accountAddress,
-    } = userOnchainDashboardData as RegistrationStatus;
+    const isRegisteredToLiquidity = cryptoWallet[0].isRegisteredToLiquidity;
+    const accountAddress = cryptoWallet[0].address;
 
-    if (!isRegistered) {
+    if (!isRegisteredToLiquidity) {
       throw new Error('User is not registered to contract');
     }
 
-    if (cryptoWallet[0].address !== accountAddress) {
-      throw new Error('User wallet address does not match contract address');
-    }
-
-    // Step 2: Verify token balance
     const balance = await this.contractService.getAccountBalance(fromCurrency, accountAddress);
-    this.logger.log(`User balance: ${balance} ${fromCurrency}`);
 
     if (parseFloat(balance) < fromAmount) {
       throw new Error(`Insufficient token balance. Required: ${fromAmount}, Available: ${balance}`);
     }
 
-    // Step 3: Verify user has fiat account for payout
-    const fiatAccount = await this.walletService.getFiatAccountForUser(userId);
-    if (!fiatAccount) {
-      throw new Error('User does not have a fiat account for payout');
-    }
-
-    // Step 4: Initiate swap transaction on StarkNet
     this.logger.log(`Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`);
 
     const tokenTransferResult = await this.contractService.swapTokenToFiat(
@@ -179,8 +148,6 @@ export class SwapOrderService {
       `Token swap transaction sent: ${tokenTransferResult.txHash}`,
     );
 
-    // Step 5: Update order status to 'processing'
-    // The swap is now on-chain, waiting for confirmation
     await this.update(swapOrder.id, {
       status: 'processing',
       transactionHash: tokenTransferResult.txHash,
@@ -312,7 +279,7 @@ export class SwapOrderService {
       );
 
       // TODO: Store payout reference in a separate PayoutRecord table if needed
-      // For now, we just log it
+      // For now, will just log it
     } catch (error) {
       this.logger.error(
         `Failed to initiate payout for swap ${swapOrderId}: ${error.message}`,

@@ -49,14 +49,6 @@ export class AccountFactoryContractService {
     if (!this.accountFactoryAddress)
       throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
 
-    // Check cache first
-    const cacheKey = 'account:class:hash';
-    const cachedHash = await this.cacheManager.get<string>(cacheKey);
-    if (cachedHash) {
-      console.log('[Cache Hit] Account class hash');
-      return cachedHash;
-    }
-
     const accountFactoryClass = await this.provider.getClassAt(
       this.accountFactoryAddress,
     );
@@ -73,9 +65,6 @@ export class AccountFactoryContractService {
 
     // Convert decimal string to hex
     const hexValue = '0x' + BigInt(feltValue as string).toString(16);
-
-    // Cache for 10 minutes
-    await this.cacheManager.set(cacheKey, hexValue, 600000);
 
     return hexValue;
   }
@@ -154,8 +143,6 @@ export class AccountFactoryContractService {
     const txR = await this.provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
       console.log('Paid fee =', txR.statusReceipt);
-      // Invalidate cache after upgrade
-      await this.cacheManager.del('account:class:hash');
     }
   }
 

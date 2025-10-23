@@ -50,7 +50,6 @@ export class WalletController {
   async getSummary(@Request() req) {
     try {
       const userId = req.user.sub;
-      console.log('Fetching wallet summary for user:', userId);
       return await this.walletService.getWalletSummary(userId);
     } catch (error) {
       this.logger.error('Failed to get wallet summary:', error);

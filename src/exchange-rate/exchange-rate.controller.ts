@@ -10,13 +10,15 @@ export class ExchangeRateController {
     return this.exchangeRateService.getExchangeRates();
   }
 
-  @Get(':fiatSymbol/:tokenSymbol')
-  findOne(@Param('fiatSymbol') fiatSymbol: string, @Param('tokenSymbol') tokenSymbol: string) {
-    return this.exchangeRateService.findOne(fiatSymbol, tokenSymbol);
-  }
-
-  @Get('getExchangeRates')
-  getExchangeRates() {
-    return this.exchangeRateService.getExchangeRates();
+  @Get('pair')
+  async findOne(
+    @Param('fiatSymbol') fiatSymbol: string, 
+    @Param('tokenSymbol') tokenSymbol: string
+  ) {
+    const rate = await this.exchangeRateService.findOne(fiatSymbol, tokenSymbol);
+    if (!rate) {
+      return null;
+    }
+    return rate;
   }
 }

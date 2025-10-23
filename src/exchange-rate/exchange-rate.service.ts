@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
 import { ContractService } from '../contract/contract.service';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
+import { PragmaService } from './pragma.service';
 import axios from 'axios';
 
 @Injectable()
@@ -11,141 +14,211 @@ export class ExchangeRateService {
     private readonly prisma: PrismaService,
     private readonly contractService: ContractService,
     private readonly flutterwaveService: FlutterwaveService,
+    private readonly pragmaService: PragmaService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   create(data: CreateExchangeRateDto) {
     return this.prisma.exchangeRate.create({ data });
   }
 
-  async findAll() {
-    // Get rates from database
-    const syncRates = await this.prisma.exchangeRate.findMany();
-
-    // Get Flutterwave rates (USD/NGN)
-    const fwRates = await this.flutterwaveService.getExchangeRate(
-      'USD',
-      'NGN',
-      100,
-    );
-
-    // Get token USD rates
-    const tokenRates = await Promise.all([
-      this.contractService.getTokenAmountInUsd(
-        this.contractService.syncTokenAddress,
-      ),
-      this.contractService.getTokenAmountInUsd(
-        this.contractService.strkTokenAddress,
-      ),
-      this.contractService.getTokenAmountInUsd(
-        this.contractService.usdcTokenAddress,
-      ),
-      this.contractService.getTokenAmountInUsd(
-        this.contractService.ethTokenAddress,
-      ),
-      this.contractService.getTokenAmountInUsd(
-        this.contractService.btcTokenAddress,
-      ),
-    ]);
-
-    // Combine all rates
-    const exchangeRates = [
-      ...syncRates,
-      {
-        fiatSymbol: 'NGN',
-        tokenSymbol: 'USD',
-        rate: Number(fwRates.rate),
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'SYNC',
-        rate: Number(tokenRates[0]) / Math.pow(10, 18),
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'STRK',
-        rate: Number(tokenRates[1]) / Math.pow(10, 18),
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'USDC',
-        rate: Number(tokenRates[2]) / Math.pow(10, 6),
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'ETH',
-        rate: Number(tokenRates[3]) / Math.pow(10, 18),
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'BTC',
-        rate: Number(tokenRates[4]) / Math.pow(10, 18),
-      },
-    ];
-
-    return exchangeRates;
-  }
+  private readonly CACHE_TTL_MS = 60000;
+  private readonly CACHE_KEY = 'exchange-rates';
+  private lastFetchTime: number = 0;
+  private lastCachedRates: any = null;
 
   async getExchangeRates() {
-    // Get rates from database
-    const syncRates = await this.prisma.exchangeRate.findMany();
+    const now = Date.now();
+    
+    // Return in-memory cache if available and not expired
+    if (this.lastCachedRates && (now - this.lastFetchTime < this.CACHE_TTL_MS)) {
+      return this.lastCachedRates;
+    }
 
-    // Get Flutterwave rates (USD/NGN)
-    const fwRates = await this.flutterwaveService.getExchangeRate(
-      'NGN',
-      'USD',
-      1
-    );
+    try {
+      const cachedRates = await this.cacheManager.get(this.CACHE_KEY);
+      if (cachedRates) {
+        this.lastCachedRates = cachedRates;
+        this.lastFetchTime = now;
+        return cachedRates;
+      }
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      // Continue to fetch fresh data if cache read fails
+    }
 
-    // CoinGecko coin IDs for tokens
-    const coinIds = 'starknet,ethereum,usd-coin,bitcoin';
+    try {
+      const [syncRates, fwRates, syncUsdRate] = await Promise.all([
+        this.prisma.exchangeRate.findMany(),
+        this.flutterwaveService.getExchangeRate('NGN', 'USD', 100),
+        this.contractService.getTokenAmountInUsd(this.contractService.syncTokenAddress),
+      ]);
 
-    // Fetch all token prices in a single API call (more efficient)
-    const tokenRatesResponse = await axios.get(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`
-    );
+      const pragmaPairs = ['STRK/USD', 'USDC/USD', 'ETH/USD', 'BTC/USD'];
+      const [strkUsdRate, usdcUsdRate, ethUsdRate, btcUsdRate] = this.pragmaService.getRates(pragmaPairs);
 
-    const { data: tokenPrices } = tokenRatesResponse;
+      // Combine all rates
+      const exchangeRates = [
+        ...syncRates,
+        {
+          fiatSymbol: 'NGN',
+          tokenSymbol: 'USD',
+          rate: Number(fwRates.rate),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          fiatSymbol: 'USD',
+          tokenSymbol: 'SYNC',
+          rate: Number(syncUsdRate) / Math.pow(10, 18),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          fiatSymbol: 'USD',
+          tokenSymbol: 'STRK',
+          rate: strkUsdRate || 0,
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          fiatSymbol: 'USD',
+          tokenSymbol: 'USDC',
+          rate: usdcUsdRate || 0,
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          fiatSymbol: 'USD',
+          tokenSymbol: 'ETH',
+          rate: ethUsdRate || 0,
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          fiatSymbol: 'USD',
+          tokenSymbol: 'BTC',
+          rate: btcUsdRate || 0,
+          updatedAt: new Date().toISOString(),
+        },
+      ];
 
-    // Note: SYNC token might not be available on CoinGecko
-    // Using a placeholder of 0 if not found
-    const syncPrice = tokenPrices.sync?.usd || 0;
+      // Update in-memory cache
+      this.lastCachedRates = exchangeRates;
+      this.lastFetchTime = now;
 
-    // Combine all rates
-    const exchangeRates = [
-      ...syncRates,
-      {
-        fiatSymbol: 'NGN',
-        tokenSymbol: 'USD',
-        rate: Number(fwRates.rate),
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'SYNC',
-        rate: syncPrice, // CoinGecko price or 0 if not available
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'STRK',
-        rate: tokenPrices.starknet?.usd || 0,
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'USDC',
-        rate: tokenPrices['usd-coin']?.usd || 0,
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'ETH',
-        rate: tokenPrices.ethereum?.usd || 0,
-      },
-      {
-        fiatSymbol: 'USD',
-        tokenSymbol: 'BTC',
-        rate: tokenPrices.bitcoin?.usd || 0,
-      },
-    ];
+      // Update Redis cache in background
+      this.cacheManager.set(this.CACHE_KEY, exchangeRates, this.CACHE_TTL_MS / 1000)
+        .catch(error => console.error('Error writing to cache:', error));
 
-    return exchangeRates;
+      return exchangeRates;
+    } catch (error) {
+      console.error('Error fetching exchange rates:', error);
+      // If we have stale data, return it with a warning
+      if (this.lastCachedRates) {
+        console.warn('Returning stale exchange rate data due to error');
+        return this.lastCachedRates;
+      }
+      throw error;
+    }
+  }
+
+  // async getExchangeRates() {
+  //   const syncRates = await this.prisma.exchangeRate.findMany();
+
+  //   const fwRates = await this.flutterwaveService.getExchangeRate(
+  //     'NGN',
+  //     'USD',
+  //     1
+  //   );
+
+  //   const coinIds = 'starknet,ethereum,usd-coin,bitcoin';
+
+  //   const tokenRatesResponse = await axios.get(
+  //     `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`
+  //   );
+
+  //   const { data: tokenPrices } = tokenRatesResponse;
+
+  //   const syncPrice = tokenPrices.sync?.usd || 0;
+
+  //   // Combine all rates
+  //   const exchangeRates = [
+  //     ...syncRates,
+  //     {
+  //       fiatSymbol: 'NGN',
+  //       tokenSymbol: 'USD',
+  //       rate: Number(fwRates.rate),
+  //     },
+  //     {
+  //       fiatSymbol: 'USD',
+  //       tokenSymbol: 'SYNC',
+  //       rate: syncPrice, // CoinGecko price or 0 if not available
+  //     },
+  //     {
+  //       fiatSymbol: 'USD',
+  //       tokenSymbol: 'STRK',
+  //       rate: tokenPrices.starknet?.usd || 0,
+  //     },
+  //     {
+  //       fiatSymbol: 'USD',
+  //       tokenSymbol: 'USDC',
+  //       rate: tokenPrices['usd-coin']?.usd || 0,
+  //     },
+  //     {
+  //       fiatSymbol: 'USD',
+  //       tokenSymbol: 'ETH',
+  //       rate: tokenPrices.ethereum?.usd || 0,
+  //     },
+  //     {
+  //       fiatSymbol: 'USD',
+  //       tokenSymbol: 'BTC',
+  //       rate: tokenPrices.bitcoin?.usd || 0,
+  //     },
+  //   ];
+
+  //   return exchangeRates;
+  // }
+
+  async getExchangeRateFor(symbols: string[]) {
+    const symbolToCoinGeckoId: Record<string, string> = {
+      strk: 'starknet',
+      eth: 'ethereum',
+      usdc: 'usd-coin',
+      btc: 'bitcoin',
+    };
+
+    const rates: Record<string, number> = {};
+
+    // Separate crypto and fiat symbols
+    const cryptoSymbols = symbols.filter(s => symbolToCoinGeckoId[s.toLowerCase()]);
+    const fiatSymbols = symbols.filter(s => !symbolToCoinGeckoId[s.toLowerCase()]);
+
+    // Fetch crypto rates from CoinGecko
+    if (cryptoSymbols.length > 0) {
+      const coinIds = cryptoSymbols
+        .map(symbol => symbolToCoinGeckoId[symbol.toLowerCase()])
+        .join(',');
+
+      const response = await axios.get(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`
+      );
+
+      const { data: tokenPrices } = response;
+
+      for (const symbol of cryptoSymbols) {
+        const coinId = symbolToCoinGeckoId[symbol.toLowerCase()];
+        if (tokenPrices[coinId]?.usd) {
+          rates[symbol.toLowerCase()] = tokenPrices[coinId].usd;
+        }
+      }
+    }
+
+    // Fetch fiat rates (NGN, etc.)
+    for (const symbol of fiatSymbols) {
+      if (symbol.toLowerCase() === 'ngn') {
+        const fwRates = await this.flutterwaveService.getExchangeRate('NGN', 'USD', 1);
+        rates.ngn = Number(fwRates.rate);
+      }
+      // Add other fiat currencies as needed
+    }
+
+    return rates;
   }
 
   findOne(fiatSymbol: string, tokenSymbol: string) {

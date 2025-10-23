@@ -11,6 +11,8 @@ import { WalletModule } from '../wallet/wallet.module';
 import { SwapOrderModule } from '../swap-order/swap-order.module';
 import { UserModule } from '../user/user.module';
 import { CacheModule } from '../cache/cache.module';
+import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
+import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
 
 @Module({
   imports: [
@@ -19,6 +21,7 @@ import { CacheModule } from '../cache/cache.module';
     CacheModule,
     forwardRef(() => UserModule),
     forwardRef(() => SwapOrderModule),
+    forwardRef(() => ExchangeRateModule),
   ],
   controllers: [ContractController],
   providers: [
@@ -28,6 +31,7 @@ import { CacheModule } from '../cache/cache.module';
     LiquidityPoolContractService,
     TokenContractService,
     LiquidityEventProcessorService,
+    FlutterwaveService
   ],
   exports: [
     ContractService,

@@ -8,6 +8,7 @@ import {
   uint256,
   shortString,
   CallData,
+  Uint256,
 } from 'starknet';
 import {
   connectToStarknet,
@@ -228,6 +229,11 @@ export class LiquidityPoolContractService {
     }
   }
 
+  async getTokenDecimals(tokenAddress: string): Promise<number> {
+    // TODO: Implement proper token decimals fetching
+    return 18;
+  }
+
   /**
    * Get token amount in USD with caching
    */
@@ -352,36 +358,40 @@ export class LiquidityPoolContractService {
     const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
     const fiat = 'USD';
     const token = tokenSymbol.toUpperCase();
-    const amountU256 = uint256.bnToUint256(BigInt(tokenAmount));
     const tokenSymbolToUSD = `${token}/USD`;
     const supportedTokenAddress =
       await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
+    const decimals = await this.getTokenDecimals(supportedTokenAddress);
 
-    try {
-      const feeBpsResult = await this.getFeeBPS();
-      const feeBps = BigInt(feeBpsResult);
-      const fee = (BigInt(tokenAmount) * feeBps) / 10000n;
-      const amountAfterFee = BigInt(tokenAmount) - fee;
+    // Convert token amount to wei units properly handling decimals
+    const amountInWei = this.convertToWei(tokenAmount, decimals);
+    const amountU256 = uint256.bnToUint256(amountInWei);
 
-      const pricePerToken = await this.getTokenAmountInUsd(
-        supportedTokenAddress,
-      );
+    // try {
+    //   const feeBpsResult = await this.getFeeBPS();
+    //   const feeBps = BigInt(feeBpsResult);
+    //   const fee = (BigInt(tokenAmount) * feeBps) / 10000n;
+    //   const amountAfterFee = BigInt(tokenAmount) - fee;
 
-      const decimals = await this.getTokenDecimals(supportedTokenAddress);
-      const decimalsPower = BigInt(Math.pow(10, decimals));
-      const calculatedFiatAmount =
-        BigInt(amountAfterFee * BigInt(pricePerToken)) / decimalsPower;
+    //   const pricePerToken = await this.getTokenAmountInUsd(
+    //     supportedTokenAddress,
+    //   );
 
-      const availableFiat = await this.getFiatLiquidityBalance(fiat);
+    //   const decimals = await this.getTokenDecimals(supportedTokenAddress);
+    //   const decimalsPower = BigInt(Math.pow(10, decimals));
+    //   const calculatedFiatAmount =
+    //     BigInt(amountAfterFee * BigInt(pricePerToken)) / decimalsPower;
 
-      if (availableFiat < calculatedFiatAmount) {
-        throw new Error(
-          `Insufficient fiat liquidity. Available: ${availableFiat}, Required: ${calculatedFiatAmount}`,
-        );
-      }
-    } catch (error) {
-      throw new Error(`Pre-swap validation failed: ${error.message}`);
-    }
+    //   const availableFiat = await this.getFiatLiquidityBalance(fiat);
+
+    //   if (availableFiat < calculatedFiatAmount) {
+    //     throw new Error(
+    //       `Insufficient fiat liquidity. Available: ${availableFiat}, Required: ${calculatedFiatAmount}`,
+    //     );
+    //   }
+    // } catch (error) {
+    //   throw new Error(`Pre-swap validation failed: ${error.message}`);
+    // }
 
     const swapCall = {
       contractAddress: this.liquidityContractAddress,
@@ -402,11 +412,9 @@ export class LiquidityPoolContractService {
         user.id,
         tokenAddress,
         this.liquidityContractAddress,
-        BigInt(tokenAmount),
-      );
+        amountU256);
 
       const txResponse = await account.execute(swapCall);
-      console.log(`[Swap] Transaction submitted:`, txResponse.transaction_hash);
 
       return {
         txHash: txResponse.transaction_hash,
@@ -673,17 +681,14 @@ export class LiquidityPoolContractService {
     userId: string,
     tokenAddress: string,
     spenderAddress: string,
-    amount: bigint,
+    amount: Uint256,
   ) {
     const call = {
       contractAddress: tokenAddress,
       entrypoint: 'approve',
       calldata: CallData.compile({
         spender: spenderAddress,
-        amount: {
-          low: amount & BigInt('0xFFFFFFFFFFFFFFFF'),
-          high: amount >> BigInt(128),
-        },
+        amount,
       }),
     };
 
@@ -758,26 +763,30 @@ export class LiquidityPoolContractService {
     }
   }
 
-  /**
-   * Get token decimals (placeholder - should be implemented properly)
-   */
-  private async getTokenDecimals(tokenAddress: string): Promise<number> {
-    // TODO: Implement proper token decimals fetching
-    return 18;
+  private convertToWei(amount: string | number, decimals: number): bigint {
+    const amountStr = amount.toString();
+
+    // Split into whole and decimal parts
+    const parts = amountStr.split('.');
+    const wholePart = parts[0];
+    const decimalPart = parts[1] || '0';
+
+    // Pad or truncate decimal part to match token decimals
+    const paddedDecimalPart = decimalPart.padEnd(decimals, '0').substring(0, decimals);
+
+    // Combine whole and decimal parts
+    const amountWithDecimals = wholePart + paddedDecimalPart;
+
+    // Convert to BigInt
+    return BigInt(amountWithDecimals);
   }
 
-  /**
-   * Get deployer wallet
-   */
   private getDeployerWallet() {
     if (!this.provider || !this.accountAddress || !this.private_key)
       throw new Error("credentials required to deploy deployer's wallet");
     return new Account(this.provider, this.accountAddress, this.private_key);
   }
 
-  /**
-   * Invalidate user registration cache
-   */
   private async invalidateUserRegistrationCache(userContractAddress: string) {
     await this.cacheManager.del(`liquidity:registered:${userContractAddress}`);
   }

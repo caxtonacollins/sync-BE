@@ -127,6 +127,7 @@ model CryptoWallet {
   isActive        Boolean     @default(true)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+  isRegisteredToLiquidity Boolean @default(false)
 
   transactions    Transaction[]
 }

@@ -60,9 +60,7 @@ export class TokenContractService {
   get btcTokenAddress(): string {
     return this._btcTokenAddress;
   }
-  /**
-   * Get token balance for a specific address with Redis caching
-   */
+
   async getAccountBalance(symbol: string, accountAddress: string): Promise<string> {
     if (!symbol) throw new Error('symbol is required');
     if (!accountAddress) throw new Error('accountAddress is required');
@@ -90,9 +88,6 @@ export class TokenContractService {
     }
   }
 
-  /**
-   * Batch fetch multiple token balances for a single address
-   */
   async getMultipleAccountBalances(symbols: string[], userAddress: string): Promise<TokenBalance[]> {
     if (!symbols || symbols.length === 0)
       throw new Error('symbols array is required');
@@ -100,14 +95,13 @@ export class TokenContractService {
 
     const balancePromises = symbols.map(async (symbol) => {
       try {
-        const rawBalance = await this.getAccountBalance(symbol, userAddress);
+        const formattedBalance = await this.getAccountBalance(symbol, userAddress);
         const decimals = this.decimalsMap[symbol.toUpperCase()] || 18;
-        const formattedBalance = (parseFloat(rawBalance) / Math.pow(10, decimals)).toString();
         
         return {
           symbol,
-          balance: rawBalance,
-          raw: rawBalance,
+          balance: formattedBalance,
+          raw: formattedBalance,
           formatted: formattedBalance,
           decimals: decimals
         } as TokenBalance;
