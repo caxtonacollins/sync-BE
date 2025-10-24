@@ -617,6 +617,27 @@ export class UserController {
     return this.userService.remove(id);
   }
 
+  @Post('provision-accounts')
+  @ApiOperation({
+    summary: 'Provision user accounts',
+    description:
+      'Provisions fiat and crypto accounts for the currently authenticated user.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'User accounts provisioned successfully',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async provisionAccounts(@Req() req: RequestWithUser) {
+    try {
+      const userId = req.user.userId;
+      return await this.userService.provisionUserAccounts(userId);
+    } catch (error) {
+      console.error('Error provisioning accounts:', error);
+      throw new BadRequestException('Failed to provision accounts.');
+    }
+  }
+
   @Get('resolve/account/:accountNumber')
   async resolveAccount(@Param('accountNumber') accountNumber: string) {
     const syncAccount =

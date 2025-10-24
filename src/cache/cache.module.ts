@@ -7,24 +7,34 @@ import { redisStore } from 'cache-manager-redis-store';
   imports: [
     NestCacheModule.registerAsync({
       useFactory: async () => {
-        const store = await redisStore({
-          socket: {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-          },
-          isGlobal: true,
-          password: process.env.REDIS_PASSWORD || undefined,
-          database: parseInt(process.env.REDIS_DB || '0'),
-          ttl: parseInt(process.env.REDIS_TTL || '60'), // Default TTL in seconds
-        });
+        const redisUrl = process.env.REDIS_URL;
 
-        return {
-          store: store as any,
-          ttl: parseInt(process.env.REDIS_TTL || '60'),
-        };
+        if (!redisUrl) {
+          console.warn('REDIS_URL not set, using in-memory cache');
+          return {
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          };
+        }
+
+        try {
+          const store = await redisStore({
+            url: redisUrl,
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          });
+
+          return {
+            store: store as any,
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          };
+        } catch (error) {
+          console.error('Failed to connect to Redis, falling back to in-memory cache:', error);
+          return {
+            ttl: parseInt(process.env.REDIS_TTL || '60'),
+          };
+        }
       },
     }),
   ],
   exports: [NestCacheModule],
 })
-export class CacheModule {}
+export class CacheModule { }

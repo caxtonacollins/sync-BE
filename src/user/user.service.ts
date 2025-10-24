@@ -13,6 +13,7 @@ import chalk from 'chalk';
 import { ContractService } from 'src/contract/contract.service';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
+
 @Injectable()
 export class UserService {
   constructor(
@@ -44,28 +45,37 @@ private flutterwaveService: FlutterwaveService,
   }
 
   async createUser(createUserDto: CreateUserDto) {
-    console.log("Creating user...", createUserDto)
-    return this.prisma.$transaction(
-      async (tx) => {
-        // 1. Hash password and create user
-        const passwordHash = await this.hashPassword(createUserDto.password);
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Hash password and create user
+      const passwordHash = await this.hashPassword(createUserDto.password);
 
-        const user = await tx.user.create({
-          data: {
-            email: createUserDto.email,
-            password: passwordHash,
-            firstName: createUserDto.firstName,
-            lastName: createUserDto.lastName,
-            phoneNumber: createUserDto.phoneNumber,
-            role: createUserDto.role,
-            status: createUserDto.status,
-            verificationStatus: createUserDto.verificationStatus,
-            bvn: createUserDto.bvn,
-            nin: createUserDto.nin,
-          },
-        });
+      const user = await tx.user.create({
+        data: {
+          email: createUserDto.email,
+          password: passwordHash,
+          firstName: createUserDto.firstName,
+          lastName: createUserDto.lastName,
+          phoneNumber: createUserDto.phoneNumber,
+          role: createUserDto.role,
+          status: createUserDto.status,
+          verificationStatus: createUserDto.verificationStatus,
+          bvn: createUserDto.bvn,
+          nin: createUserDto.nin,
+        },
+      });
 
-        // 2. Create fiat accounts for supported currencies
+      const { password, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    });
+  }
+
+  async provisionUserAccounts(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    console.log('user', user);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
         const fiatCurrencies = ['NGN']; // 'GHS', 'USD'
 
         for (const currency of fiatCurrencies) {
@@ -74,11 +84,10 @@ private flutterwaveService: FlutterwaveService,
               const flutterwaveAccounts =
                 await this.flutterwaveService.createVirtualAccounts(user);
 
-              console.log(flutterwaveAccounts);
-
               for (const fwAccount of flutterwaveAccounts) {
+
                 if (fwAccount) {
-                  await tx.fiatAccount.create({
+                  await this.prisma.fiatAccount.create({
                     data: {
                       userId: user.id,
                       provider: 'flutterwave',
@@ -90,9 +99,7 @@ private flutterwaveService: FlutterwaveService,
                         `${user.firstName} ${user.lastName}`,
                       bankName: fwAccount.bank_name,
                       bankCode: fwAccount.bank_code,
-                      // Store Flutterwave specific data
                       accountReference: fwAccount.order_ref,
-                      // Store full account details as JSON
                       accounts: fwAccount,
                     },
                   });
@@ -110,9 +117,7 @@ private flutterwaveService: FlutterwaveService,
         }
 
         try {
-          const accountResult = await this.contractService.createAccount(
-            user.id,
-          );
+          const accountResult = await this.contractService.createAccount(user.id);
           if (!accountResult) {
             throw new Error('Failed to create StarkNet account');
           }
@@ -123,7 +128,7 @@ private flutterwaveService: FlutterwaveService,
             ),
           );
 
-          await tx.cryptoWallet.create({
+          await this.prisma.cryptoWallet.create({
             data: {
               userId: user.id,
               network: 'starknet',
@@ -134,7 +139,7 @@ private flutterwaveService: FlutterwaveService,
             },
           });
 
-          const defaultFiatAccount = await tx.fiatAccount.findFirst({
+          const defaultFiatAccount = await this.prisma.fiatAccount.findFirst({
             where: { userId: user.id, isDefault: true },
           });
 
@@ -149,14 +154,7 @@ private flutterwaveService: FlutterwaveService,
           throw contractError;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
-      },
-      {
-        timeout: 60_000,
-      },
-    );
+    return { success: true, message: 'Accounts provisioned successfully' };
   }
 
   async findAll(filter: UserFilterDto): Promise<{

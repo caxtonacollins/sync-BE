@@ -89,12 +89,13 @@ export class FlutterwaveService {
       return response.data.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
         const message = error.response?.data?.message || error.message;
-        console.error(`Flutterwave Exchange Rate Error: ${message}`);
-        throw new Error(`Failed to fetch exchange rate: ${message}`);
+        console.error(`Flutterwave Exchange Rate Error [${status}]: ${message}`);
+        throw new Error(`Failed to fetch exchange rate: [${status}] ${message}`);
       }
       console.error('Unexpected error in getExchangeRate:', error);
-      throw new Error('Failed to fetch exchange rate');
+      throw new Error('Failed to fetch exchange rate: Unexpected error');
     }
   }
 
@@ -142,7 +143,6 @@ export class FlutterwaveService {
         });
 
       if (response?.status === 'success') {
-        console.log(`Virtual account created for ${user.email} in ${currency}`);
         return response.data;
       } else {
         return null;

@@ -479,11 +479,16 @@ export class LiquidityEventProcessorService {
       },
     });
 
-    console.log('updated swap order');
-
-    // Create transaction record for completed swap
-    await this.prisma.transaction.create({
-      data: {
+    // Create or update transaction record for completed swap
+    await this.prisma.transaction.upsert({
+      where: { reference: pendingSwapOrder.reference },
+      update: {
+        status: 'completed',
+        blockNumber: evt.blockNumber,
+        transactionHash: evt.transactionHash,
+        completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
+      },
+      create: {
         userId: pendingSwapOrder.userId,
         type: 'swap',
         status: 'completed',
