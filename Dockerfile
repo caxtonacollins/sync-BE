@@ -12,7 +12,6 @@ COPY src ./src
 
 RUN pnpm install --frozen-lockfile
 RUN npx prisma generate
-RUN npx prisma migrate deploy
 RUN pnpm build
 
 FROM node:22-alpine AS runtime
