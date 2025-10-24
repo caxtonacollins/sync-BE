@@ -39,7 +39,7 @@ export class PragmaService implements OnModuleInit, OnModuleDestroy {
         message.oracle_prices.forEach(price => {
           const scaledPrice = Number(price.price) / Math.pow(10, 18);
           this.rates.set(price.pair_id, scaledPrice);
-          this.logger.log(`Updated rate for ${price.pair_id}: ${scaledPrice}`);
+          // this.logger.log(`Updated rate for ${price.pair_id}: ${scaledPrice}`);
         });
       }
     });

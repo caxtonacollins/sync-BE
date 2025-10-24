@@ -16,8 +16,6 @@ import { redisStore } from 'cache-manager-redis-store';
           };
         }
 
-        console.log('Connecting to Redis:', redisUrl.replace(/:[^:@]+@/, ':****@')); // Log without password
-
         try {
           const store = await redisStore({
             url: redisUrl,
@@ -30,7 +28,6 @@ import { redisStore } from 'cache-manager-redis-store';
           };
         } catch (error) {
           console.error('Failed to connect to Redis, falling back to in-memory cache:', error);
-          // Fallback to in-memory cache on connection error
           return {
             ttl: parseInt(process.env.REDIS_TTL || '60'),
           };
