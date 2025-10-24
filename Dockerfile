@@ -30,4 +30,4 @@ COPY --from=builder /app/src ./src
 
 ENV NODE_ENV=production
 
-CMD ["node", "dist/src/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
