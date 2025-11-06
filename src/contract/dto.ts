@@ -1,4 +1,4 @@
-import { IsOptional } from "class-validator";
+import { IsOptional, IsString } from "class-validator";
 
 export class CreateAccountDto {
   @IsOptional()
@@ -13,6 +13,7 @@ export class SetLiquidityContractAddressDto {
 }
 
 export class SetAccountClassHashDto {
+  @IsString()
   classHash: string;
 }
 
@@ -28,6 +29,8 @@ export class SwapFiatToTokenDto {
   tokenSymbol: string;
   fiatAmount: number;
   swapOrderId: string;
+  tokenAmount: number;
+  fee: number;
 }
 
 export class SwapTokenToFiatDto {

@@ -281,6 +281,9 @@ export class LiquidityPoolContractService {
     tokenSymbol: string,
     fiatAmount: number,
     swapOrderId: string,
+    tokenAddress: string,
+    tokenAmount: number,
+    fee: number,
   ) {
     if (!userContractAddress)
       throw new Error('userContractAddress is required');
@@ -288,49 +291,67 @@ export class LiquidityPoolContractService {
     if (!tokenSymbol) throw new Error('tokenSymbol is required');
     if (!fiatAmount) throw new Error('fiatAmount is required');
 
-    const fiatSymbolFelt = shortString.encodeShortString(fiatSymbol);
-    const tokenSymbolFelt = shortString.encodeShortString(tokenSymbol);
-    const amountU256 = uint256.bnToUint256(BigInt(fiatAmount));
-    const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
+    const user =
+      await this.userService.getUserByCryptoAddress(userContractAddress);
+    if (!user) throw new Error('User not found');
 
-    const call = {
+    const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
+    const fiat = 'USD';
+    const token = tokenSymbol.toUpperCase();
+    const tokenSymbolToUSD = `${token}/${fiat}`;
+
+    const fiatSymbolFelt = shortString.encodeShortString(fiatSymbol);
+    const fiatAmountU256 = uint256.bnToUint256(BigInt(fiatAmount));
+
+    const supportedTokenAddress =
+      await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
+    const decimals = await this.getTokenDecimals(supportedTokenAddress);
+
+    // Convert token amount to wei units properly handling decimals
+    const amountInWei = this.convertToWei(tokenAmount, decimals);
+    const amountU256 = uint256.bnToUint256(amountInWei);
+
+    console.log('swapFiatToToken', {
+      userContractAddress,
+      swapOrderIdToFelt,
+      fiatSymbolFelt,
+      tokenSymbolToUSD,
+      fiatAmountU256,
+      amountU256,
+      fee,
+    });
+    const swapCall = {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'swap_fiat_to_token',
       calldata: [
         userContractAddress,
         swapOrderIdToFelt,
         fiatSymbolFelt,
-        tokenSymbolFelt,
-        amountU256.low,
-        amountU256.high,
+        tokenSymbolToUSD,
+        fiatAmountU256.low,
+        fiatAmountU256.high,
+        amountU256,
+        fee,
       ],
     };
 
     try {
       const account = this.getDeployerWallet();
 
-      const { transaction_hash: txH } = await account.execute(call, {
-        maxFee: 10 ** 15,
-      });
+      const txResponse = await account.execute(swapCall);
 
-      const txR = await this.provider.waitForTransaction(txH);
-
-      if (txR.isSuccess()) {
-        console.log(
-          chalk.green(
-            `Successfully swapped fiat to token for user ${userContractAddress}`,
-          ),
-        );
-        return {
-          transactionHash: txH,
-          receipt: txR,
-        };
-      } else {
-        throw new Error('Swap transaction failed');
-      }
+      return {
+        txHash: txResponse.transaction_hash,
+        status: 'pending',
+        details: {
+          from: fiatSymbol,
+          to: tokenSymbol,
+          amount: fiatAmount,
+        },
+      };
     } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
-      throw error;
+      console.error(`[Swap] Failed ${fiatSymbol}->${tokenSymbol} swap:`, error);
+      throw new Error(`Swap failed: ${error.message}`);
     }
   }
 
@@ -358,7 +379,7 @@ export class LiquidityPoolContractService {
     const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
     const fiat = 'USD';
     const token = tokenSymbol.toUpperCase();
-    const tokenSymbolToUSD = `${token}/USD`;
+    const tokenSymbolToUSD = `${token}/${fiat}`;
     const supportedTokenAddress =
       await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
     const decimals = await this.getTokenDecimals(supportedTokenAddress);
@@ -431,9 +452,7 @@ export class LiquidityPoolContractService {
     }
   }
 
-  /**
-   * Get fee BPS with caching
-   */
+
   async getFeeBPS() {
     const cacheKey = 'liquidity:fee:bps';
     const cachedFee = await this.cacheManager.get(cacheKey);
@@ -456,7 +475,6 @@ export class LiquidityPoolContractService {
     const result = await liquidityContract.get_fee_bps();
     const feeBps = BigInt(result);
 
-    // Cache for 5 minutes
     await this.cacheManager.set(cacheKey, feeBps.toString(), 300000);
 
     return feeBps;

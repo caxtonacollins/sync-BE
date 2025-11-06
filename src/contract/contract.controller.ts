@@ -116,14 +116,6 @@ export class ContractController {
     );
   }
 
-  @Post('add-fiat-to-liquidity')
-  async addFiatToLiquidity(@Body() addFiatToLiquidityDto: { symbol: string; amount: string }) {
-    return await this.contractService.addFiatToLiquidity(
-      addFiatToLiquidityDto.symbol,
-      addFiatToLiquidityDto.amount,
-    );
-  }
-
   @Post('add-token-to-liquidity')
   async addTokenToLiquidity(@Body() addTokenToLiquidityDto: { symbol: string; amount: string }) {
     return await this.contractService.addTokenToLiquidity(
@@ -143,12 +135,15 @@ export class ContractController {
 
   @Post('swap-fiat-to-token')
   async swapFiatToToken(@Body() swapFiatToTokenDto: SwapFiatToTokenDto) {
+    console.log(swapFiatToTokenDto);
     return await this.contractService.swapFiatToToken(
       swapFiatToTokenDto.userContractAddress,
       swapFiatToTokenDto.fiatSymbol,
       swapFiatToTokenDto.tokenSymbol,
       swapFiatToTokenDto.fiatAmount,
       swapFiatToTokenDto.swapOrderId,
+      swapFiatToTokenDto.tokenAmount,
+      swapFiatToTokenDto.fee,
     );
   }
 

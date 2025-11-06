@@ -101,10 +101,6 @@ export class ContractService {
     return this.liquidityPoolService.isUserRegistered(userContractAddress);
   };
 
-  addFiatToLiquidity = async (symbol: string, amount: string) => {
-    return this.liquidityPoolService.addFiatToLiquidity(symbol, amount);
-  };
-
   addTokenToLiquidity = async (symbol: string, amount: string) => {
     return this.liquidityPoolService.addTokenToLiquidity(symbol, amount);
   };
@@ -123,13 +119,19 @@ export class ContractService {
     tokenSymbol: string,
     fiatAmount: number,
     swapOrderId: string,
+    tokenAmount: number,
+    fee: number,
   ) => {
+    const tokenAddress = this.tokenService.getTokenAddress(tokenSymbol);
     return this.liquidityPoolService.swapFiatToToken(
       userContractAddress,
       fiatSymbol,
       tokenSymbol,
       fiatAmount,
       swapOrderId,
+      tokenAddress,
+      tokenAmount,
+      fee,
     );
   };
 
@@ -153,10 +155,6 @@ export class ContractService {
 
   getFeeBPS = async () => {
     return this.liquidityPoolService.getFeeBPS();
-  };
-
-  getFiatLiquidityBalance = async (fiatSymbol: string) => {
-    return this.liquidityPoolService.getFiatLiquidityBalance(fiatSymbol);
   };
 
   getSupportedTokenBySymbol = async (symbol: string) => {

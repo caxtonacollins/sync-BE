@@ -12,7 +12,6 @@ COPY src ./src
 
 RUN pnpm install --frozen-lockfile
 RUN npx prisma generate
-RUN npx prisma migrate deploy
 RUN pnpm build
 
 FROM node:22-alpine AS runtime
@@ -30,4 +29,4 @@ COPY --from=builder /app/src ./src
 
 ENV NODE_ENV=production
 
-CMD ["node", "dist/src/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy || npx prisma db push --accept-data-loss; node dist/src/main.js"]

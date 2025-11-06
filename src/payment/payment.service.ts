@@ -1,5 +1,4 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { FiatAccount } from '@prisma/client';
 import axios from 'axios';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 
@@ -19,27 +18,24 @@ export class PaymentService {
    * This is called after swap confirmation from StarkNet
    */
   async initiatePayout(
-    fiatAccount: FiatAccount,
-    amount: number,  // in USD
+    fiatAccount: any,
+    amount: number, // in USD
     currency: string,
   ) {
     try {
-      const exchangeRateResponse = await this.flutterwaveService.getExchangeRate(
-        'USD',
-        currency,
-        amount,
-      );
+      const exchangeRateResponse =
+        await this.flutterwaveService.getExchangeRate('USD', currency, amount);
       const payoutAmount = exchangeRateResponse.destination.amount;
       const payoutReference = `PAYOUT_${Date.now()}_${fiatAccount.id}`;
 
       // Convert amount to smallest currency unit (kobo for NGN, cents for USD, etc.)
       const amountInSubunit = Math.round(payoutAmount * 100);
-      
+
       // First, verify the bank account details
       const accountVerification = await this.verifyBankAccount(
         fiatAccount.accountNumber,
-        fiatAccount.bankCode?.toString() || "",
-        currency
+        fiatAccount.bankCode?.toString() || '',
+        currency,
       );
 
       // Prepare transfer payload
@@ -82,16 +78,22 @@ export class PaymentService {
     } catch (error) {
       const errorMessage = error.response?.data?.message || error.message;
       this.logger.error(`Payout failed: ${errorMessage}`, error.stack);
-      throw new BadRequestException(`Failed to initiate payout: ${errorMessage}`);
+      throw new BadRequestException(
+        `Failed to initiate payout: ${errorMessage}`,
+      );
     }
   }
 
-  /**
-   * Verify bank account details before initiating transfer
-   */
-  private async verifyBankAccount(accountNumber: string, bankCode: string, currency: string) {
+  private async verifyBankAccount(
+    accountNumber: string,
+    bankCode: string,
+    currency: string,
+  ) {
     try {
-      this.logger.debug(`Verifying bank account: ${accountNumber} for bank code: ${bankCode}`);
+      this.logger.debug(
+        `Verifying bank account: ${accountNumber} for bank code: ${bankCode}`,
+      );
+      console.log('currency', currency);
       const response = await axios.post(
         `${this.flutterwaveBaseUrl}/accounts/resolve`,
         {
@@ -118,24 +120,15 @@ export class PaymentService {
     }
   }
 
-  /**
-   * Charge user's fiat account via Flutterwave
-   * This is called before initiating fiat-to-token swap
-   */
-  async charge(fiatAccount: FiatAccount, amount: number, currency: string) {
+  async charge(fiatAccount: any, amount: number, currency: string) {
     this.logger.log(
       `Charging ${amount} ${currency} from account ${fiatAccount.accountNumber}`,
     );
 
     try {
       const chargeReference = `CHARGE_${Date.now()}_${fiatAccount.id}`;
+      console.log('chargeReference', chargeReference);
 
-      // TODO: Implement Flutterwave Charge API
-      // For virtual accounts, charges happen automatically when user deposits
-      // We just need to verify the balance is sufficient
-
-      // TODO: Uncomment when Flutterwave credentials are ready
-      /*
       // Verify account balance first
       const balanceResponse = await axios.get(
         `${this.flutterwaveBaseUrl}/virtual-account-numbers/${fiatAccount.accountReference}`,
@@ -150,31 +143,27 @@ export class PaymentService {
       if (availableBalance < amount) {
         throw new BadRequestException('Insufficient balance in fiat account');
       }
-      */
 
       // Mock response for development
-      this.logger.warn(
-        `MOCK CHARGE: ${amount} ${currency} from ${fiatAccount.accountNumber}`,
-      );
-      return {
-        status: 'success',
-        reference: chargeReference,
-        message: 'Charge completed (mock mode)',
-      };
+      // this.logger.warn(
+      //   `MOCK CHARGE: ${amount} ${currency} from ${fiatAccount.accountNumber}`,
+      // );
+      // return {
+      //   status: 'success',
+      //   reference: chargeReference,
+      //   message: 'Charge completed (mock mode)',
+      // };
     } catch (error) {
       this.logger.error(`Charge failed: ${error.message}`, error.stack);
-      throw new BadRequestException(`Failed to charge account: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to charge account: ${error.message}`,
+      );
     }
   }
 
-  /**
-   * Verify Flutterwave transfer status
-   * Used to confirm payout completion
-   */
-  async verifyTransfer(reference: string) {
+  async verifyTransferStatus(reference: string) {
     try {
       // TODO: Implement Flutterwave Transfer verification
-      /*
       const response = await axios.get(
         `${this.flutterwaveBaseUrl}/transfers?reference=${reference}`,
         {
@@ -185,10 +174,6 @@ export class PaymentService {
       );
 
       return response.data;
-      */
-
-      this.logger.warn(`MOCK VERIFY: Transfer ${reference}`);
-      return { status: 'success', reference };
     } catch (error) {
       this.logger.error(`Transfer verification failed: ${error.message}`);
       throw error;
@@ -198,10 +183,9 @@ export class PaymentService {
   /**
    * Get account balance from Flutterwave
    */
-  async getAccountBalance(fiatAccount: FiatAccount): Promise<number> {
+  async getAccountBalance(fiatAccount: any): Promise<number> {
     try {
       // TODO: Implement Flutterwave balance check
-      /*
       const response = await axios.get(
         `${this.flutterwaveBaseUrl}/virtual-account-numbers/${fiatAccount.accountReference}`,
         {
@@ -212,7 +196,6 @@ export class PaymentService {
       );
 
       return response.data.data.available_balance || 0;
-      */
 
       this.logger.warn(`MOCK BALANCE CHECK: ${fiatAccount.accountNumber}`);
       return 100000; // Mock balance

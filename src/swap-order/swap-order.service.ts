@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { WalletService } from '../wallet/wallet.service';
 import { TransactionService } from '../transaction/transaction.service';
 import { ContractService } from '../contract/contract.service';
@@ -6,7 +7,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateSwapOrderDto, SwapType } from './dto/create-swap-order.dto';
 import { UpdateSwapOrderDto } from './dto/update-swap-order.dto';
 import { SwapOrderFilterDto } from './dto/swap-order-filter.dto';
-import { Prisma } from '@prisma/client';
 import { UserService } from 'src/user/user.service';
 import { PaymentService } from 'src/payment/payment.service';
 
@@ -122,13 +122,13 @@ export class SwapOrderService {
     }
 
     const isRegisteredToLiquidity = cryptoWallet[0].isRegisteredToLiquidity;
-    const accountAddress = cryptoWallet[0].address;
+    const cryptoWalletAddress = cryptoWallet[0].address;
 
     if (!isRegisteredToLiquidity) {
       throw new Error('User is not registered to contract');
     }
 
-    const balance = await this.contractService.getAccountBalance(fromCurrency, accountAddress);
+    const balance = await this.contractService.getAccountBalance(fromCurrency, cryptoWalletAddress);
 
     if (parseFloat(balance) < fromAmount) {
       throw new Error(`Insufficient token balance. Required: ${fromAmount}, Available: ${balance}`);
@@ -137,7 +137,7 @@ export class SwapOrderService {
     this.logger.log(`Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`);
 
     const tokenTransferResult = await this.contractService.swapTokenToFiat(
-      accountAddress,
+      cryptoWalletAddress,
       toCurrency,
       fromCurrency,
       fromAmount,
@@ -158,85 +158,79 @@ export class SwapOrderService {
     );
   }
 
-  /**
-   * Execute Fiat-to-Token swap
-   * Step 1: Validate user and fiat account
-   * Step 2: Verify/charge fiat balance
-   * Step 3: Initiate swap on StarkNet contract
-   * Step 4: Update order status to 'processing'
-   * Step 5: Wait for event confirmation (handled by LiquidityEventProcessorService)
-   */
   private async executeFiatToTokenSwap(swapOrder: any) {
     this.logger.log(`Executing Fiat-to-Token swap for order ${swapOrder.id}`);
 
     const { id: swapOrderId, userId, fromAmount, fromCurrency, toAmount, toCurrency } = swapOrder;
 
-    // Step 1: Validate user
     const user = await this.userService.findOne(userId);
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    // Step 2: Validate fiat account
     const fiatAccount = await this.walletService.getFiatAccountForUser(userId);
     if (!fiatAccount) {
       throw new Error('User does not have a fiat account for payment');
     }
 
-    // Step 3: Verify crypto wallet
     const cryptoWallet = await this.walletService.getCryptoWallets(userId);
     if (!cryptoWallet || cryptoWallet.length === 0) {
       throw new Error('User does not have a crypto wallet for receiving tokens');
     }
+    const isRegisteredToLiquidity = cryptoWallet[0].isRegisteredToLiquidity;
+    const cryptoWalletAddress = cryptoWallet[0].address;
 
-    // Step 4: Check and charge fiat balance
-    // TODO: Implement actual balance check with Flutterwave
-    const balance = await this.paymentService.getAccountBalance(fiatAccount);
-    if (balance < fromAmount) {
-      throw new Error(`Insufficient fiat balance. Required: ${fromAmount}, Available: ${balance}`);
+    if (!isRegisteredToLiquidity) {
+      throw new Error('User is not registered to contract');
     }
 
+
+    const fiatBalance = await this.paymentService.getAccountBalance(fiatAccount);
+
+    if (fiatBalance < fromAmount) {
+      throw new Error(`Insufficient fiat balance. Required: ${fromAmount}, Available: ${fiatBalance}`);
+    }
+
+    // calculate the fee to be paid
+    const fee = await this.contractService.getFeeBPS();
+    const feeToNumber = Number(fee);
+    const feeAmount = fromAmount * feeToNumber / 100; 
+
     this.logger.log(`Charging ${fromAmount} ${fromCurrency} from user's fiat account`);
-    await this.paymentService.charge(fiatAccount, fromAmount, fromCurrency);
+    const amountToCharge = fromAmount + feeAmount;
+    await this.paymentService.charge(fiatAccount, amountToCharge, fromCurrency);
 
     this.logger.log(
       `Successfully charged ${fromAmount} ${fromCurrency} from user ${userId}`,
     );
 
-    // Step 5: Initiate swap transaction on StarkNet
     this.logger.log(`Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`);
 
     const tokenTransferResult = await this.contractService.swapFiatToToken(
-      cryptoWallet[0].address,
+      cryptoWalletAddress,
       fromCurrency,
       toCurrency,
       fromAmount,
       swapOrderId,
+      toAmount,
+      feeToNumber,
     );
 
     this.logger.log(
-      `Token transfer transaction sent: ${tokenTransferResult.transactionHash}`,
+      `Token transfer transaction sent: ${tokenTransferResult.txHash}`,
     );
 
     // Step 6: Update order status to 'processing'
     await this.update(swapOrder.id, {
       status: 'processing',
-      transactionHash: tokenTransferResult.transactionHash,
+      transactionHash: tokenTransferResult.txHash,
     });
 
     this.logger.log(
       `Swap order ${swapOrder.id} is now processing. Waiting for StarkNet event confirmation...`,
     );
-
-    // NOTE: Order completion will be triggered automatically by LiquidityEventProcessorService
-    // when it receives the FiatToTokenSwapExecuted event from StarkNet.
-    // See: liquidity-event-processor.service.ts -> handleFiatToTokenSwap()
   }
 
-  /**
-   * Initiate payout for a confirmed swap
-   * This is called by the event processor after receiving swap confirmation from StarkNet
-   */
   async initiatePayoutForSwap(swapOrderId: string) {
     this.logger.log(`Initiating payout for swap order ${swapOrderId}`);
 
