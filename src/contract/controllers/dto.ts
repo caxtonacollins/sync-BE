@@ -44,4 +44,5 @@ export class SwapTokenToFiatDto {
 export class MintTokenDto {
   receiverAddress: string;
   amount: string;
+  syncTokenAddress: string;
 }

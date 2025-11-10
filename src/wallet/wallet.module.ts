@@ -21,6 +21,9 @@ import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
     MonnifyService,
     FlutterwaveService
   ],
-  exports: [WalletService, KeyManagementService],
+  exports: [
+    WalletService,
+    KeyManagementService
+  ],
 })
 export class WalletModule {}

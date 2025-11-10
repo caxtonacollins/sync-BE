@@ -1,10 +1,11 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { TransactionService } from '../transaction/transaction.service';
 import { CreateTransferDto } from './dto/create-transfer.dto';
-import { ContractService } from '../contract/contract.service';
-import { TokenContractService } from '../contract/token-contract.service';
+import { TokenContractService } from '../contract/services/erc20-token/erc20-token.service';
+import { LiquidityPoolContractService } from '../contract/services/liquidity-pool/liquidity-pool.service';
 import { createNewContractInstance } from '../contract/utils';
 import erc20 from '../contract/abi/erc20.json';
+import { AccountContractService } from 'src/contract/services/account/account.service';
 
 @Injectable()
 export class TransferService {
@@ -12,8 +13,9 @@ export class TransferService {
 
   constructor(
     private readonly transactionService: TransactionService,
-    @Inject(forwardRef(() => ContractService))
-    private readonly contractService: ContractService,
+    @Inject(forwardRef(() => AccountContractService))
+    private readonly accountContractService: AccountContractService,
+    @Inject(forwardRef(() => TokenContractService))
     private readonly tokenService: TokenContractService,
   ) {}
 
@@ -23,7 +25,7 @@ export class TransferService {
     
     try {
       // Get the user's wallet address
-      const userWallet = await this.contractService.getAccountAddress(userId);
+      const userWallet = await this.accountContractService.getAccountAddress(userId);
       if (!userWallet) {
         throw new Error('User wallet not found');
       }

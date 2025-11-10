@@ -1,11 +1,4 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { ContractController } from './contract.controller';
-import { ContractService } from './contract.service';
-import { LiquidityEventProcessorService } from './liquidity-event-processor.service';
-import { AccountContractService } from './account-contract.service';
-import { AccountFactoryContractService } from './account-factory-contract.service';
-import { LiquidityPoolContractService } from './liquidity-pool-contract.service';
-import { TokenContractService } from './token-contract.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { SwapOrderModule } from '../swap-order/swap-order.module';
@@ -13,6 +6,19 @@ import { UserModule } from '../user/user.module';
 import { CacheModule } from '../cache/cache.module';
 import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
 import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
+import { KeyManagementService } from '../wallet/key-management.service';
+import { LiquidityController } from './controllers/liquidity/liquidity.controller';
+import { StakingController } from './controllers/staking/staking.controller';
+import { AccountFactoryController } from './controllers/account-factory/account-factory.controller';
+import { AccountController } from './controllers/account/account.controller';
+import { EventsController } from './controllers/events/events.controller';
+import { Erc20TokenController } from './controllers/erc20-token/erc20-token.controller';
+import { AccountFactoryContractService } from './services/account-factory/account-factory.service';
+import { AccountContractService } from './services/account/account.service';
+import { TokenContractService } from './services/erc20-token/erc20-token.service';
+import { LiquidityEventProcessorService } from './services/event-processor/event-processor.service';
+import { LiquidityPoolContractService } from './services/liquidity-pool/liquidity-pool.service';
+import { StakingContractService } from './services/staking/staking.service';
 
 @Module({
   imports: [
@@ -23,23 +29,24 @@ import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
     forwardRef(() => SwapOrderModule),
     forwardRef(() => ExchangeRateModule),
   ],
-  controllers: [ContractController],
+  controllers: [LiquidityController, StakingController, AccountFactoryController, AccountController, EventsController, Erc20TokenController],
   providers: [
-    ContractService,
     AccountContractService,
     AccountFactoryContractService,
     LiquidityPoolContractService,
     TokenContractService,
     LiquidityEventProcessorService,
-    FlutterwaveService
+    FlutterwaveService,
+    StakingContractService,
+    KeyManagementService,
   ],
   exports: [
-    ContractService,
     AccountContractService,
     AccountFactoryContractService,
     LiquidityPoolContractService,
     TokenContractService,
     LiquidityEventProcessorService,
+    StakingContractService,
   ],
 })
-export class ContractModule {}
+export class ContractModule { }

@@ -256,6 +256,79 @@ async function main() {
     });
   }
 
+  // Create crypto staking pools
+  const cryptoPools = [
+    {
+      tokenSymbol: 'STRK',
+      tokenAddress: '0x...', // Your STRK token address
+      network: 'starknet',
+      baseApyBps: 800, // 8%
+      bonusApyBps: 400, // 4%
+      minStakeAmount: 1,
+      maxStakeAmount: 1000000,
+      isActive: true,
+    },
+    {
+      tokenSymbol: 'ETH',
+      tokenAddress: '0x...', // Your ETH token address
+      network: 'starknet',
+      baseApyBps: 500, // 5%
+      bonusApyBps: 300, // 3%
+      minStakeAmount: 0.01,
+      maxStakeAmount: 1000,
+      isActive: true,
+    },
+  ];
+
+  for (const pool of cryptoPools) {
+    await prisma.cryptoStakingPool.upsert({
+      where: { tokenSymbol: pool.tokenSymbol },
+      update: {},
+      create: pool,
+    });
+  }
+
+  // Create fiat staking pools
+  const fiatPools = [
+    {
+      currency: 'NGN',
+      baseApyBps: 800, // 8%
+      bonusApyBps: 400, // 4%
+      minStakeAmount: 1000,
+      maxStakeAmount: 10000000,
+      decimals: 2,
+      isActive: true,
+    },
+    {
+      currency: 'USD',
+      baseApyBps: 600, // 6%
+      bonusApyBps: 300, // 3%
+      minStakeAmount: 100,
+      maxStakeAmount: 1000000,
+      decimals: 2,
+      isActive: true,
+    },
+    {
+      currency: 'GBP',
+      baseApyBps: 550, // 5.5%
+      bonusApyBps: 250, // 2.5%
+      minStakeAmount: 100,
+      maxStakeAmount: 1000000,
+      decimals: 2,
+      isActive: true,
+    },
+  ];
+
+  for (const pool of fiatPools) {
+    await prisma.fiatStakingPool.upsert({
+      where: { currency: pool.currency },
+      update: {},
+      create: pool,
+    });
+  }
+
+  console.log('✅ Staking pools seeded successfully');
+
   // Create audit logs
   const auditActions = [
     'USER_LOGIN',
@@ -331,8 +404,71 @@ async function main() {
   console.log('Created users:', users.map((u) => u.email).join(', '));
 }
 
+async function migrateExistingUsers() {
+  const users = await prisma.user.findMany({
+    include: { fiatAccounts: true, cryptoWallets: true },
+  });
+
+  for (const user of users) {
+    // Create FiatBalance for each fiat account currency
+    const currencies = [
+      ...new Set(user.fiatAccounts.map((acc) => acc.currency)),
+    ];
+
+    for (const currency of currencies) {
+      const totalBalance = user.fiatAccounts
+        .filter((acc) => acc.currency === currency)
+        .reduce((sum, acc) => sum + acc.balance, 0);
+
+      await prisma.fiatBalance.upsert({
+        where: {
+          userId_currency: {
+            userId: user.id,
+            currency,
+          },
+        },
+        update: {
+          available: totalBalance,
+        },
+        create: {
+          userId: user.id,
+          currency,
+          available: totalBalance,
+          staked: 0,
+          pending: 0,
+        },
+      });
+    }
+
+    // Create CryptoBalance for each wallet
+    for (const wallet of user.cryptoWallets || []) {
+      await prisma.cryptoBalance.upsert({
+        where: {
+          userId_currency_network: {
+            userId: user.id,
+            currency: wallet.currency,
+            network: wallet.network,
+          },
+        },
+        update: {},
+        create: {
+          userId: user.id,
+          currency: wallet.currency,
+          network: wallet.network,
+          available: 0, // Will be updated by blockchain sync
+          staked: 0,
+          pending: 0,
+        },
+      });
+    }
+  }
+
+  console.log(`✅ Migrated ${users.length} users`);
+}
+
 async function runSeed() {
   try {
+    await migrateExistingUsers();
     await main();
   } catch (e) {
     console.error('Error during seeding:', e);

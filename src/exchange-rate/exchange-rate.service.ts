@@ -3,16 +3,18 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
-import { ContractService } from '../contract/contract.service';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 import { PragmaService } from './pragma.service';
 import axios from 'axios';
+import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
+import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 
 @Injectable()
 export class ExchangeRateService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly contractService: ContractService,
+    private readonly contractService: LiquidityPoolContractService,
+    private readonly tokenContractService: TokenContractService,
     private readonly flutterwaveService: FlutterwaveService,
     private readonly pragmaService: PragmaService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
@@ -51,7 +53,7 @@ export class ExchangeRateService {
       const [syncRates, fwRates, syncUsdRate] = await Promise.all([
         this.prisma.exchangeRate.findMany(),
         this.flutterwaveService.getExchangeRate('NGN', 'USD', 100),
-        this.contractService.getTokenAmountInUsd(this.contractService.syncTokenAddress),
+        this.contractService.getTokenAmountInUsd(this.tokenContractService.syncTokenAddress),
       ]);
 
       const pragmaPairs = ['STRK/USD', 'USDC/USD', 'ETH/USD', 'BTC/USD'];

@@ -21,7 +21,6 @@ import { UserResponseDto } from './dto/user-response.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
-import { ContractService } from 'src/contract/contract.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Public } from '../auth/decorators/public.decorator';
@@ -42,7 +41,7 @@ interface JwtUser {
   role: string;
 }
 
-interface RequestWithUser extends Request {
+export interface RequestWithUser extends Request {
   user: JwtUser;
 }
 
@@ -54,7 +53,6 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly flutterwaveService: FlutterwaveService,
-    private readonly contractService: ContractService,
   ) {}
 
   @Public()

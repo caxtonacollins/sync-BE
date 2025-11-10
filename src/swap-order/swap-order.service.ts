@@ -2,13 +2,14 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { WalletService } from '../wallet/wallet.service';
 import { TransactionService } from '../transaction/transaction.service';
-import { ContractService } from '../contract/contract.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSwapOrderDto, SwapType } from './dto/create-swap-order.dto';
 import { UpdateSwapOrderDto } from './dto/update-swap-order.dto';
 import { SwapOrderFilterDto } from './dto/swap-order-filter.dto';
 import { UserService } from 'src/user/user.service';
 import { PaymentService } from 'src/payment/payment.service';
+import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
+import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
 
 @Injectable()
 export class SwapOrderService {
@@ -18,7 +19,8 @@ export class SwapOrderService {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly transactionService: TransactionService,
-    private readonly contractService: ContractService,
+    private readonly TokenContractService: TokenContractService,
+    private readonly LiquidityPoolContractService: LiquidityPoolContractService,
     private readonly userService: UserService,
     private readonly paymentService: PaymentService,
   ) { }
@@ -128,7 +130,7 @@ export class SwapOrderService {
       throw new Error('User is not registered to contract');
     }
 
-    const balance = await this.contractService.getAccountBalance(fromCurrency, cryptoWalletAddress);
+    const balance = await this.TokenContractService.getAccountBalance(fromCurrency, cryptoWalletAddress);
 
     if (parseFloat(balance) < fromAmount) {
       throw new Error(`Insufficient token balance. Required: ${fromAmount}, Available: ${balance}`);
@@ -136,7 +138,7 @@ export class SwapOrderService {
 
     this.logger.log(`Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`);
 
-    const tokenTransferResult = await this.contractService.swapTokenToFiat(
+    const tokenTransferResult = await this.LiquidityPoolContractService.swapTokenToFiat(
       cryptoWalletAddress,
       toCurrency,
       fromCurrency,
@@ -192,7 +194,7 @@ export class SwapOrderService {
     }
 
     // calculate the fee to be paid
-    const fee = await this.contractService.getFeeBPS();
+    const fee = await this.LiquidityPoolContractService.getFeeBPS();
     const feeToNumber = Number(fee);
     const feeAmount = fromAmount * feeToNumber / 100; 
 
@@ -206,7 +208,7 @@ export class SwapOrderService {
 
     this.logger.log(`Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`);
 
-    const tokenTransferResult = await this.contractService.swapFiatToToken(
+    const tokenTransferResult = await this.LiquidityPoolContractService.swapFiatToToken(
       cryptoWalletAddress,
       fromCurrency,
       toCurrency,

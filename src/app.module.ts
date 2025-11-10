@@ -17,6 +17,11 @@ import { TransferModule } from './transfer/transfer.module';
 import { PaymentModule } from './payment/payment.module';
 import { SyncPayModule } from './syncpay/syncpay.module';
 import { CacheModule } from './cache/cache.module';
+import { FiatStakingService } from './fiat-staking/fiat-staking.service';
+import { FiatStakingController } from './fiat-staking/fiat-staking.controller';
+import { FiatStakingModule } from './fiat-staking/fiat-staking.module';
+import { CryptoStakingModule } from './crypto-staking/crypto-staking.module';
+import { LiquidityController } from './contract/controllers/liquidity/liquidity.controller';
 
 @Module({
   imports: [
@@ -35,8 +40,10 @@ import { CacheModule } from './cache/cache.module';
     TransferModule,
     PaymentModule,
     SyncPayModule,
+    FiatStakingModule,
+    CryptoStakingModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, PrismaService],
+  controllers: [AppController, FiatStakingController, LiquidityController],
+  providers: [AppService, PrismaService, FiatStakingService],
 })
 export class AppModule {}

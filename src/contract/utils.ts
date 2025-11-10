@@ -202,3 +202,11 @@ export function decryptPrivateKey(encryptedData: string): string {
 export function hashData(data: string): string {
   return crypto.createHash('sha256').update(data).digest('hex');
 }
+
+export function stringToFelt252(text: string): string {
+  if (text.length > 31) {
+    throw new Error('Text too long to be converted to felt252');
+  }
+  const hex = Buffer.from(text, 'utf8').toString('hex');
+  return `0x${hex}`;
+}

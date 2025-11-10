@@ -1,16 +1,12 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MonnifyService } from '../monnify/monnify.service';
 import { Logger } from '@nestjs/common';
-import { FiatAccount, CryptoWallet } from '@prisma/client';
-import { ContractService } from 'src/contract/contract.service';
+import { FiatAccount, CryptoWallet, Transaction } from '@prisma/client';
 import { ExchangeRateService } from '../exchange-rate/exchange-rate.service';
+import { QueueWithdrawalDto } from './dto/queue-withdrawal.dto';
+import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
+import { AccountContractService } from 'src/contract/services/account/account.service';
 
 export interface WalletSummaryResponse {
   totalBalanceNGN: number;
@@ -64,8 +60,10 @@ export class WalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly monnifyService: MonnifyService,
-    @Inject(forwardRef(() => ContractService))
-    private readonly contractService: ContractService,
+    @Inject(forwardRef(() => TokenContractService))
+    private readonly contractService: TokenContractService,
+    @Inject(forwardRef(() => AccountContractService))
+    private readonly accountContractService: AccountContractService,
     private readonly exchangeRateService: ExchangeRateService,
   ) {}
 
@@ -338,7 +336,7 @@ export class WalletService {
       }
 
       // Create StarkNet account
-      const result = await this.contractService.createAccount(userId);
+      const result = await this.accountContractService.createAccount(userId);
 
       if (!result?.accountAddress || !result?.encryptedPrivateKey) {
         throw new Error('Failed to create StarkNet account');
@@ -484,5 +482,238 @@ export class WalletService {
     const maxDiscount = 0.5; // 50%
     const discount = (stakedTokens / 1000) * discountPerThousandTokens;
     return Math.min(discount, maxDiscount);
+  }
+
+  /**
+   * Calculate the withdrawal fee for a given amount and currency
+   * @param amount The amount to withdraw
+   * @param currency The currency of the withdrawal
+   * @returns The calculated fee amount
+   */
+  private calculateWithdrawalFee(amount: number, currency: string): number {
+    // Define fee structure by currency
+    const feeStructure = {
+      NGN: (amount: number) => Math.min(100, Math.max(10, amount * 0.01)), // 1% with min 10 and max 100 NGN
+      USD: (amount: number) => Math.min(10, Math.max(1, amount * 0.01)),   // 1% with min 1 and max 10 USD
+      GBP: (amount: number) => Math.min(8, Math.max(0.8, amount * 0.01)),  // 1% with min 0.8 and max 8 GBP
+      GHS: (amount: number) => Math.min(50, Math.max(5, amount * 0.01)),   // 1% with min 5 and max 50 GHS
+      default: (amount: number) => amount * 0.01, // 1% for other currencies
+    };
+
+    const calculateFee = feeStructure[currency] || feeStructure.default;
+    return calculateFee(amount);
+  }
+
+  /**
+   * Get the current bank balance for a specific currency
+   * @param currency The currency code (e.g., 'NGN', 'USD')
+   * @returns The current bank balance in the specified currency
+   */
+  async getBankBalance(currency: string): Promise<number> {
+    try {
+      // In a real implementation, this would call your banking provider's API
+      // For example, using Monnify or another payment processor
+      // Since getAccountBalance doesn't exist, we'll use a placeholder implementation
+      // that sums up the balances from the database as a fallback
+      
+      // Get the sum of all fiat balances for this currency
+      const result = await this.prisma.fiatBalance.aggregate({
+        where: { currency },
+        _sum: {
+          available: true,
+        },
+      });
+      
+      // Convert Decimal to number
+      return result._sum.available?.toNumber() || 0;
+      
+    } catch (error) {
+      this.logger.error(`Failed to get bank balance for ${currency}:`, error);
+      
+      // In a real app, you might want to implement a fallback mechanism here,
+      // such as checking a cached balance or using a different provider
+      
+      // For now, we'll rethrow the error
+      throw new Error(`Failed to retrieve bank balance: ${error.message}`);
+    }
+  }
+
+  /**
+   * Queue a large withdrawal request for manual processing
+   * @param userId The ID of the user requesting the withdrawal
+   * @param dto The withdrawal request details
+   * @returns The created withdrawal request
+   */
+  async queueLargeWithdrawal(
+    userId: string,
+    dto: QueueWithdrawalDto,
+  ) {
+    // 1. Validate the user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // 2. Check if user has sufficient balance
+    const balance = await this.prisma.fiatBalance.findUnique({
+      where: {
+        userId_currency: {
+          userId,
+          currency: dto.currency,
+        },
+      },
+    });
+
+    // Convert Decimal to number for comparison
+    const availableBalance = balance?.available?.toNumber() || 0;
+    if (!balance || availableBalance < dto.amount) {
+      throw new BadRequestException('Insufficient balance');
+    }
+
+    // 3. Check if currency is supported
+    const supportedCurrencies = ['NGN', 'USD', 'GBP', 'GHS'];
+    if (!supportedCurrencies.includes(dto.currency)) {
+      throw new BadRequestException(`Currency ${dto.currency} is not supported for large withdrawals`);
+    }
+
+    // 4. Check if amount is above threshold for manual processing
+    const largeWithdrawalThresholds = {
+      NGN: 500000, // 500,000 NGN
+      USD: 1000,   // 1,000 USD
+      GBP: 800,    // 800 GBP
+      GHS: 10000,  // 10,000 GHS
+    };
+
+    const threshold = largeWithdrawalThresholds[dto.currency] || 0;
+    if (dto.amount <= threshold) {
+      throw new BadRequestException(
+        `Amount is below the threshold for large withdrawals. Please use the standard withdrawal process.`,
+      );
+    }
+
+    // 5. Create the withdrawal request
+    // First, we need to create a transaction record with all required fields
+    const reference = `WDR-${Date.now()}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+    const fee = this.calculateWithdrawalFee(dto.amount, dto.currency);
+    
+    // Create the transaction first
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        userId,
+        type: 'WITHDRAWAL',
+        status: 'PENDING',
+        amount: dto.amount,
+        netAmount: dto.amount - fee,
+        currency: dto.currency,
+        fee,
+        reference,
+        metadata: {
+          isLargeWithdrawal: true,
+          withdrawalMethod: dto.withdrawalMethod,
+          destinationAddress: dto.destinationAddress,
+          bankAccountId: dto.bankAccountId,
+        },
+      },
+    });
+    
+    // Then create the withdrawal request linked to the transaction
+    const withdrawalData = {
+      userId,
+      amount: dto.amount,
+      currency: dto.currency,
+      status: 'PENDING',
+      reason: dto.reason || 'Large withdrawal request',
+      transactionId: transaction.id,
+      metadata: {
+        ...dto.metadata,
+        withdrawalMethod: dto.withdrawalMethod,
+        destinationAddress: dto.destinationAddress,
+        bankAccountId: dto.bankAccountId,
+      },
+    };
+    
+    // Use Prisma's create method with raw SQL as a fallback
+    let withdrawalRequest;
+    try {
+      // First try the standard Prisma way if the model is available
+      withdrawalRequest = await this.prisma.withdrawalRequest.create({
+        data: {
+          userId: withdrawalData.userId,
+          amount: withdrawalData.amount,
+          currency: withdrawalData.currency,
+          status: withdrawalData.status,
+          reason: withdrawalData.reason,
+          transactionId: withdrawalData.transactionId,
+          metadata: withdrawalData.metadata as any,
+        },
+      });
+    } catch (error) {
+      // If the model isn't available yet, use raw SQL
+      if (error.code === 'P2001' || error.message.includes('does not exist')) {
+        const result = await this.prisma.$queryRaw`
+          INSERT INTO "WithdrawalRequest" (
+            "id", "userId", "amount", "currency", "status", "reason", 
+            "transactionId", "metadata", "createdAt", "updatedAt"
+          ) VALUES (
+            gen_random_uuid(), 
+            ${withdrawalData.userId}, 
+            ${withdrawalData.amount}, 
+            ${withdrawalData.currency}, 
+            ${withdrawalData.status}, 
+            ${withdrawalData.reason},
+            ${withdrawalData.transactionId},
+            ${withdrawalData.metadata}::jsonb,
+            NOW(), 
+            NOW()
+          )
+          RETURNING *
+        `;
+        withdrawalRequest = Array.isArray(result) ? result[0] : result;
+      } else {
+        throw error;
+      }
+    }
+
+    // 6. Update the transaction with the withdrawal request ID
+    await this.prisma.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        metadata: {
+          ...(transaction.metadata as object || {}),
+          withdrawalRequestId: withdrawalRequest.id,
+        },
+      },
+    });
+
+    // 7. Send notification to admin for manual processing
+    await this.sendWithdrawalNotificationToAdmin(withdrawalRequest);
+
+    return withdrawalRequest;
+  }
+
+  /**
+   * Helper method to send notification to admin about a new large withdrawal request
+   */
+  private async sendWithdrawalNotificationToAdmin(withdrawalRequest: any) {
+    try {
+      // In a real implementation, this would send an email or notification to the admin
+      // For example:
+      // await this.notificationService.sendToAdmin({
+      //   type: 'LARGE_WITHDRAWAL_REQUEST',
+      //   title: 'New Large Withdrawal Request',
+      //   message: `A new large withdrawal request of ${withdrawalRequest.amount} ${withdrawalRequest.currency} has been submitted.`,
+      //   data: withdrawalRequest,
+      // });
+      
+      this.logger.log(
+        `Large withdrawal request created: ${withdrawalRequest.id} for ${withdrawalRequest.amount} ${withdrawalRequest.currency}`,
+      );
+    } catch (error) {
+      this.logger.error('Failed to send withdrawal notification to admin:', error);
+      // Don't throw the error as we don't want to fail the withdrawal request
+    }
   }
 }

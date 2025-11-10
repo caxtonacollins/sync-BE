@@ -10,17 +10,19 @@ import { Prisma, VerificationStatus } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
 import chalk from 'chalk';
-import { ContractService } from 'src/contract/contract.service';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { AccountContractService } from 'src/contract/services/account/account.service';
+import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
 
 
 @Injectable()
 export class UserService {
   constructor(
     private prisma: PrismaService,
-private flutterwaveService: FlutterwaveService,
-    private readonly contractService: ContractService,
-  ) {}
+    private flutterwaveService: FlutterwaveService,
+    private readonly accountContractService: AccountContractService,
+    private readonly liquidityPoolContractService: LiquidityPoolContractService,
+  ) { }
 
   private readonly SALT_ROUNDS = 12;
 
@@ -76,83 +78,83 @@ private flutterwaveService: FlutterwaveService,
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-        const fiatCurrencies = ['NGN']; // 'GHS', 'USD'
+    const fiatCurrencies = ['NGN']; // 'GHS', 'USD'
 
-        for (const currency of fiatCurrencies) {
-          try {
-            if (currency === 'NGN') {
-              const flutterwaveAccounts =
-                await this.flutterwaveService.createVirtualAccounts(user);
+    for (const currency of fiatCurrencies) {
+      try {
+        if (currency === 'NGN') {
+          const flutterwaveAccounts =
+            await this.flutterwaveService.createVirtualAccounts(user);
 
-              for (const fwAccount of flutterwaveAccounts) {
+          for (const fwAccount of flutterwaveAccounts) {
 
-                if (fwAccount) {
-                  await this.prisma.fiatAccount.create({
-                    data: {
-                      userId: user.id,
-                      provider: 'flutterwave',
-                      currency: fwAccount.currency || 'NGN',
-                      isDefault: true,
-                      accountNumber: fwAccount.account_number,
-                      accountName:
-                        fwAccount.account_name ||
-                        `${user.firstName} ${user.lastName}`,
-                      bankName: fwAccount.bank_name,
-                      bankCode: fwAccount.bank_code,
-                      accountReference: fwAccount.order_ref,
-                      accounts: fwAccount,
-                    },
-                  });
-                }
-              }
-            }
-          } catch (error) {
-            console.error(`Failed to create ${currency} fiat account:`, error);
-            if (currency === 'NGN') {
-              throw new Error(
-                `Failed to create Flutterwave virtual account: ${error.message}`,
-              );
+            if (fwAccount) {
+              await this.prisma.fiatAccount.create({
+                data: {
+                  userId: user.id,
+                  provider: 'flutterwave',
+                  currency: fwAccount.currency || 'NGN',
+                  isDefault: true,
+                  accountNumber: fwAccount.account_number,
+                  accountName:
+                    fwAccount.account_name ||
+                    `${user.firstName} ${user.lastName}`,
+                  bankName: fwAccount.bank_name,
+                  bankCode: fwAccount.bank_code,
+                  accountReference: fwAccount.order_ref,
+                  accounts: fwAccount,
+                },
+              });
             }
           }
         }
-
-        try {
-          const accountResult = await this.contractService.createAccount(user.id);
-          if (!accountResult) {
-            throw new Error('Failed to create StarkNet account');
-          }
-
-          console.log(
-            chalk.green(
-              `StarkNet account created: ${accountResult.accountAddress}`,
-            ),
+      } catch (error) {
+        console.error(`Failed to create ${currency} fiat account:`, error);
+        if (currency === 'NGN') {
+          throw new Error(
+            `Failed to create Flutterwave virtual account: ${error.message}`,
           );
-
-          await this.prisma.cryptoWallet.create({
-            data: {
-              userId: user.id,
-              network: 'starknet',
-              address: accountResult.accountAddress,
-              encryptedPrivateKey: accountResult.encryptedPrivateKey,
-              currency: 'STRK',
-              isDefault: true,
-            },
-          });
-
-          const defaultFiatAccount = await this.prisma.fiatAccount.findFirst({
-            where: { userId: user.id, isDefault: true },
-          });
-
-          if (defaultFiatAccount) {
-            await this.contractService.registerUserToLiquidity(
-              accountResult.accountAddress,
-              defaultFiatAccount.id,
-            );
-          }
-        } catch (contractError) {
-          console.error('StarkNet account creation failed:', contractError);
-          throw contractError;
         }
+      }
+    }
+
+    try {
+      const accountResult = await this.accountContractService.createAccount(user.id);
+      if (!accountResult) {
+        throw new Error('Failed to create StarkNet account');
+      }
+
+      console.log(
+        chalk.green(
+          `StarkNet account created: ${accountResult.accountAddress}`,
+        ),
+      );
+
+      await this.prisma.cryptoWallet.create({
+        data: {
+          userId: user.id,
+          network: 'starknet',
+          address: accountResult.accountAddress,
+          encryptedPrivateKey: accountResult.encryptedPrivateKey,
+          currency: 'STRK',
+          isDefault: true,
+        },
+      });
+
+      const defaultFiatAccount = await this.prisma.fiatAccount.findFirst({
+        where: { userId: user.id, isDefault: true },
+      });
+
+      if (defaultFiatAccount) {
+        await this.liquidityPoolContractService.registerUserToLiquidity(
+          accountResult.accountAddress,
+          defaultFiatAccount.id,
+        );
+      }
+    } catch (contractError) {
+      console.error('StarkNet account creation failed:', contractError);
+      throw contractError;
+    }
 
     return { success: true, message: 'Accounts provisioned successfully' };
   }
