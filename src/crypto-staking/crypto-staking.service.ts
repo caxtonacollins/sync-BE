@@ -7,7 +7,11 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { StakingContractService } from 'src/contract/services/staking/staking.service';
 import { stringToFelt252 } from 'src/contract/utils';
 import { Cron } from '@nestjs/schedule';
-import { ClaimCryptoRewardsDto, CreateCryptoStakeDto, UnstakeCryptoDto } from './dto';
+import {
+  ClaimCryptoRewardsDto,
+  CreateCryptoStakeDto,
+  UnstakeCryptoDto,
+} from './dto';
 
 @Injectable()
 export class CryptoStakingService {
@@ -15,7 +19,7 @@ export class CryptoStakingService {
     private readonly prisma: PrismaService,
     private readonly contract: StakingContractService,
   ) {}
-  
+
   async stakeCrypto(userId: string, dto: CreateCryptoStakeDto) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -115,7 +119,8 @@ export class CryptoStakingService {
           ],
         };
 
-        const { transactionHash, receipt } = await this.contract.executeUserStakingTransaction(userId, [call]);
+        const { transactionHash, receipt } =
+          await this.contract.executeUserStakingTransaction(userId, [call]);
         const onChainStakeId = this.getStakeIdFromEvents(receipt.events);
 
         // 4d. Update stake with transaction hash
@@ -193,7 +198,8 @@ export class CryptoStakingService {
         calldata: [stringToFelt252(dto.tokenSymbol), stake.onChainStakeId || 0],
       };
 
-      const { transactionHash } = await this.contract.executeUserStakingTransaction(userId, [call]);
+      const { transactionHash } =
+        await this.contract.executeUserStakingTransaction(userId, [call]);
 
       await tx.cryptoStake.update({
         where: { id: stake.id },
@@ -267,7 +273,8 @@ export class CryptoStakingService {
         calldata: [stringToFelt252(dto.tokenSymbol), stake.onChainStakeId || 0],
       };
 
-      const { transactionHash } = await this.contract.executeUserStakingTransaction(userId, [call]);
+      const { transactionHash } =
+        await this.contract.executeUserStakingTransaction(userId, [call]);
 
       await tx.cryptoStake.update({
         where: { id: stake.id },
@@ -330,7 +337,8 @@ export class CryptoStakingService {
         calldata: [stringToFelt252(dto.tokenSymbol), stake.onChainStakeId || 0],
       };
 
-      const { transactionHash } = await this.contract.executeUserStakingTransaction(userId, [call]);
+      const { transactionHash } =
+        await this.contract.executeUserStakingTransaction(userId, [call]);
 
       await tx.cryptoStake.update({
         where: { id: stake.id },
@@ -431,7 +439,6 @@ export class CryptoStakingService {
       totalStakers: pool.totalStakers,
     }));
   }
-
 
   //
   // HELPER FUNCTIONS

@@ -5,31 +5,6 @@ import { StakingContractService } from 'src/contract/services/staking/staking.se
 export class StakingController {
     constructor(private readonly stakingService: StakingContractService) { }
 
-    @Get('pool/:tokenSymbol')
-    getPool(@Param('tokenSymbol') tokenSymbol: string) {
-        return this.stakingService.getStakingPool(tokenSymbol);
-    }
-
-    @Get('user/:userAddress/stakes/:tokenSymbol')
-    getUserStakes(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
-        return this.stakingService.getStakePosition(userAddress, tokenSymbol, stakeId);
-    }
-
-    @Get('calculate-rewards/:userAddress/:tokenSymbol/:stakeId')
-    calculateRewards(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
-        return this.stakingService.calculateRewards(userAddress, tokenSymbol, stakeId);
-    }
-
-    @Get('supported-tokens')
-    getSupportedTokens() {
-        return this.stakingService.getSupportedTokens();
-    }
-
-    @Get('version')
-    getVersion() {
-        return this.stakingService.getVersion();
-    }
-
     @Post('create-staking-pool')
     createStakingPool(@Body() body: any) {
         return this.stakingService.createStakingPool(
@@ -68,7 +43,28 @@ export class StakingController {
             body.userId,
             body.currency,
             body.stakeId,
+            body.rewards,
         );
+    }
+
+    @Post('update-pool-apy')
+    updatePoolApy(@Body() body: any) {
+        return this.stakingService.updatePoolApy(body.tokenSymbol, body.baseApyBps, body.bonusApyBps);
+    }
+
+    @Post('toggle-pool')
+    togglePool(@Body() body: any) {
+        return this.stakingService.togglePool(body.tokenSymbol);
+    }
+
+    @Post('pause')
+    pause() {
+        return this.stakingService.pause();
+    }
+
+    @Post('unpause')
+    unpause() {
+        return this.stakingService.unpause();
     }
 
     @Post('update-balance-merkle-root')
@@ -87,4 +83,40 @@ export class StakingController {
             body.ipfsHash,
         );
     }
+
+    @Post('upgrade')
+    upgrade(@Body() body: any) {
+        return this.stakingService.upgradeContract(body.classHash);
+    }
+
+    @Get('pool/:tokenSymbol')
+    getPool(@Param('tokenSymbol') tokenSymbol: string) {
+        return this.stakingService.getStakingPool(tokenSymbol);
+    }
+
+    @Get('user/:userAddress/stakes/:tokenSymbol')
+    getUserStakes(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
+        return this.stakingService.getStakePosition(userAddress, tokenSymbol, stakeId);
+    }
+
+    @Get('calculate-rewards/:userAddress/:tokenSymbol/:stakeId')
+    calculateRewards(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
+        return this.stakingService.calculateRewards(userAddress, tokenSymbol, stakeId);
+    }
+
+    @Get('pools')
+    getAllPools() {
+        return this.stakingService.getAllPools();
+    }
+
+    @Get('user/:userAddress/stake-count/:tokenSymbol')
+    getUserStakeCount(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string) {
+        return this.stakingService.getUserStakeCount(userAddress, tokenSymbol);
+    }
+
+    @Get('version')
+    getVersion() {
+        return this.stakingService.getVersion();
+    }
+
 }

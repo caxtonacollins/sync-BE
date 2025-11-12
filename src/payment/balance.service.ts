@@ -10,6 +10,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 import Decimal from 'decimal.js';
 import { Prisma } from '@prisma/client';
+import {
+  parseAmount,
+  addAmounts,
+  subtractAmounts,
+  validateNonNegativeAmount,
+  toApiString,
+  getCurrencyDecimals,
+} from '../../libs/currency.utils';
 
 @Injectable()
 export class BalanceService {
@@ -46,30 +54,31 @@ export class BalanceService {
         throw new ConflictException('Duplicate transaction');
       }
 
-      // Use Decimal.js for precise calculations
+      // Use fintech-standard currency utilities for precise calculations
       const currentBalance = new Decimal(account.balance.toString());
-      const creditAmount = new Decimal(amount.toString());
-      const newBalance = currentBalance.plus(creditAmount);
+      const creditAmount = parseAmount(amount, account.currency);
+      const newBalance = addAmounts(currentBalance, creditAmount, account.currency);
 
-      // Update account balance
+      // Update account balance using Decimal
       await tx.fiatAccount.update({
         where: { id: account.id },
         data: {
-          balance: newBalance.toNumber(),
-          availableBalance: newBalance.toNumber(),
+          balance: newBalance,
+          availableBalance: newBalance,
         },
       });
 
-      // Create transaction record
+      // Create transaction record using Decimal
+      const zeroAmount = new Decimal(0);
       const transaction = await tx.transaction.create({
         data: {
           userId: account.userId,
           type: 'credit',
           status: 'completed',
-          amount: amount,
+          amount: creditAmount,
           currency: account.currency,
-          fee: 0,
-          netAmount: amount,
+          fee: zeroAmount,
+          netAmount: creditAmount,
           reference,
           fiatAccountId: account.id,
           metadata,
@@ -124,36 +133,37 @@ export class BalanceService {
         throw new ConflictException('Duplicate transaction');
       }
 
-      // Use Decimal.js for precise calculations
+      // Use fintech-standard currency utilities for precise calculations
       const currentBalance = new Decimal(account.balance.toString());
-      const debitAmount = new Decimal(amount.toString());
+      const debitAmount = parseAmount(amount, account.currency);
 
       // Check for sufficient balance
       if (currentBalance.lessThan(debitAmount)) {
         throw new BadRequestException('Insufficient balance');
       }
 
-      const newBalance = currentBalance.minus(debitAmount);
+      const newBalance = subtractAmounts(currentBalance, debitAmount, account.currency);
 
-      // Update account balance
+      // Update account balance using Decimal
       await tx.fiatAccount.update({
         where: { id: account.id },
         data: {
-          balance: newBalance.toNumber(),
-          availableBalance: newBalance.toNumber(),
+          balance: newBalance,
+          availableBalance: newBalance,
         },
       });
 
-      // Create transaction record
+      // Create transaction record using Decimal
+      const zeroAmount = new Decimal(0);
       const transaction = await tx.transaction.create({
         data: {
           userId: account.userId,
           type: 'debit',
           status: 'completed',
-          amount: amount,
+          amount: debitAmount,
           currency: account.currency,
-          fee: 0,
-          netAmount: amount,
+          fee: zeroAmount,
+          netAmount: debitAmount,
           reference,
           fiatAccountId: account.id,
           metadata,
@@ -184,8 +194,8 @@ export class BalanceService {
   }
 
   async getBalance(accountNumber: string): Promise<{
-    balance: number;
-    availableBalance: number;
+    balance: string;
+    availableBalance: string;
     currency: string;
   }> {
     const account = await this.prisma.fiatAccount.findFirst({
@@ -201,9 +211,11 @@ export class BalanceService {
       throw new BadRequestException('Account not found');
     }
 
+    const availableBalance = account.availableBalance ?? account.balance;
+
     return {
-      balance: account.balance,
-      availableBalance: account.availableBalance ?? account.balance,
+      balance: toApiString(account.balance, account.currency),
+      availableBalance: toApiString(availableBalance, account.currency),
       currency: account.currency,
     };
   }
@@ -314,16 +326,27 @@ export class BalanceService {
     }
 
     // Update local balance if there's a discrepancy
-    if (flutterwaveBalance.available_balance !== account.balance) {
+    const flutterwaveBalanceDecimal = parseAmount(
+      flutterwaveBalance.available_balance,
+      account.currency,
+    );
+    const currentBalance = new Decimal(account.balance.toString());
+
+    if (!currentBalance.equals(flutterwaveBalanceDecimal)) {
       await this.prisma.fiatAccount.update({
         where: { id: account.id },
         data: {
-          balance: flutterwaveBalance.available_balance,
-          availableBalance: flutterwaveBalance.available_balance,
+          balance: flutterwaveBalanceDecimal,
+          availableBalance: flutterwaveBalanceDecimal,
         },
       });
 
       // Log the reconciliation
+      const difference = subtractAmounts(
+        flutterwaveBalanceDecimal,
+        currentBalance,
+        account.currency,
+      );
       await this.prisma.auditLog.create({
         data: {
           userId: account.userId,
@@ -331,9 +354,9 @@ export class BalanceService {
           entityType: 'FIAT_ACCOUNT',
           entityId: account.id,
           metadata: {
-            previousBalance: account.balance,
-            newBalance: flutterwaveBalance.available_balance,
-            difference: flutterwaveBalance.available_balance - account.balance,
+            previousBalance: toApiString(currentBalance, account.currency),
+            newBalance: toApiString(flutterwaveBalanceDecimal, account.currency),
+            difference: toApiString(difference, account.currency),
           },
         },
       });

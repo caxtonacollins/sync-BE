@@ -7,6 +7,15 @@ import { ExchangeRateService } from '../exchange-rate/exchange-rate.service';
 import { QueueWithdrawalDto } from './dto/queue-withdrawal.dto';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 import { AccountContractService } from 'src/contract/services/account/account.service';
+import Decimal from 'decimal.js';
+import {
+  toApiString,
+  parseAmount,
+  multiplyAmount,
+  addAmounts,
+  formatAmount,
+} from '../../libs/currency.utils';
+import { formatUnifiedWalletBalance } from '../../libs/api-response.utils';
 
 export interface WalletSummaryResponse {
   totalBalanceNGN: number;
@@ -25,21 +34,21 @@ export interface UnifiedWalletBalance {
   userId: string;
   fiatBalances: {
     currency: string;
-    balance: number;
+    balance: string;
     accountId: string;
     provider: string;
     isDefault: boolean;
   }[];
   cryptoBalances: {
     currency: string;
-    balance: number;
+    balance: string;
     walletId: string;
     network: string;
     address: string;
     isDefault: boolean;
   }[];
-  totalValueUSD: number;
-  totalValueNGN: number;
+  totalValueUSD: string;
+  totalValueNGN: string;
 }
 
 export interface WalletTransaction {
@@ -169,18 +178,15 @@ export class WalletService {
         throw new NotFoundException('User not found');
       }
 
-      // Get fiat balances
+      // Get fiat balances - using Decimal for precision
       const fiatBalances = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/await-thenable
         user.fiatAccounts.map((account) => {
-          const balance = account.balance;
-
-          // Convert from kobo to naira for NGN accounts
-          const convertedBalance = account.currency === 'NGN' ? balance / 100 : balance;
+          const balance = new Decimal(account.balance.toString());
 
           return {
             currency: account.currency,
-            balance: convertedBalance,
+            balance: toApiString(balance, account.currency), // Return as string for precision
             accountId: account.id,
             accountNumber: account.accountNumber,
             bankName: account.bankName,
@@ -200,14 +206,20 @@ export class WalletService {
           );
 
           // Map token balances to the format expected by the frontend
-          return tokenBalances.map((tokenBalance) => ({
-            currency: tokenBalance.symbol,
-            balance: Number(tokenBalance.formatted) || 0,
-            walletId: wallet.id,
-            network: wallet.network,
-            address: wallet.address,
-            isDefault: wallet.isDefault,
-          }));
+          return tokenBalances.map((tokenBalance) => {
+            const balance = parseAmount(
+              tokenBalance.formatted || '0',
+              tokenBalance.symbol,
+            );
+            return {
+              currency: tokenBalance.symbol,
+              balance: toApiString(balance, tokenBalance.symbol), // Return as string for precision
+              walletId: wallet.id,
+              network: wallet.network,
+              address: wallet.address,
+              isDefault: wallet.isDefault,
+            };
+          });
         }),
       );
 
@@ -217,49 +229,55 @@ export class WalletService {
       // Get real-time exchange rates
       const exchangeRates = await this.exchangeRateService.getExchangeRates();
 
-      // Create a map for quick rate lookups
-      const rateMap = new Map();
+      // Create a map for quick rate lookups using Decimal
+      const rateMap = new Map<string, Decimal>();
       exchangeRates.forEach((rate) => {
         const key = `${rate.fiatSymbol}_${rate.tokenSymbol}`;
-        rateMap.set(key, rate.rate);
+        rateMap.set(key, new Decimal(rate.rate.toString()));
       });
 
-      let totalValueNGN = 0;
+      let totalValueNGN = new Decimal(0);
 
-      // Calculate fiat balances in NGN
+      // Calculate fiat balances in NGN using Decimal for precision
       fiatBalances.forEach(({ currency, balance }) => {
+        const balanceDecimal = parseAmount(balance, currency);
         if (currency === 'NGN') {
-          totalValueNGN += balance;
+          totalValueNGN = addAmounts(totalValueNGN, balanceDecimal, 'NGN');
         } else if (currency === 'USD') {
           const usdToNgnRate = rateMap.get('NGN_USD');
           if (usdToNgnRate) {
-            totalValueNGN += balance * usdToNgnRate;
+            const valueInNgn = multiplyAmount(balanceDecimal, usdToNgnRate, 'NGN');
+            totalValueNGN = addAmounts(totalValueNGN, valueInNgn, 'NGN');
           }
         }
       });
 
-      // Calculate crypto balances in NGN
+      // Calculate crypto balances in NGN using Decimal for precision
       flattenedCryptoBalances.forEach(({ currency, balance }) => {
+        const balanceDecimal = parseAmount(balance, currency);
         const tokenToUsdRate = rateMap.get(`USD_${currency}`);
         const usdToNgnRate = rateMap.get('NGN_USD');
 
         if (tokenToUsdRate && usdToNgnRate) {
           // Convert crypto to USD, then USD to NGN
-          const valueInUsd = Number(balance) * tokenToUsdRate;
-          const valueInNgn = valueInUsd * usdToNgnRate;
-          totalValueNGN += valueInNgn;
+          const valueInUsd = multiplyAmount(balanceDecimal, tokenToUsdRate, 'USD');
+          const valueInNgn = multiplyAmount(valueInUsd, usdToNgnRate, 'NGN');
+          totalValueNGN = addAmounts(totalValueNGN, valueInNgn, 'NGN');
         }
       });
 
-      // Calculate total in USD
-      const totalValueUSD = totalValueNGN / rateMap.get('NGN_USD');
+      // Calculate total in USD using Decimal
+      const usdToNgnRate = rateMap.get('NGN_USD');
+      const totalValueUSD = usdToNgnRate && !usdToNgnRate.isZero()
+        ? totalValueNGN.div(usdToNgnRate)
+        : new Decimal(0);
 
       return {
         userId,
         fiatBalances,
         cryptoBalances: flattenedCryptoBalances,
-        totalValueUSD,
-        totalValueNGN,
+        totalValueUSD: toApiString(totalValueUSD, 'USD'),
+        totalValueNGN: toApiString(totalValueNGN, 'NGN'),
       };
     } catch (error) {
       this.logger.error(
@@ -380,7 +398,7 @@ export class WalletService {
         id: tx.id,
         type: tx.fiatAccount ? 'fiat' : 'crypto',
         currency: tx.currency,
-        amount: tx.amount,
+        amount: new Decimal(tx.amount).toNumber(),
         status: tx.status,
         reference: tx.reference,
         createdAt: tx.createdAt,
@@ -455,8 +473,8 @@ export class WalletService {
       const transactionFeeDiscount = 0;
 
       return {
-        totalBalanceNGN: balance.totalValueNGN,
-        totalBalanceUSD: balance.totalValueUSD,
+        totalBalanceNGN: Number(balance.totalValueNGN),
+        totalBalanceUSD: Number(balance.totalValueUSD),
         syncTokenBalance: tokenBalances.SYNC,
         ethTokenBalance: tokenBalances.ETH,
         strkTokenBalance: tokenBalances.STRK,

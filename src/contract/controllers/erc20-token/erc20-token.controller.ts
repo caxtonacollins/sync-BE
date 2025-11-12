@@ -7,7 +7,7 @@ export class Erc20TokenController {
     constructor(private readonly contractService: TokenContractService) { }
 
         @Post('mint-token')
-        async mintToken(@Body() mintTokenDto: MintTokenDto) {
+        async mintToken(@Body() mintTokenDto: MintTokenDto) {   
             return await this.contractService.mintToken(
                 mintTokenDto.receiverAddress,
                 mintTokenDto.amount,

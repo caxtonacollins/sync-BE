@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseInterceptors } from '@nestjs/common';
-import { CreateAccountDto, SetLiquidityContractAddressDto } from 'src/contract/controllers/dto';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { AccountContractService } from 'src/contract/services/account/account.service';
+import { CreateAccountDto } from 'src/contract/controllers/dto';
 
 @UseInterceptors(CacheInterceptor)
 @Controller('account')

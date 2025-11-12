@@ -3,6 +3,7 @@ import {
     Account,
     RpcProvider,
     Contract,
+    uint256,
 } from 'starknet';
 import { connectToStarknet, writeAbiToFile, getClassAt } from '../../utils';
 import { KeyManagementService } from 'src/wallet/key-management.service';
@@ -54,11 +55,9 @@ export class StakingContractService {
     }
 
     // WRITE methods
-
     async executeUserStakingTransaction(userId: string, calls: any[]) {
         return this.keyManagementService.executeTransaction(userId, calls);
     }
-
     async createStakingPool(
         tokenSymbol: string,
         tokenAddress: string,
@@ -76,9 +75,49 @@ export class StakingContractService {
                 tokenAddress,
                 baseApyBps,
                 bonusApyBps,
-                minStakeAmount,
-                maxStakeAmount,
+                uint256.bnToUint256(BigInt(minStakeAmount)),
+                uint256.bnToUint256(BigInt(maxStakeAmount)),
             ],
+        };
+        return await account.execute(call);
+    }
+
+    async updatePoolApy(tokenSymbol: string, baseApyBps: number, bonusApyBps: number) {
+        const account = this.getDeployerWallet();
+        const call = {
+            contractAddress: this.stakingContractAddress,
+            entrypoint: 'update_pool_apy',
+            calldata: [tokenSymbol, baseApyBps, bonusApyBps],
+        };
+        return await account.execute(call);
+    }
+
+    async togglePool(tokenSymbol: string) {
+        const account = this.getDeployerWallet();
+        const call = {
+            contractAddress: this.stakingContractAddress,
+            entrypoint: 'toggle_pool',
+            calldata: [tokenSymbol],
+        };
+        return await account.execute(call);
+    }
+
+    async pause() {
+        const account = this.getDeployerWallet();
+        const call = {
+            contractAddress: this.stakingContractAddress,
+            entrypoint: 'pause',
+            calldata: [],
+        };
+        return await account.execute(call);
+    }
+
+    async unpause() {
+        const account = this.getDeployerWallet();
+        const call = {
+            contractAddress: this.stakingContractAddress,
+            entrypoint: 'unpause',
+            calldata: [],
         };
         return await account.execute(call);
     }
@@ -101,11 +140,11 @@ export class StakingContractService {
         return this.keyManagementService.executeTransaction(userId, [call]);
     }
 
-    async recordFiatRewardClaim(userId: string, currency: string, stakeId: string) {
+    async recordFiatRewardClaim(userId: string, currency: string, stakeId: string, rewards: string) {
         const call = {
             contractAddress: this.stakingContractAddress,
             entrypoint: 'record_fiat_reward_claim',
-            calldata: [currency, stakeId],
+            calldata: [userId, currency, stakeId, uint256.bnToUint256(BigInt(rewards))],
         };
         return this.keyManagementService.executeTransaction(userId, [call]);
     }
@@ -130,6 +169,16 @@ export class StakingContractService {
         return await account.execute(call);
     }
 
+    async upgradeContract(classHash: string) {
+        const account = this.getDeployerWallet();
+        const call = {
+            contractAddress: this.stakingContractAddress,
+            entrypoint: 'upgrade',
+            calldata: [classHash],
+        };
+        return await account.execute(call);
+    }
+
     // READ methods (use the provider)
 
     async getStakingPool(tokenSymbol: string) {
@@ -148,8 +197,12 @@ export class StakingContractService {
         return await this.contract.get_user_total_staked(userAddress, tokenSymbol);
     }
 
-    async getSupportedTokens() {
-        return await this.contract.get_supported_tokens();
+    async getUserStakeCount(userAddress: string, tokenSymbol: string) {
+        return await this.contract.get_user_stake_count(userAddress, tokenSymbol);
+    }
+
+    async getAllPools() {
+        return await this.contract.get_all_pools();
     }
 
     async getVersion() {

@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import Decimal from 'decimal.js';
 import { Prisma } from '@prisma/client';
 import { WalletService } from '../wallet/wallet.service';
 import { TransactionService } from '../transaction/transaction.service';
@@ -266,12 +267,12 @@ export class SwapOrderService {
  
       const payoutResult = await this.paymentService.initiatePayout(
         fiatAccount,
-        swapOrder.toAmount || 0,
+        Number(new Decimal(swapOrder.toAmount || 0).toNumber()),
         swapOrder.toCurrency,
       );
 
       this.logger.log(
-        `Payout initiated successfully for swap ${swapOrderId}. Reference: ${payoutResult.reference}`,
+        `Payout initiated successfully for swap ${swapOrderId}. Reference: ${payoutResult.reference}`
       );
 
       // TODO: Store payout reference in a separate PayoutRecord table if needed

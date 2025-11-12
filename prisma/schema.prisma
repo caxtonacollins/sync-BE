@@ -132,9 +132,9 @@ model FiatAccount {
   accountName          String
   bankName             String?
   bankCode             String?
-  balance              Float     @default(0)
-  availableBalance     Float?    @default(0)
-  ledgerBalance        Float?    @default(0)
+  balance              Decimal   @default(0) @db.Decimal(20, 2)
+  availableBalance     Decimal?  @default(0) @db.Decimal(20, 2)
+  ledgerBalance        Decimal?  @default(0) @db.Decimal(20, 2)
   currency             String    @default("NGN")
   isDefault            Boolean   @default(false)
   isActive             Boolean   @default(true)
@@ -178,9 +178,9 @@ model CryptoBalance {
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   currency  String // 'STRK', 'ETH', 'USDC', 'USDT', etc.
   network   String // 'starknet', 'ethereum', etc.
-  available Decimal @default(0) @db.Decimal(30, 18) // Available balance
-  staked    Decimal @default(0) @db.Decimal(30, 18) // Locked in staking
-  pending   Decimal @default(0) @db.Decimal(30, 18) // Pending transactions
+  available Decimal @default(0) @db.Decimal(38, 18) // Available balance
+  staked    Decimal @default(0) @db.Decimal(38, 18) // Locked in staking
+  pending   Decimal @default(0) @db.Decimal(38, 18) // Pending transactions
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -198,9 +198,9 @@ model CryptoStakingPool {
   network        String  @default("starknet")
   baseApyBps     Int // Base APY in basis points (e.g., 800 = 8%)
   bonusApyBps    Int // Maximum bonus APY (e.g., 400 = 4%)
-  minStakeAmount Decimal @db.Decimal(30, 18)
-  maxStakeAmount Decimal @db.Decimal(30, 18)
-  totalStaked    Decimal @default(0) @db.Decimal(30, 18)
+  minStakeAmount Decimal @db.Decimal(38, 18)
+  maxStakeAmount Decimal @db.Decimal(38, 18)
+  totalStaked    Decimal @default(0) @db.Decimal(38, 18)
   totalStakers   Int     @default(0)
   isActive       Boolean @default(true)
 
@@ -224,7 +224,7 @@ model CryptoStake {
   pool   CryptoStakingPool @relation(fields: [poolId], references: [id])
 
   tokenSymbol         String
-  amount              Decimal @db.Decimal(30, 18)
+  amount              Decimal @db.Decimal(38, 18)
   lockDays            Int
   lockDurationSeconds BigInt
 
@@ -233,7 +233,7 @@ model CryptoStake {
   unstakedAt      DateTime?
   lastRewardClaim DateTime  @default(now())
 
-  rewardsClaimed Decimal     @default(0) @db.Decimal(30, 18)
+  rewardsClaimed Decimal     @default(0) @db.Decimal(38, 18)
   status         StakeStatus @default(ACTIVE)
 
   // APY at time of staking
@@ -412,10 +412,10 @@ model Transaction {
   user            User      @relation(fields: [userId], references: [id])
   type            String // "deposit", "withdrawal", "swap", "transfer"
   status          String // "pending", "completed", "failed", "reversed"
-  amount          Float
+  amount          Decimal   @db.Decimal(38, 18) // Supports both fiat (2 decimals) and crypto (18 decimals)
   currency        String
-  fee             Float     @default(0)
-  netAmount       Float
+  fee             Decimal   @default(0) @db.Decimal(38, 18)
+  netAmount       Decimal   @db.Decimal(38, 18)
   reference       String    @unique
   metadata        Json?
   createdAt       DateTime  @default(now())
@@ -444,11 +444,11 @@ model SwapOrder {
   user            User      @relation(fields: [userId], references: [id])
   fromCurrency    String
   toCurrency      String
-  fromAmount      Float
-  toAmount        Float?
-  rate            Float?
+  fromAmount      Decimal   @db.Decimal(38, 18)
+  toAmount        Decimal?  @db.Decimal(38, 18)
+  rate            Decimal?  @db.Decimal(20, 8) // Exchange rate precision: 8 decimals
   swapType        SwapType?
-  fee             Float?
+  fee             Decimal?  @db.Decimal(38, 18)
   status          String    @default("pending") // "pending", "completed", "failed", "partial"
   reference       String    @unique
   createdAt       DateTime  @default(now())
@@ -545,7 +545,7 @@ model LiquidityPool {
   id          String   @id @default(uuid())
   symbol      String   @unique // e.g., 'NGN', 'USDC'
   type        String // 'fiat' or 'token'
-  balance     Float    @default(0)
+  balance     Decimal  @default(0) @db.Decimal(38, 18)
   isActive    Boolean  @default(true)
   lastUpdated DateTime @updatedAt
   createdAt   DateTime @default(now())
@@ -557,7 +557,7 @@ model PoolHistory {
   id              String        @id @default(uuid())
   poolId          String
   pool            LiquidityPool @relation(fields: [poolId], references: [id])
-  amount          Float
+  amount          Decimal       @db.Decimal(38, 18)
   type            String // 'add' or 'remove'
   transactionHash String
   blockNumber     String
@@ -571,7 +571,7 @@ model ExchangeRate {
   id          String   @id @default(uuid())
   fiatSymbol  String
   tokenSymbol String
-  rate        Float
+  rate        Decimal  @db.Decimal(20, 8) // Fintech standard: 8 decimal places for exchange rates
   lastUpdated DateTime @updatedAt
   createdAt   DateTime @default(now())
 

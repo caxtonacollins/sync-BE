@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { TxFilterDto } from './dto/tx-filter.dto';
 import { UpdateTxDto } from './dto/update-tx.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import Decimal from 'decimal.js';
 
 @Injectable()
 export class TransactionService {
@@ -158,14 +159,14 @@ export class TransactionService {
     }
 
     // TODO: Implement real balance check with a payment provider
-    if (senderAccount.balance < amount) {
+    if (new Decimal(senderAccount.balance).lessThan(new Decimal(amount))) {
       throw new BadRequestException('Insufficient funds.');
     }
 
     const reference = `FIATTRANSFER_${Date.now()}`;
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+    return await this.prisma.$transaction(async (tx) => {
         // 1. Debit sender's account
         const debitTx = await tx.transaction.create({
           data: {

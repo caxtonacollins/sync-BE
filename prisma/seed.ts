@@ -4,6 +4,7 @@ import {
   AccountStatus,
   VerificationStatus,
 } from '@prisma/client';
+import Decimal from 'decimal.js';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -418,7 +419,7 @@ async function migrateExistingUsers() {
     for (const currency of currencies) {
       const totalBalance = user.fiatAccounts
         .filter((acc) => acc.currency === currency)
-        .reduce((sum, acc) => sum + acc.balance, 0);
+        .reduce((sum, acc) => sum.plus(acc.balance), new Decimal(0));
 
       await prisma.fiatBalance.upsert({
         where: {

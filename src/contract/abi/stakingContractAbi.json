@@ -1,0 +1,916 @@
+[
+  {
+    "type": "impl",
+    "name": "SyncStakingImpl",
+    "interface_name": "isyncpayment::interfaces::istaking::ISyncStaking"
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "isyncpayment::interfaces::istaking::StakingPool",
+    "members": [
+      {
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "name": "token_address",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "base_apy_bps",
+        "type": "core::integer::u16"
+      },
+      {
+        "name": "bonus_apy_bps",
+        "type": "core::integer::u16"
+      },
+      {
+        "name": "total_staked",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "total_stakers",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "min_stake_amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "max_stake_amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "is_active",
+        "type": "core::bool"
+      },
+      {
+        "name": "created_at",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "last_updated",
+        "type": "core::integer::u64"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "isyncpayment::interfaces::istaking::StakePosition",
+    "members": [
+      {
+        "name": "stake_id",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "token_symbol",
+        "type": "core::felt252"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "staked_at",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "unlock_at",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "last_reward_claim",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "accumulated_rewards",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "is_active",
+        "type": "core::bool"
+      },
+      {
+        "name": "lock_duration",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "effective_apy_bps",
+        "type": "core::integer::u16"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "isyncpayment::interfaces::istaking::ISyncStaking",
+    "items": [
+      {
+        "type": "function",
+        "name": "create_staking_pool",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "token_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "base_apy_bps",
+            "type": "core::integer::u16"
+          },
+          {
+            "name": "bonus_apy_bps",
+            "type": "core::integer::u16"
+          },
+          {
+            "name": "min_stake_amount",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "max_stake_amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_pool_apy",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "base_apy_bps",
+            "type": "core::integer::u16"
+          },
+          {
+            "name": "bonus_apy_bps",
+            "type": "core::integer::u16"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "toggle_pool",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_pool",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "isyncpayment::interfaces::istaking::StakingPool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_all_pools",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "stake",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "lock_duration",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "unstake",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "stake_id",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "claim_rewards",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "stake_id",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "emergency_unstake",
+        "inputs": [
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "stake_id",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "calculate_rewards",
+        "inputs": [
+          {
+            "name": "user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "stake_id",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_stake",
+        "inputs": [
+          {
+            "name": "user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          },
+          {
+            "name": "stake_id",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "isyncpayment::interfaces::istaking::StakePosition"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_user_total_staked",
+        "inputs": [
+          {
+            "name": "user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_user_stake_count",
+        "inputs": [
+          {
+            "name": "user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "token_symbol",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u64"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "pause",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "unpause",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "UpgradeableImpl",
+    "interface_name": "openzeppelin_upgrades::interface::IUpgradeable"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_upgrades::interface::IUpgradeable",
+    "items": [
+      {
+        "type": "function",
+        "name": "upgrade",
+        "inputs": [
+          {
+            "name": "new_class_hash",
+            "type": "core::starknet::class_hash::ClassHash"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableMixinImpl",
+    "interface_name": "openzeppelin_access::ownable::interface::OwnableABI"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_access::ownable::interface::OwnableABI",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "transferOwnership",
+        "inputs": [
+          {
+            "name": "newOwner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounceOwnership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "PausableImpl",
+    "interface_name": "openzeppelin_security::interface::IPausable"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_security::interface::IPausable",
+    "items": [
+      {
+        "type": "function",
+        "name": "is_paused",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "liquidity_bridge",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "account_factory",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "reward_treasury",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "emergency_withdrawal_fee_bps",
+        "type": "core::integer::u16"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnershipTransferStarted",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_security::pausable::PausableComponent::Paused",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "account",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_security::pausable::PausableComponent::Unpaused",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "account",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_security::pausable::PausableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Paused",
+        "type": "openzeppelin_security::pausable::PausableComponent::Paused",
+        "kind": "nested"
+      },
+      {
+        "name": "Unpaused",
+        "type": "openzeppelin_security::pausable::PausableComponent::Unpaused",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_security::reentrancyguard::ReentrancyGuardComponent::Event",
+    "kind": "enum",
+    "variants": []
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "class_hash",
+        "type": "core::starknet::class_hash::ClassHash",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Upgraded",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::events::stakingEvents::PoolCreated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "token_symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "token_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "base_apy_bps",
+        "type": "core::integer::u16",
+        "kind": "data"
+      },
+      {
+        "name": "min_stake_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::events::stakingEvents::PoolUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "token_symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "base_apy_bps",
+        "type": "core::integer::u16",
+        "kind": "data"
+      },
+      {
+        "name": "bonus_apy_bps",
+        "type": "core::integer::u16",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::events::stakingEvents::Staked",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "token_symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "stake_id",
+        "type": "core::integer::u64",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "lock_duration",
+        "type": "core::integer::u64",
+        "kind": "data"
+      },
+      {
+        "name": "unlock_at",
+        "type": "core::integer::u64",
+        "kind": "data"
+      },
+      {
+        "name": "effective_apy_bps",
+        "type": "core::integer::u16",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::events::stakingEvents::Unstaked",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "token_symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "stake_id",
+        "type": "core::integer::u64",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "rewards",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::events::stakingEvents::RewardsClaimed",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "token_symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::events::stakingEvents::EmergencyWithdrawal",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "token_symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "stake_id",
+        "type": "core::integer::u64",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "penalty",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::events::stakingEvents::RewardsDeposited",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "token_symbol",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "depositor",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "isyncpayment::staking::staking::SyncStaking::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnableEvent",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "PausableEvent",
+        "type": "openzeppelin_security::pausable::PausableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "ReentrancyEvent",
+        "type": "openzeppelin_security::reentrancyguard::ReentrancyGuardComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "UpgradeableEvent",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "PoolCreated",
+        "type": "isyncpayment::events::stakingEvents::PoolCreated",
+        "kind": "nested"
+      },
+      {
+        "name": "PoolUpdated",
+        "type": "isyncpayment::events::stakingEvents::PoolUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "Staked",
+        "type": "isyncpayment::events::stakingEvents::Staked",
+        "kind": "nested"
+      },
+      {
+        "name": "Unstaked",
+        "type": "isyncpayment::events::stakingEvents::Unstaked",
+        "kind": "nested"
+      },
+      {
+        "name": "RewardsClaimed",
+        "type": "isyncpayment::events::stakingEvents::RewardsClaimed",
+        "kind": "nested"
+      },
+      {
+        "name": "EmergencyWithdrawal",
+        "type": "isyncpayment::events::stakingEvents::EmergencyWithdrawal",
+        "kind": "nested"
+      },
+      {
+        "name": "RewardsDeposited",
+        "type": "isyncpayment::events::stakingEvents::RewardsDeposited",
+        "kind": "nested"
+      }
+    ]
+  }
+]

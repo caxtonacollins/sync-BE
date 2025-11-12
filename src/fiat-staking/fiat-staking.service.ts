@@ -320,6 +320,7 @@ export class FiatStakingService {
         userId,
         stringToFelt252(dto.currency),
         stake.id,
+        rewards.toString(),
       );
 
       // 4. Create transaction record
