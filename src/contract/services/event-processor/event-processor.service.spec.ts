@@ -9,7 +9,9 @@ describe('EventProcessorService', () => {
       providers: [LiquidityEventProcessorService],
     }).compile();
 
-    service = module.get<LiquidityEventProcessorService>(LiquidityEventProcessorService);
+    service = module.get<LiquidityEventProcessorService>(
+      LiquidityEventProcessorService,
+    );
   });
 
   it('should be defined', () => {

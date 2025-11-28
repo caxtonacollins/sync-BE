@@ -76,10 +76,10 @@ export class MonnifyService {
       return { accounts };
     } catch (error) {
       if (error.response) {
-        console.error("Monnify Error:", error.response.data);
+        console.error('Monnify Error:', error.response.data);
         throw new Error(error.response.data.responseMessage);
       } else {
-        console.error("Unexpected Error:", error.message);
+        console.error('Unexpected Error:', error.message);
       }
     }
   }

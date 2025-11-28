@@ -1,4 +1,14 @@
-import { Controller, Post, Body, UseGuards, Get, Query, Param, Delete, Put } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Get,
+  Query,
+  Param,
+  Delete,
+  Put,
+} from '@nestjs/common';
 import { FlutterwaveService } from './flutterwave.service';
 import { User } from '@prisma/client';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -23,14 +33,22 @@ export class FlutterwaveController {
   }
 
   @Get('get-exchange-rate')
-  async getExchangeRate(@Query('sourceCurrency') sourceCurrency: string, @Query('destinationCurrency') destinationCurrency: string, @Query('amount') amount: number) {
-    return this.flutterwaveService.getExchangeRate(sourceCurrency, destinationCurrency, amount);
+  async getExchangeRate(
+    @Query('sourceCurrency') sourceCurrency: string,
+    @Query('destinationCurrency') destinationCurrency: string,
+    @Query('amount') amount: number,
+  ) {
+    return this.flutterwaveService.getExchangeRate(
+      sourceCurrency,
+      destinationCurrency,
+      amount,
+    );
   }
 
   @Put('virtual-account/:orderRef/bvn')
   async updateBVN(
     @Param('orderRef') orderRef: string,
-    @Body() updateBVNDto: UpdateBVNDto
+    @Body() updateBVNDto: UpdateBVNDto,
   ) {
     return this.flutterwaveService.updateBVN(orderRef, updateBVNDto.bvn);
   }

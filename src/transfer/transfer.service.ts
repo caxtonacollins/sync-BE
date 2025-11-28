@@ -22,28 +22,29 @@ export class TransferService {
   async transferToken(dto: CreateTransferDto, userId: string) {
     this.logger.log(`Initiating token transfer for user ${userId}`);
     const { toAddress, amount, token } = dto;
-    
+
     try {
       // Get the user's wallet address
-      const userWallet = await this.accountContractService.getAccountAddress(userId);
+      const userWallet =
+        await this.accountContractService.getAccountAddress(userId);
       if (!userWallet) {
         throw new Error('User wallet not found');
       }
 
       // Get token address
       const tokenAddress = this.tokenService.getTokenAddress(token);
-      
+
       // Get the token contract instance
       const tokenContract = createNewContractInstance(erc20, tokenAddress);
-      
+
       // Get token decimals for amount conversion
       const decimals = this.tokenService.getTokenDecimals(token);
       const amountInWei = BigInt(Math.floor(amount * Math.pow(10, decimals)));
-      
+
       // Execute the transfer
       const tx = await tokenContract.transfer(
         toAddress,
-        amountInWei.toString()
+        amountInWei.toString(),
       );
 
       // Create a transaction record
@@ -64,7 +65,10 @@ export class TransferService {
 
       return { status: 'processing', transaction };
     } catch (error) {
-      this.logger.error(`Error transferring token: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error transferring token: ${error.message}`,
+        error.stack,
+      );
       throw new Error(`Failed to transfer token: ${error.message}`);
     }
   }

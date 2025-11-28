@@ -1,18 +1,24 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsIn, IsNotEmpty, IsPositive } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsIn,
+  IsNotEmpty,
+  IsPositive,
+} from 'class-validator';
 
 export class CreateCryptoStakeDto {
   @ApiProperty({
     description: 'Symbol of the token to stake',
     enum: ['STRK', 'ETH', 'USDC', 'USDT'],
-    required: true
+    required: true,
   })
   @IsIn(['STRK', 'ETH', 'USDC', 'USDT'])
   tokenSymbol: 'STRK' | 'ETH' | 'USDC' | 'USDT';
 
   @ApiProperty({
     description: 'Amount to stake in token units (e.g., "100.5")',
-    required: true
+    required: true,
   })
   @IsString()
   @IsNotEmpty()
@@ -20,7 +26,7 @@ export class CreateCryptoStakeDto {
 
   @ApiProperty({
     description: 'Number of days to lock the stake',
-    required: true
+    required: true,
   })
   @IsNumber()
   @IsPositive()

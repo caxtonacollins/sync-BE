@@ -31,9 +31,9 @@ export class ExchangeRateService {
 
   async getExchangeRates() {
     const now = Date.now();
-    
+
     // Return in-memory cache if available and not expired
-    if (this.lastCachedRates && (now - this.lastFetchTime < this.CACHE_TTL_MS)) {
+    if (this.lastCachedRates && now - this.lastFetchTime < this.CACHE_TTL_MS) {
       return this.lastCachedRates;
     }
 
@@ -53,11 +53,14 @@ export class ExchangeRateService {
       const [syncRates, fwRates, syncUsdRate] = await Promise.all([
         this.prisma.exchangeRate.findMany(),
         this.flutterwaveService.getExchangeRate('NGN', 'USD', 100),
-        this.contractService.getTokenAmountInUsd(this.tokenContractService.syncTokenAddress),
+        this.contractService.getTokenAmountInUsd(
+          this.tokenContractService.syncTokenAddress,
+        ),
       ]);
 
       const pragmaPairs = ['STRK/USD', 'USDC/USD', 'ETH/USD', 'BTC/USD'];
-      const [strkUsdRate, usdcUsdRate, ethUsdRate, btcUsdRate] = this.pragmaService.getRates(pragmaPairs);
+      const [strkUsdRate, usdcUsdRate, ethUsdRate, btcUsdRate] =
+        this.pragmaService.getRates(pragmaPairs);
 
       // Combine all rates
       const exchangeRates = [
@@ -105,8 +108,9 @@ export class ExchangeRateService {
       this.lastFetchTime = now;
 
       // Update Redis cache in background
-      this.cacheManager.set(this.CACHE_KEY, exchangeRates, this.CACHE_TTL_MS / 1000)
-        .catch(error => console.error('Error writing to cache:', error));
+      this.cacheManager
+        .set(this.CACHE_KEY, exchangeRates, this.CACHE_TTL_MS / 1000)
+        .catch((error) => console.error('Error writing to cache:', error));
 
       return exchangeRates;
     } catch (error) {
@@ -188,17 +192,21 @@ export class ExchangeRateService {
     const rates: Record<string, number> = {};
 
     // Separate crypto and fiat symbols
-    const cryptoSymbols = symbols.filter(s => symbolToCoinGeckoId[s.toLowerCase()]);
-    const fiatSymbols = symbols.filter(s => !symbolToCoinGeckoId[s.toLowerCase()]);
+    const cryptoSymbols = symbols.filter(
+      (s) => symbolToCoinGeckoId[s.toLowerCase()],
+    );
+    const fiatSymbols = symbols.filter(
+      (s) => !symbolToCoinGeckoId[s.toLowerCase()],
+    );
 
     // Fetch crypto rates from CoinGecko
     if (cryptoSymbols.length > 0) {
       const coinIds = cryptoSymbols
-        .map(symbol => symbolToCoinGeckoId[symbol.toLowerCase()])
+        .map((symbol) => symbolToCoinGeckoId[symbol.toLowerCase()])
         .join(',');
 
       const response = await axios.get(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`
+        `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`,
       );
 
       const { data: tokenPrices } = response;
@@ -214,7 +222,11 @@ export class ExchangeRateService {
     // Fetch fiat rates (NGN, etc.)
     for (const symbol of fiatSymbols) {
       if (symbol.toLowerCase() === 'ngn') {
-        const fwRates = await this.flutterwaveService.getExchangeRate('NGN', 'USD', 1);
+        const fwRates = await this.flutterwaveService.getExchangeRate(
+          'NGN',
+          'USD',
+          1,
+        );
         rates.ngn = Number(fwRates.rate);
       }
       // Add other fiat currencies as needed

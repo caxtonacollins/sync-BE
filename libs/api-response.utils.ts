@@ -58,4 +58,3 @@ export function formatUnifiedWalletBalance(balance: {
     balance: formatAmountForApi(balance.balance, balance.currency),
   };
 }
-

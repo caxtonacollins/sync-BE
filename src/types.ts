@@ -1,43 +1,42 @@
 export interface TokenBalance {
-    raw: string;
-    formatted: string;
-    symbol: string;
-    decimals: number;
+  raw: string;
+  formatted: string;
+  symbol: string;
+  decimals: number;
 }
 
 export interface RegistrationStatus {
-    isRegistered: boolean;
-    accountAddress: string;
+  isRegistered: boolean;
+  accountAddress: string;
 }
 
 export interface MultipleBalancesResponse {
-    [key: string]: TokenBalance;
+  [key: string]: TokenBalance;
 }
 
 export type BaseStake = {
-    id: string;
-    amount: number | string;
-    stakedAt: Date;
-    unlockAt: Date;
-    lockDays: number;
-    apyBps: number;
-    apy: string;
-    pendingRewards: number;
-    isLocked: boolean;
-    daysRemaining: number;
-    onChainVerified: boolean;
-    onChainTxHash: string | null;
+  id: string;
+  amount: number | string;
+  stakedAt: Date;
+  unlockAt: Date;
+  lockDays: number;
+  apyBps: number;
+  apy: string;
+  pendingRewards: number;
+  isLocked: boolean;
+  daysRemaining: number;
+  onChainVerified: boolean;
+  onChainTxHash: string | null;
 };
 
 export type CryptoStake = BaseStake & {
-    type: 'CRYPTO';
-    tokenSymbol: string;
+  type: 'CRYPTO';
+  tokenSymbol: string;
 };
 
 export type FiatStake = BaseStake & {
-    type: 'FIAT';
-    currency: string;
+  type: 'FIAT';
+  currency: string;
 };
 
 export type Stake = CryptoStake | FiatStake;
-

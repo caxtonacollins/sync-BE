@@ -1,4 +1,10 @@
-import { IsString, IsNumber, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsNotEmpty,
+  IsOptional,
+  IsIn,
+} from 'class-validator';
 
 export class QueueWithdrawalDto {
   @IsString()
@@ -40,12 +46,15 @@ function IsObject() {
     // This is a simplified version - in a real app, you'd want more robust validation
     // that checks if the value is a plain object
     const validate = (value: any) => {
-      return value === undefined || (value !== null && typeof value === 'object' && !Array.isArray(value));
+      return (
+        value === undefined ||
+        (value !== null && typeof value === 'object' && !Array.isArray(value))
+      );
     };
-    
+
     // Register the validation
     const originalMethod = object[propertyName];
-    object[propertyName] = function(...args: any[]) {
+    object[propertyName] = function (...args: any[]) {
       const value = args[0];
       if (!validate(value)) {
         throw new Error(`${propertyName} must be an object`);

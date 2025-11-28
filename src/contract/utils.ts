@@ -218,22 +218,20 @@ export function stringToFelt252(text: string): string {
  */
 export function feltToContractAddress(value: any): string {
   if (!value && value !== 0) return '0x0';
-  
+
   try {
     // Handle BigInt, string, or number inputs
-    const bigIntValue = typeof value === 'bigint' 
-      ? value 
-      : BigInt(value);
-    
+    const bigIntValue = typeof value === 'bigint' ? value : BigInt(value);
+
     // Convert to hex and ensure it's lowercase for consistency
     const hex = bigIntValue.toString(16).toLowerCase();
-    
+
     // Ensure the hex string is properly prefixed with 0x
     return hex.startsWith('0x') ? hex : `0x${hex}`;
   } catch (e) {
-    console.error('Error converting felt to contract address:', { 
-      input: value, 
-      error: e.message 
+    console.error('Error converting felt to contract address:', {
+      input: value,
+      error: e.message,
     });
     return '0x0';
   }
@@ -241,27 +239,31 @@ export function feltToContractAddress(value: any): string {
 
 export function felt252ToString(felt: any): string {
   if (!felt) return '';
-  
+
   // Convert to string if it's a BigInt or number
-  const hexString = typeof felt === 'bigint' || typeof felt === 'number' 
-    ? felt.toString(16) 
-    : String(felt);
-    
+  const hexString =
+    typeof felt === 'bigint' || typeof felt === 'number'
+      ? felt.toString(16)
+      : String(felt);
+
   const hex = hexString.startsWith('0x') ? hexString.substring(2) : hexString;
-  
+
   try {
     return Buffer.from(hex, 'hex').toString('utf8');
   } catch (e) {
-    console.error('Error converting felt to string:', { 
-      input: felt, 
+    console.error('Error converting felt to string:', {
+      input: felt,
       hexString,
-      error: e.message 
+      error: e.message,
     });
     return hexString; // Return the raw hex if conversion fails
   }
 }
 
-export function convertToWei(amount: string | number, decimals: number): bigint {
+export function convertToWei(
+  amount: string | number,
+  decimals: number,
+): bigint {
   if (typeof amount === 'string') {
     // Remove any commas and trim whitespace
     amount = amount.replace(/,/g, '').trim();
@@ -306,7 +308,7 @@ export function toJSONSafeValue(value: any): any {
   }
 
   if (Array.isArray(value)) {
-    return value.map(item => toJSONSafeValue(item));
+    return value.map((item) => toJSONSafeValue(item));
   }
 
   if (typeof value === 'object') {

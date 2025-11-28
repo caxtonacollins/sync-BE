@@ -24,7 +24,7 @@ export class SwapOrderService {
     private readonly LiquidityPoolContractService: LiquidityPoolContractService,
     private readonly userService: UserService,
     private readonly paymentService: PaymentService,
-  ) { }
+  ) {}
 
   async create(dto: CreateSwapOrderDto) {
     return this.prisma.swapOrder.create({
@@ -49,7 +49,8 @@ export class SwapOrderService {
 
       if (where.fromDate || where.toDate) {
         prismaWhere.createdAt = {};
-        if (where.fromDate) prismaWhere.createdAt.gte = new Date(where.fromDate);
+        if (where.fromDate)
+          prismaWhere.createdAt.gte = new Date(where.fromDate);
         if (where.toDate) prismaWhere.createdAt.lte = new Date(where.toDate);
       }
 
@@ -131,21 +132,29 @@ export class SwapOrderService {
       throw new Error('User is not registered to contract');
     }
 
-    const balance = await this.TokenContractService.getAccountBalance(fromCurrency, cryptoWalletAddress);
+    const balance = await this.TokenContractService.getAccountBalance(
+      fromCurrency,
+      cryptoWalletAddress,
+    );
 
     if (parseFloat(balance) < fromAmount) {
-      throw new Error(`Insufficient token balance. Required: ${fromAmount}, Available: ${balance}`);
+      throw new Error(
+        `Insufficient token balance. Required: ${fromAmount}, Available: ${balance}`,
+      );
     }
 
-    this.logger.log(`Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`);
-
-    const tokenTransferResult = await this.LiquidityPoolContractService.swapTokenToFiat(
-      cryptoWalletAddress,
-      toCurrency,
-      fromCurrency,
-      fromAmount,
-      swapOrderId,
+    this.logger.log(
+      `Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`,
     );
+
+    const tokenTransferResult =
+      await this.LiquidityPoolContractService.swapTokenToFiat(
+        cryptoWalletAddress,
+        toCurrency,
+        fromCurrency,
+        fromAmount,
+        swapOrderId,
+      );
 
     this.logger.log(
       `Token swap transaction sent: ${tokenTransferResult.txHash}`,
@@ -164,7 +173,14 @@ export class SwapOrderService {
   private async executeFiatToTokenSwap(swapOrder: any) {
     this.logger.log(`Executing Fiat-to-Token swap for order ${swapOrder.id}`);
 
-    const { id: swapOrderId, userId, fromAmount, fromCurrency, toAmount, toCurrency } = swapOrder;
+    const {
+      id: swapOrderId,
+      userId,
+      fromAmount,
+      fromCurrency,
+      toAmount,
+      toCurrency,
+    } = swapOrder;
 
     const user = await this.userService.findOne(userId);
     if (!user) {
@@ -178,7 +194,9 @@ export class SwapOrderService {
 
     const cryptoWallet = await this.walletService.getCryptoWallets(userId);
     if (!cryptoWallet || cryptoWallet.length === 0) {
-      throw new Error('User does not have a crypto wallet for receiving tokens');
+      throw new Error(
+        'User does not have a crypto wallet for receiving tokens',
+      );
     }
     const isRegisteredToLiquidity = cryptoWallet[0].isRegisteredToLiquidity;
     const cryptoWalletAddress = cryptoWallet[0].address;
@@ -187,19 +205,23 @@ export class SwapOrderService {
       throw new Error('User is not registered to contract');
     }
 
-
-    const fiatBalance = await this.paymentService.getAccountBalance(fiatAccount);
+    const fiatBalance =
+      await this.paymentService.getAccountBalance(fiatAccount);
 
     if (fiatBalance < fromAmount) {
-      throw new Error(`Insufficient fiat balance. Required: ${fromAmount}, Available: ${fiatBalance}`);
+      throw new Error(
+        `Insufficient fiat balance. Required: ${fromAmount}, Available: ${fiatBalance}`,
+      );
     }
 
     // calculate the fee to be paid
     const fee = await this.LiquidityPoolContractService.getFeeBPS();
     const feeToNumber = Number(fee);
-    const feeAmount = fromAmount * feeToNumber / 100; 
+    const feeAmount = (fromAmount * feeToNumber) / 100;
 
-    this.logger.log(`Charging ${fromAmount} ${fromCurrency} from user's fiat account`);
+    this.logger.log(
+      `Charging ${fromAmount} ${fromCurrency} from user's fiat account`,
+    );
     const amountToCharge = fromAmount + feeAmount;
     await this.paymentService.charge(fiatAccount, amountToCharge, fromCurrency);
 
@@ -207,17 +229,20 @@ export class SwapOrderService {
       `Successfully charged ${fromAmount} ${fromCurrency} from user ${userId}`,
     );
 
-    this.logger.log(`Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`);
-
-    const tokenTransferResult = await this.LiquidityPoolContractService.swapFiatToToken(
-      cryptoWalletAddress,
-      fromCurrency,
-      toCurrency,
-      fromAmount,
-      swapOrderId,
-      toAmount,
-      feeToNumber,
+    this.logger.log(
+      `Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`,
     );
+
+    const tokenTransferResult =
+      await this.LiquidityPoolContractService.swapFiatToToken(
+        cryptoWalletAddress,
+        fromCurrency,
+        toCurrency,
+        fromAmount,
+        swapOrderId,
+        toAmount,
+        feeToNumber,
+      );
 
     this.logger.log(
       `Token transfer transaction sent: ${tokenTransferResult.txHash}`,
@@ -250,12 +275,16 @@ export class SwapOrderService {
     }
 
     if (swapOrder.swapType !== 'TOKENTOFIAT') {
-      this.logger.log(`Swap order ${swapOrderId} is not a Token-to-Fiat swap. Skipping payout.`);
+      this.logger.log(
+        `Swap order ${swapOrderId} is not a Token-to-Fiat swap. Skipping payout.`,
+      );
       return;
     }
 
     try {
-      const fiatAccount = await this.walletService.getFiatAccountForUser(swapOrder.userId);
+      const fiatAccount = await this.walletService.getFiatAccountForUser(
+        swapOrder.userId,
+      );
       if (!fiatAccount) {
         throw new Error('User does not have a fiat account for payout');
       }
@@ -264,7 +293,7 @@ export class SwapOrderService {
       this.logger.log(
         `Initiating fiat payout of ${swapOrder.toAmount} ${swapOrder.toCurrency} to user ${swapOrder.userId}`,
       );
- 
+
       const payoutResult = await this.paymentService.initiatePayout(
         fiatAccount,
         Number(new Decimal(swapOrder.toAmount || 0).toNumber()),
@@ -272,7 +301,7 @@ export class SwapOrderService {
       );
 
       this.logger.log(
-        `Payout initiated successfully for swap ${swapOrderId}. Reference: ${payoutResult.reference}`
+        `Payout initiated successfully for swap ${swapOrderId}. Reference: ${payoutResult.reference}`,
       );
 
       // TODO: Store payout reference in a separate PayoutRecord table if needed

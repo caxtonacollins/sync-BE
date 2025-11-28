@@ -21,6 +21,11 @@ import {
   multiplyAmount,
   addAmounts,
 } from '../../libs/currency.utils';
+import { ensureUserExists } from 'src/common/helpers/db.helper';
+import {
+  mapFiatAccountWithUser,
+  mapCryptoWalletWithUser,
+} from 'src/common/helpers/mapper.helper';
 
 export interface WalletSummaryResponse {
   totalBalanceNGN: number;
@@ -86,38 +91,12 @@ export class WalletService {
    * Get fiat accounts for a user
    */
   async getFiatAccounts(userId: string) {
-    try {
-      const accounts = await this.prisma.fiatAccount.findMany({
-        where: {
-          userId,
-          isActive: true,
-        },
-        include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-      });
+    const accounts = await this.prisma.fiatAccount.findMany({
+      where: { userId, isActive: true },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    });
 
-      return accounts.map((account) => ({
-        id: account.id,
-        name: `${account.user.firstName} ${account.user.lastName}`,
-        accountNumber: account.accountNumber,
-        balance: 0,
-        currency: account.currency,
-        initials: `${account.user.firstName[0]}${account.user.lastName[0]}`,
-        isDefault: account.isDefault,
-      }));
-    } catch (error) {
-      this.logger.error(
-        `Failed to get fiat accounts for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
+    return accounts.map((a) => mapFiatAccountWithUser(a as any));
   }
 
   async getFiatAccountForUser(userId: string): Promise<FiatAccount | null> {
@@ -131,39 +110,12 @@ export class WalletService {
   }
 
   async getCryptoWallets(userId: string) {
-    try {
-      const wallets = await this.prisma.cryptoWallet.findMany({
-        where: {
-          userId,
-          isActive: true,
-        },
-        include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-      });
+    const wallets = await this.prisma.cryptoWallet.findMany({
+      where: { userId, isActive: true },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    });
 
-      return wallets.map((wallet) => ({
-        id: wallet.id,
-        name: `${wallet.user.firstName} ${wallet.user.lastName}`,
-        isRegisteredToLiquidity: wallet.isRegisteredToLiquidity,
-        address: wallet.address,
-        balance: 0,
-        currency: wallet.currency,
-        initials: `${wallet.user.firstName[0]}${wallet.user.lastName[0]}`,
-        isDefault: wallet.isDefault,
-      }));
-    } catch (error) {
-      this.logger.error(
-        `Failed to get crypto wallets for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
+    return wallets.map((w) => mapCryptoWalletWithUser(w as any));
   }
 
   async getUnifiedBalance(userId: string): Promise<UnifiedWalletBalance> {
@@ -171,12 +123,8 @@ export class WalletService {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         include: {
-          fiatAccounts: {
-            where: { isActive: true },
-          },
-          cryptoWallets: {
-            where: { isActive: true },
-          },
+          fiatAccounts: { where: { isActive: true } },
+          cryptoWallets: { where: { isActive: true } },
           fiatBalances: true,
           cryptoBalances: true,
         },
@@ -301,13 +249,7 @@ export class WalletService {
     currency: string = 'NGN',
   ): Promise<FiatAccount> {
     try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+      const user = await ensureUserExists(this.prisma, userId);
 
       if (currency === 'NGN') {
         const monnifyData =
@@ -353,13 +295,7 @@ export class WalletService {
     currency: string = 'STRK',
   ): Promise<CryptoWallet> {
     try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+      await ensureUserExists(this.prisma, userId);
 
       // Create StarkNet account
       const result = await this.accountContractService.createAccount(userId);

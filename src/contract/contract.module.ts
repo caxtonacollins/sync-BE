@@ -29,7 +29,14 @@ import { StakingContractService } from './services/staking/staking.service';
     forwardRef(() => SwapOrderModule),
     forwardRef(() => ExchangeRateModule),
   ],
-  controllers: [LiquidityController, StakingController, AccountFactoryController, AccountController, EventsController, Erc20TokenController],
+  controllers: [
+    LiquidityController,
+    StakingController,
+    AccountFactoryController,
+    AccountController,
+    EventsController,
+    Erc20TokenController,
+  ],
   providers: [
     AccountContractService,
     AccountFactoryContractService,
@@ -49,4 +56,4 @@ import { StakingContractService } from './services/staking/staking.service';
     StakingContractService,
   ],
 })
-export class ContractModule { }
+export class ContractModule {}

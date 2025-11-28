@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import WebSocket from 'ws';
 
 @Injectable()
@@ -9,12 +14,7 @@ export class PragmaService implements OnModuleInit, OnModuleDestroy {
 
   private pingInterval: NodeJS.Timeout;
 
-  private readonly pairs = [
-    'BTC/USD',
-    'ETH/USD',
-    'STRK/USD',
-    'USDC/USD',
-  ];
+  private readonly pairs = ['BTC/USD', 'ETH/USD', 'STRK/USD', 'USDC/USD'];
 
   onModuleInit() {
     this.connect();
@@ -25,7 +25,9 @@ export class PragmaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private connect() {
-    this.ws = new WebSocket('wss://ws.devnet.pragma.build/node/v1/data/price/subscribe');
+    this.ws = new WebSocket(
+      'wss://ws.devnet.pragma.build/node/v1/data/price/subscribe',
+    );
 
     this.ws.on('open', () => {
       this.logger.log('Connected to Pragma WebSocket API');
@@ -36,7 +38,7 @@ export class PragmaService implements OnModuleInit, OnModuleDestroy {
     this.ws.on('message', (data: WebSocket.RawData) => {
       const message = JSON.parse(data.toString());
       if (message.oracle_prices) {
-        message.oracle_prices.forEach(price => {
+        message.oracle_prices.forEach((price) => {
           const scaledPrice = Number(price.price) / Math.pow(10, 18);
           this.rates.set(price.pair_id, scaledPrice);
           // this.logger.log(`Updated rate for ${price.pair_id}: ${scaledPrice}`);
@@ -45,7 +47,9 @@ export class PragmaService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.ws.on('close', () => {
-      this.logger.warn('Disconnected from Pragma WebSocket API. Reconnecting...');
+      this.logger.warn(
+        'Disconnected from Pragma WebSocket API. Reconnecting...',
+      );
       this.stopPing();
       setTimeout(() => this.connect(), 5000);
     });
@@ -90,6 +94,6 @@ export class PragmaService implements OnModuleInit, OnModuleDestroy {
   }
 
   getRates(pairs: string[]): (number | undefined)[] {
-    return pairs.map(pair => this.rates.get(pair));
+    return pairs.map((pair) => this.rates.get(pair));
   }
 }

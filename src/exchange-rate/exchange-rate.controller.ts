@@ -12,10 +12,13 @@ export class ExchangeRateController {
 
   @Get('pair')
   async findOne(
-    @Param('fiatSymbol') fiatSymbol: string, 
-    @Param('tokenSymbol') tokenSymbol: string
+    @Param('fiatSymbol') fiatSymbol: string,
+    @Param('tokenSymbol') tokenSymbol: string,
   ) {
-    const rate = await this.exchangeRateService.findOne(fiatSymbol, tokenSymbol);
+    const rate = await this.exchangeRateService.findOne(
+      fiatSymbol,
+      tokenSymbol,
+    );
     if (!rate) {
       return null;
     }

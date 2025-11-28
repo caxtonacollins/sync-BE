@@ -7,11 +7,7 @@ import { FlutterwaveModule } from '../flutterwave/flutterwave.module';
 import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
 
 @Module({
-  imports: [
-    PrismaModule, 
-    forwardRef(() => ContractModule), 
-    FlutterwaveModule
-  ],
+  imports: [PrismaModule, forwardRef(() => ContractModule), FlutterwaveModule],
   controllers: [UserController],
   providers: [UserService, FlutterwaveService],
   exports: [UserService],

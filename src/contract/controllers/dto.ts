@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from "class-validator";
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateAccountDto {
   @IsOptional()
@@ -17,7 +17,7 @@ export class SetAccountClassHashDto {
   classHash: string;
 }
 
-export class UpgradeAccountFactoryDto extends SetAccountClassHashDto { }
+export class UpgradeAccountFactoryDto extends SetAccountClassHashDto {}
 
 export class TransferOwnershipDto {
   newOwnerAddress: string;

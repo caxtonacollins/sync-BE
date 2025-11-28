@@ -49,8 +49,14 @@ export class SwapOrderController {
   findAll(@Query() filter: SwapOrderFilterDto, @Req() req: RequestWithUser) {
     try {
       // Ensure users can only access their own swap orders
-      if (req.user.role !== 'ADMIN' && filter.userId && req.user.userId !== filter.userId) {
-        throw new ForbiddenException('You can only access your own swap orders');
+      if (
+        req.user.role !== 'ADMIN' &&
+        filter.userId &&
+        req.user.userId !== filter.userId
+      ) {
+        throw new ForbiddenException(
+          'You can only access your own swap orders',
+        );
       }
 
       // For non-admin users, force filter by their own userId

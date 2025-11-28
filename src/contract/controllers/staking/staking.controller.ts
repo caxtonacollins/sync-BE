@@ -3,145 +3,168 @@ import { StakingContractService } from 'src/contract/services/staking/staking.se
 
 @Controller('staking')
 export class StakingController {
-    constructor(private readonly stakingService: StakingContractService) { }
+  constructor(private readonly stakingService: StakingContractService) {}
 
-    @Post('stake')
-    stake(@Body() body: any) {
-        return this.stakingService.stake(
-            body.userId,
-            body.tokenSymbol,
-            body.amount,
-            body.decimals,
-            body.lockDuration,
-        );
-    }
+  @Post('stake')
+  stake(@Body() body: any) {
+    return this.stakingService.stake(
+      body.userId,
+      body.tokenSymbol,
+      body.amount,
+      body.decimals,
+      body.lockDuration,
+    );
+  }
 
-    @Post('unstake')
-    unstake(@Body() body: any) {
-        return this.stakingService.unstake(
-            body.userId,
-            body.tokenSymbol,
-            body.stakeId,
-        );
-    }
+  @Post('unstake')
+  unstake(@Body() body: any) {
+    return this.stakingService.unstake(
+      body.userId,
+      body.tokenSymbol,
+      body.stakeId,
+    );
+  }
 
-    @Post('create-staking-pool')
-    createStakingPool(@Body() body: any) {
-        return this.stakingService.createStakingPool(
-            body.tokenSymbol,
-            body.tokenAddress,
-            body.baseApyBps,
-            body.bonusApyBps,
-            body.minStakeAmount,
-            body.maxStakeAmount,
-        );
-    }
+  @Post('create-staking-pool')
+  createStakingPool(@Body() body: any) {
+    return this.stakingService.createStakingPool(
+      body.tokenSymbol,
+      body.tokenAddress,
+      body.baseApyBps,
+      body.bonusApyBps,
+      body.minStakeAmount,
+      body.maxStakeAmount,
+    );
+  }
 
-    @Post('record-fiat-stake')
-    recordFiatStake(@Body() body: any) {
-        return this.stakingService.recordFiatStake(
-            body.userId,
-            body.currency,
-            body.amount,
-            body.lockDuration,
-            body.stakeId,
-        );
-    }
+  @Post('record-fiat-stake')
+  recordFiatStake(@Body() body: any) {
+    return this.stakingService.recordFiatStake(
+      body.userId,
+      body.currency,
+      body.amount,
+      body.lockDuration,
+      body.stakeId,
+    );
+  }
 
-    @Post('record-fiat-unstake')
-    recordFiatUnstake(@Body() body: any) {
-        return this.stakingService.recordFiatUnstake(
-            body.userId,
-            body.currency,
-            body.stakeId,
-        );
-    }
+  @Post('record-fiat-unstake')
+  recordFiatUnstake(@Body() body: any) {
+    return this.stakingService.recordFiatUnstake(
+      body.userId,
+      body.currency,
+      body.stakeId,
+    );
+  }
 
-    @Post('record-fiat-reward-claim')
-    recordFiatRewardClaim(@Body() body: any) {
-        return this.stakingService.recordFiatRewardClaim(
-            body.userId,
-            body.currency,
-            body.stakeId,
-            body.rewards,
-        );
-    }
+  @Post('record-fiat-reward-claim')
+  recordFiatRewardClaim(@Body() body: any) {
+    return this.stakingService.recordFiatRewardClaim(
+      body.userId,
+      body.currency,
+      body.stakeId,
+      body.rewards,
+    );
+  }
 
-    @Post('update-pool-apy')
-    updatePoolApy(@Body() body: any) {
-        return this.stakingService.updatePoolApy(body.tokenSymbol, body.baseApyBps, body.bonusApyBps);
-    }
+  @Post('update-pool-apy')
+  updatePoolApy(@Body() body: any) {
+    return this.stakingService.updatePoolApy(
+      body.tokenSymbol,
+      body.baseApyBps,
+      body.bonusApyBps,
+    );
+  }
 
-    @Post('toggle-pool')
-    togglePool(@Body() body: any) {
-        return this.stakingService.togglePool(body.tokenSymbol);
-    }
+  @Post('toggle-pool')
+  togglePool(@Body() body: any) {
+    return this.stakingService.togglePool(body.tokenSymbol);
+  }
 
-    @Post('pause')
-    pause() {
-        return this.stakingService.pause();
-    }
+  @Post('pause')
+  pause() {
+    return this.stakingService.pause();
+  }
 
-    @Post('unpause')
-    unpause() {
-        return this.stakingService.unpause();
-    }
+  @Post('unpause')
+  unpause() {
+    return this.stakingService.unpause();
+  }
 
-    @Post('update-balance-merkle-root')
-    updateBalanceMerkleRoot(@Body() body: any) {
-        return this.stakingService.updateBalanceMerkleRoot(
-            body.merkleRoot,
-        );
-    }
+  @Post('update-balance-merkle-root')
+  updateBalanceMerkleRoot(@Body() body: any) {
+    return this.stakingService.updateBalanceMerkleRoot(body.merkleRoot);
+  }
 
-    @Post('create-reserve-snapshot')
-    createReserveSnapshot(@Body() body: any) {
-        return this.stakingService.createReserveSnapshot(
-            body.currency,
-            body.balance,
-            body.signature,
-            body.ipfsHash,
-        );
-    }
+  @Post('create-reserve-snapshot')
+  createReserveSnapshot(@Body() body: any) {
+    return this.stakingService.createReserveSnapshot(
+      body.currency,
+      body.balance,
+      body.signature,
+      body.ipfsHash,
+    );
+  }
 
-    @Post('upgrade')
-    upgrade(@Body() body: any) {
-        return this.stakingService.upgradeContract(body.classHash);
-    }
+  @Post('upgrade')
+  upgrade(@Body() body: any) {
+    return this.stakingService.upgradeContract(body.classHash);
+  }
 
-    @Get('pool/:tokenSymbol')
-    getPool(@Param('tokenSymbol') tokenSymbol: string) {
-        return this.stakingService.getStakingPool(tokenSymbol);
-    }
+  @Get('pool/:tokenSymbol')
+  getPool(@Param('tokenSymbol') tokenSymbol: string) {
+    return this.stakingService.getStakingPool(tokenSymbol);
+  }
 
-    @Get('user/:userAddress/:stakeId/:tokenSymbol')
-    getUserStake(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
-        return this.stakingService.getStakePosition(userAddress, tokenSymbol, stakeId);
-    }
+  @Get('user/:userAddress/:stakeId/:tokenSymbol')
+  getUserStake(
+    @Param('userAddress') userAddress: string,
+    @Param('tokenSymbol') tokenSymbol: string,
+    @Param('stakeId') stakeId: number,
+  ) {
+    return this.stakingService.getStakePosition(
+      userAddress,
+      tokenSymbol,
+      stakeId,
+    );
+  }
 
-    @Get('stakes/:userAddress/:tokenSymbol')
-    getUserStakes(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string) {
-        return this.stakingService.getStakePositions(userAddress, tokenSymbol);
-    }
+  @Get('stakes/:userAddress/:tokenSymbol')
+  getUserStakes(
+    @Param('userAddress') userAddress: string,
+    @Param('tokenSymbol') tokenSymbol: string,
+  ) {
+    return this.stakingService.getStakePositions(userAddress, tokenSymbol);
+  }
 
-    @Get('calculate-rewards/:userAddress/:tokenSymbol/:stakeId')
-    calculateRewards(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
-        return this.stakingService.calculateRewards(userAddress, tokenSymbol, stakeId);
-    }
+  @Get('calculate-rewards/:userAddress/:tokenSymbol/:stakeId')
+  calculateRewards(
+    @Param('userAddress') userAddress: string,
+    @Param('tokenSymbol') tokenSymbol: string,
+    @Param('stakeId') stakeId: number,
+  ) {
+    return this.stakingService.calculateRewards(
+      userAddress,
+      tokenSymbol,
+      stakeId,
+    );
+  }
 
-    @Get('pools')
-    getAllPools() {
-        return this.stakingService.getAllPools();
-    }
+  @Get('pools')
+  getAllPools() {
+    return this.stakingService.getAllPools();
+  }
 
-    @Get('user/:userAddress/stake-count/:tokenSymbol')
-    getUserStakeCount(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string) {
-        return this.stakingService.getUserStakeCount(userAddress, tokenSymbol);
-    }
+  @Get('user/:userAddress/stake-count/:tokenSymbol')
+  getUserStakeCount(
+    @Param('userAddress') userAddress: string,
+    @Param('tokenSymbol') tokenSymbol: string,
+  ) {
+    return this.stakingService.getUserStakeCount(userAddress, tokenSymbol);
+  }
 
-    @Get('version')
-    getVersion() {
-        return this.stakingService.getVersion();
-    }
-
+  @Get('version')
+  getVersion() {
+    return this.stakingService.getVersion();
+  }
 }

@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TxFilterDto } from './dto/tx-filter.dto';
 import { UpdateTxDto } from './dto/update-tx.dto';
@@ -45,11 +50,11 @@ export class TransactionService {
       if (filter.maxAmount !== undefined) where.amount.lte = filter.maxAmount;
     }
 
-     if (filter.fromDate || filter.toDate) {
-        where.createdAt = {};
-        if (filter.fromDate) where.createdAt.gte = new Date(filter.fromDate);
-        if (filter.toDate) where.createdAt.lte = new Date(filter.toDate);
-      }
+    if (filter.fromDate || filter.toDate) {
+      where.createdAt = {};
+      if (filter.fromDate) where.createdAt.gte = new Date(filter.fromDate);
+      if (filter.toDate) where.createdAt.lte = new Date(filter.toDate);
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
@@ -117,8 +122,7 @@ export class TransactionService {
   }
 
   async updateStatus(id: string, dto: UpdateTxDto) {
-    const updateData: Partial<{ status: string; completedAt?: Date }> = {
-    };
+    const updateData: Partial<{ status: string; completedAt?: Date }> = {};
 
     // Set completedAt if status is completed
     if (dto.status === 'completed') {
@@ -133,15 +137,28 @@ export class TransactionService {
     });
   }
 
-  async transferFiat(senderUserId: string, recipientEmail: string, amount: number, currency: string) {
-    this.logger.log(`Initiating fiat transfer from user ${senderUserId} to ${recipientEmail}`);
+  async transferFiat(
+    senderUserId: string,
+    recipientEmail: string,
+    amount: number,
+    currency: string,
+  ) {
+    this.logger.log(
+      `Initiating fiat transfer from user ${senderUserId} to ${recipientEmail}`,
+    );
 
     if (amount <= 0) {
       throw new BadRequestException('Transfer amount must be positive.');
     }
 
-    const sender = await this.prisma.user.findUnique({ where: { id: senderUserId }, include: { fiatAccounts: true } });
-    const recipient = await this.prisma.user.findUnique({ where: { email: recipientEmail }, include: { fiatAccounts: true } });
+    const sender = await this.prisma.user.findUnique({
+      where: { id: senderUserId },
+      include: { fiatAccounts: true },
+    });
+    const recipient = await this.prisma.user.findUnique({
+      where: { email: recipientEmail },
+      include: { fiatAccounts: true },
+    });
 
     if (!sender || !recipient) {
       throw new NotFoundException('Sender or recipient not found.');
@@ -151,11 +168,17 @@ export class TransactionService {
       throw new BadRequestException('Cannot transfer to yourself.');
     }
 
-    const senderAccount = sender.fiatAccounts.find(acc => acc.isDefault && acc.currency === currency);
-    const recipientAccount = recipient.fiatAccounts.find(acc => acc.isDefault && acc.currency === currency);
+    const senderAccount = sender.fiatAccounts.find(
+      (acc) => acc.isDefault && acc.currency === currency,
+    );
+    const recipientAccount = recipient.fiatAccounts.find(
+      (acc) => acc.isDefault && acc.currency === currency,
+    );
 
     if (!senderAccount || !recipientAccount) {
-      throw new NotFoundException(`Default ${currency} account not found for sender or recipient.`);
+      throw new NotFoundException(
+        `Default ${currency} account not found for sender or recipient.`,
+      );
     }
 
     // TODO: Implement real balance check with a payment provider
@@ -166,7 +189,7 @@ export class TransactionService {
     const reference = `FIATTRANSFER_${Date.now()}`;
 
     try {
-    return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async (tx) => {
         // 1. Debit sender's account
         const debitTx = await tx.transaction.create({
           data: {
@@ -179,7 +202,7 @@ export class TransactionService {
             reference,
             fiatAccountId: senderAccount.id,
             completedAt: new Date(),
-          }
+          },
         });
 
         // 2. Credit recipient's account
@@ -194,7 +217,7 @@ export class TransactionService {
             reference,
             fiatAccountId: recipientAccount.id,
             completedAt: new Date(),
-          }
+          },
         });
 
         // 3. Update account balances
@@ -209,7 +232,9 @@ export class TransactionService {
           data: { balance: { increment: amount } },
         });
 
-        this.logger.log(`Successfully transferred ${amount} ${currency} from ${sender.email} to ${recipient.email}`);
+        this.logger.log(
+          `Successfully transferred ${amount} ${currency} from ${sender.email} to ${recipient.email}`,
+        );
 
         return { debitTx, creditTx };
       });

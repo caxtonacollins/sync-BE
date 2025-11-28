@@ -14,7 +14,6 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { AccountContractService } from 'src/contract/services/account/account.service';
 import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
 
-
 @Injectable()
 export class UserService {
   constructor(
@@ -22,7 +21,7 @@ export class UserService {
     private flutterwaveService: FlutterwaveService,
     private readonly accountContractService: AccountContractService,
     private readonly liquidityPoolContractService: LiquidityPoolContractService,
-  ) { }
+  ) {}
 
   private readonly SALT_ROUNDS = 12;
 
@@ -87,7 +86,6 @@ export class UserService {
             await this.flutterwaveService.createVirtualAccounts(user);
 
           for (const fwAccount of flutterwaveAccounts) {
-
             if (fwAccount) {
               await this.prisma.fiatAccount.create({
                 data: {
@@ -119,7 +117,9 @@ export class UserService {
     }
 
     try {
-      const accountResult = await this.accountContractService.createAccount(user.id);
+      const accountResult = await this.accountContractService.createAccount(
+        user.id,
+      );
       if (!accountResult) {
         throw new Error('Failed to create StarkNet account');
       }
@@ -142,7 +142,7 @@ export class UserService {
       });
 
       await this.prisma.user.update({
-        where: { id: user.id},
+        where: { id: user.id },
         data: {
           starknetAccountAddress: accountResult.accountAddress,
         },

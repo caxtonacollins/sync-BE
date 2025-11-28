@@ -33,7 +33,6 @@ export class TxFilterDto {
   @Type(() => Number)
   limit?: number = 10;
 
-
   @IsOptional()
   @IsISO8601()
   fromDate?: string;

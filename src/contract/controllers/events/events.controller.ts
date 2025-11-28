@@ -3,10 +3,12 @@ import { LiquidityEventProcessorService } from 'src/contract/services/event-proc
 
 @Controller('events')
 export class EventsController {
-    constructor(private readonly liquidityEventProcessorService: LiquidityEventProcessorService) {}
+  constructor(
+    private readonly liquidityEventProcessorService: LiquidityEventProcessorService,
+  ) {}
 
-    @Post('events')
-    async handleContractEvent(@Body() eventPayload: any) {
-      return await this.liquidityEventProcessorService.process(eventPayload);
-    }
+  @Post('events')
+  async handleContractEvent(@Body() eventPayload: any) {
+    return await this.liquidityEventProcessorService.process(eventPayload);
+  }
 }

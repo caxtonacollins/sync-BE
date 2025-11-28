@@ -117,6 +117,11 @@ export class TransactionController {
   @Post('fiat')
   transferFiat(@Body() dto: CreateFiatTransferDto, @Req() req) {
     const senderUserId = req.user.sub;
-    return this.transactionService.transferFiat(senderUserId, dto.recipientEmail, dto.amount, dto.currency);
+    return this.transactionService.transferFiat(
+      senderUserId,
+      dto.recipientEmail,
+      dto.amount,
+      dto.currency,
+    );
   }
 }

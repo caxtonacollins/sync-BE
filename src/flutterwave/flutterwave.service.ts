@@ -22,7 +22,7 @@ export class FlutterwaveService {
 
   constructor() {
     this.headers = {
-      'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+      Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
       'Content-Type': 'application/json',
     };
   }
@@ -36,14 +36,17 @@ export class FlutterwaveService {
       const response = await axios.get(`${this.baseUrl}/banks/NG`, {
         headers: this.headers,
       });
-      
-      return response.data.data.map(bank => ({
+
+      return response.data.data.map((bank) => ({
         name: bank.name,
         code: bank.code,
-        isSyncPayment: false
+        isSyncPayment: false,
       }));
     } catch (error) {
-      console.error('Error fetching banks from Flutterwave:', error.response?.data || error.message);
+      console.error(
+        'Error fetching banks from Flutterwave:',
+        error.response?.data || error.message,
+      );
       throw new Error('Failed to fetch banks. Please try again later.');
     }
   }
@@ -65,20 +68,17 @@ export class FlutterwaveService {
     }
 
     try {
-      const response = await axios.get(
-        `${this.baseUrl}/transfers/rates`,
-        {
-          params: {
-            amount,
-            destination_currency: destinationCurrency,
-            source_currency: sourceCurrency,
-          },
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
-          },
+      const response = await axios.get(`${this.baseUrl}/transfers/rates`, {
+        params: {
+          amount,
+          destination_currency: destinationCurrency,
+          source_currency: sourceCurrency,
         },
-      );
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+        },
+      });
 
       if (response.data.status !== 'success') {
         throw new Error(
@@ -91,8 +91,12 @@ export class FlutterwaveService {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const message = error.response?.data?.message || error.message;
-        console.error(`Flutterwave Exchange Rate Error [${status}]: ${message}`);
-        throw new Error(`Failed to fetch exchange rate: [${status}] ${message}`);
+        console.error(
+          `Flutterwave Exchange Rate Error [${status}]: ${message}`,
+        );
+        throw new Error(
+          `Failed to fetch exchange rate: [${status}] ${message}`,
+        );
       }
       console.error('Unexpected error in getExchangeRate:', error);
       throw new Error('Failed to fetch exchange rate: Unexpected error');
@@ -101,10 +105,10 @@ export class FlutterwaveService {
 
   private async createVirtualAccount(user: User, currency: string) {
     if (!process.env.FLUTTERWAVE_CREATE_VIRTUAL_ACCOUNT_URL) {
-      throw new Error("Flutterwave create virtual account URL not found")
+      throw new Error('Flutterwave create virtual account URL not found');
     }
     if (!process.env.FLUTTERWAVE_SECRET_KEY) {
-      throw new Error("Flutterwave secret key not found")
+      throw new Error('Flutterwave secret key not found');
     }
 
     try {
@@ -120,19 +124,20 @@ export class FlutterwaveService {
         phonenumber: user.phoneNumber,
         bvn: user.bvn,
         nin: user.nin,
-      })
+      });
 
-
-      const response = await axios.post(process.env.FLUTTERWAVE_CREATE_VIRTUAL_ACCOUNT_URL, payload, {
-        headers: {
-          accept: 'application/json', 'content-type': 'application/json',
-          Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
-        },
-      })
+      const response = await axios
+        .post(process.env.FLUTTERWAVE_CREATE_VIRTUAL_ACCOUNT_URL, payload, {
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+          },
+        })
         .then(({ data }) => {
           return data;
         })
-        .catch(err => {
+        .catch((err) => {
           if (axios.isAxiosError(err)) {
             const message = err.response?.data?.message || err.message;
             console.error(`Flutterwave Error ${message}`);
@@ -150,7 +155,7 @@ export class FlutterwaveService {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error(
-          `Flutterwave Error ${error.response?.data?.message || error.message}`
+          `Flutterwave Error ${error.response?.data?.message || error.message}`,
         );
       } else {
         console.error(`Error: ${error.message}`);
@@ -185,7 +190,7 @@ export class FlutterwaveService {
       const response = await axios.put(
         `https://api.flutterwave.com/v3/virtual-account-numbers/${orderRef}`,
         { bvn },
-        options
+        options,
       );
 
       if (response.data.status === 'success') {
@@ -220,20 +225,24 @@ export class FlutterwaveService {
       const response = await axios.post(
         `https://api.flutterwave.com/v3/virtual-account-numbers/${orderRef}`,
         { status: 'inactive' },
-        options
+        options,
       );
 
       if (response.data.status === 'success') {
         return response.data;
       }
-      throw new Error(response.data.message || 'Failed to delete virtual account');
+      throw new Error(
+        response.data.message || 'Failed to delete virtual account',
+      );
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const message = error.response?.data?.message || error.message;
         console.error(`Flutterwave Delete Account Error: ${message}`);
         throw new Error(`Failed to delete virtual account: ${message}`);
       }
-      console.error(`Unexpected error deleting virtual account: ${error.message}`);
+      console.error(
+        `Unexpected error deleting virtual account: ${error.message}`,
+      );
       throw new Error('Failed to delete virtual account');
     }
   }
@@ -254,7 +263,7 @@ export class FlutterwaveService {
 
       const response = await axios.get(
         `https://api.flutterwave.com/v3/virtual-account-numbers/${ref}`,
-        options
+        options,
       );
 
       const data = response.data;
@@ -277,5 +286,4 @@ export class FlutterwaveService {
       return null;
     }
   }
-
 }

@@ -57,7 +57,11 @@ export class BalanceService {
       // Use fintech-standard currency utilities for precise calculations
       const currentBalance = new Decimal(account.balance.toString());
       const creditAmount = parseAmount(amount, account.currency);
-      const newBalance = addAmounts(currentBalance, creditAmount, account.currency);
+      const newBalance = addAmounts(
+        currentBalance,
+        creditAmount,
+        account.currency,
+      );
 
       // Update account balance using Decimal
       await tx.fiatAccount.update({
@@ -142,7 +146,11 @@ export class BalanceService {
         throw new BadRequestException('Insufficient balance');
       }
 
-      const newBalance = subtractAmounts(currentBalance, debitAmount, account.currency);
+      const newBalance = subtractAmounts(
+        currentBalance,
+        debitAmount,
+        account.currency,
+      );
 
       // Update account balance using Decimal
       await tx.fiatAccount.update({
@@ -355,7 +363,10 @@ export class BalanceService {
           entityId: account.id,
           metadata: {
             previousBalance: toApiString(currentBalance, account.currency),
-            newBalance: toApiString(flutterwaveBalanceDecimal, account.currency),
+            newBalance: toApiString(
+              flutterwaveBalanceDecimal,
+              account.currency,
+            ),
             difference: toApiString(difference, account.currency),
           },
         },

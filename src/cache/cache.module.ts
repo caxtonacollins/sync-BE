@@ -27,7 +27,10 @@ import { redisStore } from 'cache-manager-redis-store';
             ttl: parseInt(process.env.REDIS_TTL || '60'),
           };
         } catch (error) {
-          console.error('Failed to connect to Redis, falling back to in-memory cache:', error);
+          console.error(
+            'Failed to connect to Redis, falling back to in-memory cache:',
+            error,
+          );
           return {
             ttl: parseInt(process.env.REDIS_TTL || '60'),
           };
@@ -37,4 +40,4 @@ import { redisStore } from 'cache-manager-redis-store';
   ],
   exports: [NestCacheModule],
 })
-export class CacheModule { }
+export class CacheModule {}
