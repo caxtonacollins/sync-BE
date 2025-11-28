@@ -6,6 +6,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StakingContractService } from 'src/contract/services/staking/staking.service';
 import { stringToFelt252 } from 'src/contract/utils';
+import { BalanceSyncService } from 'src/shared/services/balance-sync.service';
 import {
   ClaimCryptoRewardsDto,
   CreateCryptoStakeDto,
@@ -17,6 +18,7 @@ export class CryptoStakingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly contract: StakingContractService,
+    private readonly balanceSync: BalanceSyncService,
   ) {}
 
   async stakeCrypto(userId: string, dto: CreateCryptoStakeDto) {

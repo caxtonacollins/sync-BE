@@ -17,12 +17,10 @@ import { TransferModule } from './transfer/transfer.module';
 import { PaymentModule } from './payment/payment.module';
 import { SyncPayModule } from './syncpay/syncpay.module';
 import { CacheModule } from './cache/cache.module';
-import { FiatStakingService } from './fiat-staking/fiat-staking.service';
-import { FiatStakingController } from './fiat-staking/fiat-staking.controller';
 import { FiatStakingModule } from './fiat-staking/fiat-staking.module';
 import { StakingModule } from './staking/staking.module';
 import { CryptoStakingModule } from './crypto-staking/crypto-staking.module';
-import { LiquidityController } from './contract/controllers/liquidity/liquidity.controller';
+import { BalanceSyncModule } from './balance-sync/balance-sync.module';
 
 @Module({
   imports: [
@@ -44,6 +42,7 @@ import { LiquidityController } from './contract/controllers/liquidity/liquidity.
     FiatStakingModule,
     StakingModule,
     CryptoStakingModule,
+    BalanceSyncModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

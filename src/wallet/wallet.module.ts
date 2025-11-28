@@ -7,23 +7,22 @@ import { ContractModule } from '../contract/contract.module';
 import { WalletController } from './wallet.controller';
 import { FlutterwaveService } from '../flutterwave/flutterwave.service';
 import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
   imports: [
-    PrismaModule, 
+    PrismaModule,
     forwardRef(() => ContractModule),
-    forwardRef(() => ExchangeRateModule)
+    forwardRef(() => ExchangeRateModule),
+    SharedModule,
   ],
   controllers: [WalletController],
   providers: [
     WalletService,
     KeyManagementService,
     MonnifyService,
-    FlutterwaveService
+    FlutterwaveService,
   ],
-  exports: [
-    WalletService,
-    KeyManagementService
-  ],
+  exports: [WalletService, KeyManagementService],
 })
 export class WalletModule {}

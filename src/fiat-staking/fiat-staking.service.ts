@@ -12,6 +12,7 @@ import { StakingContractService } from 'src/contract/services/staking/staking.se
 import { stringToFelt252 } from 'src/contract/utils';
 import { WalletService } from 'src/wallet/wallet.service';
 import { QueueWithdrawalDto } from 'src/wallet/dto/queue-withdrawal.dto';
+import { BalanceSyncService } from 'src/shared/services/balance-sync.service';
 import Decimal from 'decimal.js';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class FiatStakingService {
     private readonly prisma: PrismaService,
     private readonly starknet: StakingContractService,
     private readonly wallet: WalletService,
+    private readonly balanceSync: BalanceSyncService,
   ) {}
 
   // STAKE FIAT

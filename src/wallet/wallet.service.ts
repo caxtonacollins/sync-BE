@@ -8,20 +8,19 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MonnifyService } from '../monnify/monnify.service';
 import { Logger } from '@nestjs/common';
-import { FiatAccount, CryptoWallet, Transaction } from '@prisma/client';
+import { FiatAccount, CryptoWallet } from '@prisma/client';
 import { ExchangeRateService } from '../exchange-rate/exchange-rate.service';
 import { QueueWithdrawalDto } from './dto/queue-withdrawal.dto';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 import { AccountContractService } from 'src/contract/services/account/account.service';
+import { BalanceSyncService } from 'src/shared/services/balance-sync.service';
 import Decimal from 'decimal.js';
 import {
   toApiString,
   parseAmount,
   multiplyAmount,
   addAmounts,
-  formatAmount,
 } from '../../libs/currency.utils';
-import { formatUnifiedWalletBalance } from '../../libs/api-response.utils';
 
 export interface WalletSummaryResponse {
   totalBalanceNGN: number;
@@ -80,6 +79,7 @@ export class WalletService {
     @Inject(forwardRef(() => AccountContractService))
     private readonly accountContractService: AccountContractService,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly balanceSync: BalanceSyncService,
   ) {}
 
   /**
@@ -177,6 +177,8 @@ export class WalletService {
           cryptoWallets: {
             where: { isActive: true },
           },
+          fiatBalances: true,
+          cryptoBalances: true,
         },
       });
 
@@ -184,54 +186,40 @@ export class WalletService {
         throw new NotFoundException('User not found');
       }
 
-      // Get fiat balances - using Decimal for precision
-      const fiatBalances = await Promise.all(
-        // eslint-disable-next-line @typescript-eslint/await-thenable
-        user.fiatAccounts.map((account) => {
-          const balance = new Decimal(account.balance.toString());
+      // Get fiat balances from database cache (FAST - no blockchain calls)
+      const fiatBalances = user.fiatBalances.map((dbBalance) => {
+        const account = user.fiatAccounts.find(
+          (a) => a.currency === dbBalance.currency,
+        );
 
-          return {
-            currency: account.currency,
-            balance: toApiString(balance, account.currency), // Return as string for precision
-            accountId: account.id,
-            accountNumber: account.accountNumber,
-            bankName: account.bankName,
-            provider: account.provider,
-            isDefault: account.isDefault,
-          };
-        }),
-      );
+        return {
+          currency: dbBalance.currency,
+          balance: toApiString(dbBalance.available, dbBalance.currency),
+          accountId: account?.id || '',
+          accountNumber: account?.accountNumber || '',
+          bankName: account?.bankName || '',
+          provider: account?.provider || 'unknown',
+          isDefault: account?.isDefault || false,
+        };
+      });
 
-      // Get crypto balances - Fetch all token balances for each wallet
-      const cryptoBalances = await Promise.all(
-        user.cryptoWallets.map(async (wallet) => {
-          // Fetch balances for multiple tokens in parallel
-          const tokenBalances =
-            await this.contractService.getMultipleAccountBalances(
-              ['USDC', 'STRK', 'SYNC', 'ETH'],
-              wallet.address,
-            );
+      // Get crypto balances from database cache (FAST - no blockchain calls)
+      const cryptoBalances = user.cryptoBalances.map((dbBalance) => {
+        const wallet = user.cryptoWallets.find(
+          (w) =>
+            w.currency === dbBalance.currency &&
+            w.network === dbBalance.network,
+        );
 
-          // Map token balances to the format expected by the frontend
-          return tokenBalances.map((tokenBalance) => {
-            const balance = parseAmount(
-              tokenBalance.formatted || '0',
-              tokenBalance.symbol,
-            );
-            return {
-              currency: tokenBalance.symbol,
-              balance: toApiString(balance, tokenBalance.symbol), // Return as string for precision
-              walletId: wallet.id,
-              network: wallet.network,
-              address: wallet.address,
-              isDefault: wallet.isDefault,
-            };
-          });
-        }),
-      );
-
-      // Flatten the array of arrays
-      const flattenedCryptoBalances = cryptoBalances.flat();
+        return {
+          currency: dbBalance.currency,
+          balance: toApiString(dbBalance.available, dbBalance.currency),
+          walletId: wallet?.id || '',
+          network: dbBalance.network,
+          address: wallet?.address || '',
+          isDefault: wallet?.isDefault || false,
+        };
+      });
 
       // Get real-time exchange rates
       const exchangeRates = await this.exchangeRateService.getExchangeRates();
@@ -240,7 +228,7 @@ export class WalletService {
       const rateMap = new Map<string, Decimal>();
       exchangeRates.forEach((rate) => {
         const key = `${rate.fiatSymbol}_${rate.tokenSymbol}`;
-        rateMap.set(key, new Decimal(rate.rate.toString()));
+        rateMap.set(key, new Decimal(String(rate.rate)));
       });
 
       let totalValueNGN = new Decimal(0);
@@ -264,7 +252,7 @@ export class WalletService {
       });
 
       // Calculate crypto balances in NGN using Decimal for precision
-      flattenedCryptoBalances.forEach(({ currency, balance }) => {
+      cryptoBalances.forEach(({ currency, balance }) => {
         const balanceDecimal = parseAmount(balance, currency);
         const tokenToUsdRate = rateMap.get(`USD_${currency}`);
         const usdToNgnRate = rateMap.get('NGN_USD');
@@ -288,10 +276,14 @@ export class WalletService {
           ? totalValueNGN.div(usdToNgnRate)
           : new Decimal(0);
 
+      this.logger.debug(
+        `Unified balance retrieved from cache for user ${userId}. Fiat: ${fiatBalances.length}, Crypto: ${cryptoBalances.length}`,
+      );
+
       return {
         userId,
         fiatBalances,
-        cryptoBalances: flattenedCryptoBalances,
+        cryptoBalances,
         totalValueUSD: toApiString(totalValueUSD, 'USD'),
         totalValueNGN: toApiString(totalValueNGN, 'NGN'),
       };
@@ -463,7 +455,7 @@ export class WalletService {
         (w) => w.isDefault,
       );
 
-      let tokenBalances = {
+      const tokenBalances = {
         STRK: 0,
         SYNC: 0,
         ETH: 0,
@@ -746,7 +738,7 @@ export class WalletService {
     });
 
     // 7. Send notification to admin for manual processing
-    await this.sendWithdrawalNotificationToAdmin(withdrawalRequest);
+    this.sendWithdrawalNotificationToAdmin(withdrawalRequest);
 
     return withdrawalRequest;
   }
@@ -754,7 +746,7 @@ export class WalletService {
   /**
    * Helper method to send notification to admin about a new large withdrawal request
    */
-  private async sendWithdrawalNotificationToAdmin(withdrawalRequest: any) {
+  private sendWithdrawalNotificationToAdmin(withdrawalRequest: any) {
     try {
       // In a real implementation, this would send an email or notification to the admin
       // For example:
