@@ -20,6 +20,7 @@ import { CacheModule } from './cache/cache.module';
 import { FiatStakingService } from './fiat-staking/fiat-staking.service';
 import { FiatStakingController } from './fiat-staking/fiat-staking.controller';
 import { FiatStakingModule } from './fiat-staking/fiat-staking.module';
+import { StakingModule } from './staking/staking.module';
 import { CryptoStakingModule } from './crypto-staking/crypto-staking.module';
 import { LiquidityController } from './contract/controllers/liquidity/liquidity.controller';
 
@@ -41,9 +42,10 @@ import { LiquidityController } from './contract/controllers/liquidity/liquidity.
     PaymentModule,
     SyncPayModule,
     FiatStakingModule,
+    StakingModule,
     CryptoStakingModule,
   ],
-  controllers: [AppController, FiatStakingController, LiquidityController],
-  providers: [AppService, PrismaService, FiatStakingService],
+  controllers: [AppController],
+  providers: [AppService, PrismaService],
 })
 export class AppModule {}

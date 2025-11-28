@@ -141,6 +141,13 @@ export class UserService {
         },
       });
 
+      await this.prisma.user.update({
+        where: { id: user.id},
+        data: {
+          starknetAccountAddress: accountResult.accountAddress,
+        },
+      });
+
       const defaultFiatAccount = await this.prisma.fiatAccount.findFirst({
         where: { userId: user.id, isDefault: true },
       });

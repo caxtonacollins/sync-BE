@@ -12,6 +12,7 @@ import {
 } from 'starknet';
 import {
     connectToStarknet,
+    convertToWei,
     createNewContractInstance,
     getClassAt,
     getDeployerWallet,
@@ -20,6 +21,7 @@ import {
 } from '../../utils';
 import chalk from 'chalk';
 import { UserService } from 'src/user/user.service';
+import { TokenContractService } from '../erc20-token/erc20-token.service';
 import { KeyManagementService } from 'src/wallet/key-management.service';
 
 @Injectable()
@@ -31,9 +33,11 @@ export class LiquidityPoolContractService {
 
     constructor(
         @Inject(CACHE_MANAGER) private cacheManager: Cache,
-        private readonly keyManagementService: KeyManagementService,
         @Inject(forwardRef(() => UserService))
+        @Inject(forwardRef(() => TokenContractService))
         private readonly userService: UserService,
+        private readonly tokenContractService: TokenContractService,
+        private readonly keyManagementService: KeyManagementService,
     ) {
         this.provider = connectToStarknet();
         this.liquidityContractAddress =
@@ -306,18 +310,18 @@ export class LiquidityPoolContractService {
         const decimals = await this.getTokenDecimals(supportedTokenAddress);
 
         // Convert token amount to wei units properly handling decimals
-        const amountInWei = this.convertToWei(tokenAmount, decimals);
+        const amountInWei = convertToWei(tokenAmount, decimals);
         const amountU256 = uint256.bnToUint256(amountInWei);
 
-        console.log('swapFiatToToken', {
-            userContractAddress,
-            swapOrderIdToFelt,
-            fiatSymbolFelt,
-            tokenSymbolToUSD,
-            fiatAmountU256,
-            amountU256,
-            fee,
-        });
+        // console.log('swapFiatToToken', {
+        //     userContractAddress,
+        //     swapOrderIdToFelt,
+        //     fiatSymbolFelt,
+        //     tokenSymbolToUSD,
+        //     fiatAmountU256,
+        //     amountU256,
+        //     fee,
+        // });
         const swapCall = {
             contractAddress: this.liquidityContractAddress,
             entrypoint: 'swap_fiat_to_token',
@@ -382,7 +386,7 @@ export class LiquidityPoolContractService {
         const decimals = await this.getTokenDecimals(supportedTokenAddress);
 
         // Convert token amount to wei units properly handling decimals
-        const amountInWei = this.convertToWei(tokenAmount, decimals);
+        const amountInWei = convertToWei(tokenAmount, decimals);
         const amountU256 = uint256.bnToUint256(amountInWei);
 
         // try {
@@ -426,16 +430,20 @@ export class LiquidityPoolContractService {
 
         try {
             const account = getDeployerWallet();
-            await this.approveTokenWithUserCredentials(
+            const tokenAddress = this.tokenContractService.getTokenAddress(tokenSymbol);
+            if (!tokenAddress) throw new Error(`Token ${tokenSymbol} not supported`);
+            await this.tokenContractService.approveTokenWithUserCredentials(
                 user.id,
-                userContractAddress,
+                tokenAddress,
                 this.liquidityContractAddress,
                 amountU256);
 
-            const txResponse = await account.execute(swapCall);
+            // const txResponse = await account.execute(swapCall);
+
+            const txResponse = await this.keyManagementService.executeTransaction(user.id, [swapCall]);
 
             return {
-                txHash: txResponse.transaction_hash,
+                txHash: txResponse.transactionHash,
                 status: 'pending',
                 details: {
                     from: token,
@@ -672,89 +680,6 @@ export class LiquidityPoolContractService {
      */
     setLiquidityContractAddress(address: string) {
         this.liquidityContractAddress = address;
-    }
-
-    /**
-     * Execute user transaction
-     */
-    async executeUserTransaction(
-        userId: string,
-        calls: any[],
-    ): Promise<{ transactionHash: string; receipt?: any }> {
-        try {
-            return await this.keyManagementService.executeTransaction(userId, calls);
-        } catch (error) {
-            console.error(`Failed to execute user transaction for ${userId}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Approve token with user credentials
-     */
-    async approveTokenWithUserCredentials(
-        userId: string,
-        tokenAddress: string,
-        spenderAddress: string,
-        amount: Uint256,
-    ) {
-        const call = {
-            contractAddress: tokenAddress,
-            entrypoint: 'approve',
-            calldata: CallData.compile({
-                spender: spenderAddress,
-                amount,
-            }),
-        };
-
-        const result = await this.executeUserTransaction(userId, [call]);
-        return result;
-    }
-
-    /**
-     * Approve token with deployer credentials
-     */
-    async approveTokenWithDeployerCredentials(
-        tokenAddress: string,
-        spenderAddress: string,
-        amount: bigint,
-    ) {
-        const account = getDeployerWallet();
-
-        const call = {
-            contractAddress: tokenAddress,
-            entrypoint: 'approve',
-            calldata: CallData.compile({
-                spender: spenderAddress,
-                amount: {
-                    low: amount & BigInt('0xFFFFFFFFFFFFFFFF'),
-                    high: amount >> BigInt(128),
-                },
-            }),
-        };
-
-        const result = await account.execute(call);
-        await this.provider.waitForTransaction(result.transaction_hash);
-
-        return result;
-    }
-
-    private convertToWei(amount: string | number, decimals: number): bigint {
-        const amountStr = amount.toString();
-
-        // Split into whole and decimal parts
-        const parts = amountStr.split('.');
-        const wholePart = parts[0];
-        const decimalPart = parts[1] || '0';
-
-        // Pad or truncate decimal part to match token decimals
-        const paddedDecimalPart = decimalPart.padEnd(decimals, '0').substring(0, decimals);
-
-        // Combine whole and decimal parts
-        const amountWithDecimals = wholePart + paddedDecimalPart;
-
-        // Convert to BigInt
-        return BigInt(amountWithDecimals);
     }
 
     private async invalidateUserRegistrationCache(userContractAddress: string) {

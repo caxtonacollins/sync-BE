@@ -6,14 +6,9 @@ import { ContractModule } from 'src/contract/contract.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 
 @Module({
-  imports: [
-    ContractModule,
-    WalletModule
-  ],
-  providers: [
-    CryptoStakingService, 
-    PrismaService
-  ],
-  controllers: [CryptoStakingController]
+  imports: [ContractModule, WalletModule],
+  providers: [CryptoStakingService, PrismaService],
+  controllers: [CryptoStakingController],
+  exports: [CryptoStakingService],
 })
 export class CryptoStakingModule {}

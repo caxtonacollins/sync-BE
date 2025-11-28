@@ -159,29 +159,18 @@ export class SuperContractServicee {
         try {
             this.logger.log(`Estimating fee for ${contractAddress}:${entrypoint}`);
 
-            // TODO: Replace with actual fee estimation
-            // const call = {
-            //   contractAddress,
-            //   entrypoint,
-            //   calldata,
-            // };
-            //
-            // const feeEstimate = await this.provider.estimateFee(call, this.deployerAccount.address);
-            // return {
-            //   gasConsumed: feeEstimate.gas_consumed,
-            //   gasPrice: feeEstimate.gas_price,
-            //   overallFee: feeEstimate.overall_fee,
-            // };
+            const { suggestedMaxFee, unit } = await this.deployerAccount.estimateInvokeFee({
+                contractAddress,
+                entrypoint,
+                calldata,
+            });
 
-            // Mock response for development
-            const mockResult = {
-                gasConsumed: '15000',
-                gasPrice: '100000000000',
-                overallFee: '1500000000000000',
+            return {
+                gasConsumed: suggestedMaxFee.toString(),
+                gasPrice: unit,
+                overallFee: suggestedMaxFee.toString(),
             };
 
-            this.logger.log(`Mock fee estimate: ${mockResult.overallFee} wei`);
-            return mockResult;
         } catch (error) {
             this.logger.error(`Failed to estimate transaction fee:`, error);
             throw error;

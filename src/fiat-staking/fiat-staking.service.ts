@@ -77,7 +77,7 @@ export class FiatStakingService {
       const lockDurationSeconds = dto.lockDays * 24 * 60 * 60;
       const unlockAt = new Date(Date.now() + lockDurationSeconds * 1000);
       const now = new Date();
-      
+
       const stake = await tx.fiatStake.create({
         data: {
           userId: user.id,
@@ -128,14 +128,14 @@ export class FiatStakingService {
         });
 
         return { stake, txHash: transactionHash };
-      } catch (error) {
+      } catch {
         // If on-chain recording fails, rollback the transaction
         throw new BadRequestException('Failed to record stake on-chain');
       }
     });
 
     // 5. Trigger merkle tree update (async)
-    this.updateMerkleTreeAsync(dto.currency);
+    void this.updateMerkleTreeAsync(dto.currency);
 
     return {
       success: true,
@@ -409,7 +409,7 @@ export class FiatStakingService {
       const leaves = stakes.map((stake) =>
         keccak256(
           Buffer.from(
-            `${stake.user.starknetAccountAddress}:${stake.currency}:${stake.amount}:${stake.id}`,
+            `${stake.user.starknetAccountAddress}:${stake.currency}:${stake.amount.toString()}:${stake.id}`,
           ),
         ),
       );
@@ -426,7 +426,9 @@ export class FiatStakingService {
           currency,
           merkleRoot: root,
           totalStakes: stakes.length,
-          totalAmount: stakes.reduce((sum, s) => sum.plus(s.amount), new Decimal(0)).toNumber(),
+          totalAmount: stakes
+            .reduce((sum, s) => sum.plus(s.amount), new Decimal(0))
+            .toNumber(),
           leaves: leaves,
         },
       });
@@ -459,7 +461,7 @@ export class FiatStakingService {
         });
 
         const totalStakedAmount = totalStaked._sum.amount?.toNumber() || 0;
-        
+
         if (totalStakedAmount <= 0) {
           console.log(`No active stakes found for ${currency}, skipping...`);
           continue;
@@ -467,14 +469,14 @@ export class FiatStakingService {
 
         // 2. Get actual bank balance from wallet API
         const bankBalance = await this.wallet.getBankBalance(currency);
-        
+
         if (bankBalance === null || bankBalance === undefined) {
           throw new Error(`Failed to get bank balance for ${currency}`);
         }
 
         // 3. Calculate reserve ratio with proper decimal handling
         const reserveRatioBps = Math.floor(
-          (Number(bankBalance) / totalStakedAmount) * 10000
+          (Number(bankBalance) / totalStakedAmount) * 10000,
         );
 
         // 4. Generate audit report and upload to IPFS
@@ -491,15 +493,18 @@ export class FiatStakingService {
         try {
           ipfsHash = await this.uploadToIPFS(auditReport);
         } catch (error) {
-          console.error(`Failed to upload audit report to IPFS for ${currency}:`, error);
+          console.error(
+            `Failed to upload audit report to IPFS for ${currency}:`,
+            error,
+          );
           throw new Error('Failed to upload audit report to IPFS');
         }
 
         // 5. Record snapshot on-chain with auditor signature
         let auditorSignature: string | null = null;
         try {
-          auditorSignature = await this.getAuditorSignature(auditReport);
-          
+          auditorSignature = await this.getAuditorSignature();
+
           if (auditorSignature) {
             await this.starknet.createReserveSnapshot(
               stringToFelt252(currency),
@@ -508,10 +513,15 @@ export class FiatStakingService {
               stringToFelt252(ipfsHash),
             );
           } else {
-            console.warn('Received null auditor signature, skipping on-chain snapshot');
+            console.warn(
+              'Received null auditor signature, skipping on-chain snapshot',
+            );
           }
         } catch (error) {
-          console.error(`Failed to create on-chain snapshot for ${currency}:`, error);
+          console.error(
+            `Failed to create on-chain snapshot for ${currency}:`,
+            error,
+          );
           // Continue with database snapshot even if on-chain fails
         }
 
@@ -527,10 +537,13 @@ export class FiatStakingService {
               auditorSignature: auditorSignature || null,
             },
           });
-          
+
           console.log(`Successfully created reserve snapshot for ${currency}`);
         } catch (error) {
-          console.error(`Failed to save reserve snapshot to database for ${currency}:`, error);
+          console.error(
+            `Failed to save reserve snapshot to database for ${currency}:`,
+            error,
+          );
           throw error; // Rethrow to trigger error handling
         }
 
@@ -538,7 +551,7 @@ export class FiatStakingService {
         if (reserveRatioBps < 10000) {
           const alertMessage = `⚠️ Reserve ratio for ${currency} is below 100%: ${reserveRatioBps / 100}%`;
           console.warn(alertMessage);
-          await this.sendAlertToAdmin(alertMessage);
+          this.sendAlertToAdmin(alertMessage);
         }
       } catch (error) {
         console.error(
@@ -588,14 +601,14 @@ export class FiatStakingService {
     return baseApyBps + bonus;
   }
 
-  async calculateProjectedRewards(
+  calculateProjectedRewards(
     amount: number,
     apyBps: number,
     lockDays: number,
   ): Promise<number> {
     const yearlyRewards = (amount * apyBps) / 10000;
     const periodRewards = (yearlyRewards * lockDays) / 365;
-    return Math.floor(periodRewards * 100) / 100;
+    return Promise.resolve(Math.floor(periodRewards * 100) / 100);
   }
 
   private getDaysRemaining(unlockAt: Date): number {
@@ -621,16 +634,16 @@ export class FiatStakingService {
     return decimalsMap[currency] || 2;
   }
 
-
   private async uploadToIPFS(data: any): Promise<string> {
+    console.log('Uploading data to IPFS:', data);
     // Upload to IPFS and return hash
     // Implement using services like Pinata, Infura, etc.
-    return 'Qm...'; // Placeholder
+    return Promise.resolve('Qm...');
   }
 
-  private async getAuditorSignature(report: any): Promise<string> {
+  private getAuditorSignature(): Promise<string> {
     // Get digital signature from external auditor
-    return 'signature...'; // Placeholder
+    return Promise.resolve('signature...');
   }
 
   private async getRecentTransactions(currency: string) {
@@ -641,8 +654,205 @@ export class FiatStakingService {
     });
   }
 
-  private async sendAlertToAdmin(message: string) {
+  private sendAlertToAdmin(message: string): void {
     // Send alert via email, Slack, etc.
     console.error(message);
+  }
+
+  //
+  // GET POOL BY CURRENCY
+  //
+
+  async getPoolByCurrency(currency: string) {
+    const pool = await this.prisma.fiatStakingPool.findUnique({
+      where: { currency },
+    });
+
+    if (!pool) {
+      throw new NotFoundException(`Pool for ${currency} not found`);
+    }
+
+    return {
+      currency: pool.currency,
+      baseApy: (pool.baseApyBps / 100).toFixed(2) + '%',
+      maxApy: ((pool.baseApyBps + pool.bonusApyBps) / 100).toFixed(2) + '%',
+      minStakeAmount: pool.minStakeAmount.toNumber(),
+      maxStakeAmount: pool.maxStakeAmount.toNumber(),
+      totalStaked: pool.totalStaked.toNumber(),
+      totalStakers: pool.totalStakers,
+      isActive: pool.isActive,
+      createdAt: pool.createdAt,
+      updatedAt: pool.updatedAt,
+    };
+  }
+
+  //
+  // GET POOL STATISTICS
+  //
+
+  async getPoolStatistics(currency: string) {
+    const pool = await this.prisma.fiatStakingPool.findUnique({
+      where: { currency },
+    });
+
+    if (!pool) {
+      throw new NotFoundException(`Pool for ${currency} not found`);
+    }
+
+    const stakes = await this.prisma.fiatStake.findMany({
+      where: {
+        currency,
+        status: 'ACTIVE',
+      },
+    });
+
+    const totalRewards = stakes.reduce(
+      (sum, stake) => sum + this.calculateRewards(stake),
+      0,
+    );
+
+    return {
+      currency: pool.currency,
+      totalStaked: pool.totalStaked.toNumber(),
+      totalStakers: pool.totalStakers,
+      totalRewardsDistributed: totalRewards,
+      averageLockDuration:
+        stakes.length > 0
+          ? Math.round(
+              stakes.reduce((sum, s) => sum + s.lockDays, 0) / stakes.length,
+            )
+          : 0,
+      baseApy: (pool.baseApyBps / 100).toFixed(2) + '%',
+      maxApy: ((pool.baseApyBps + pool.bonusApyBps) / 100).toFixed(2) + '%',
+      poolStatus: pool.isActive ? 'active' : 'inactive',
+    };
+  }
+
+  //
+  // CALCULATE REWARDS FOR SPECIFIC STAKE POSITION
+  //
+
+  async calculateRewardsByStakePosition(userId: string, stakeId: string) {
+    const stake = await this.prisma.fiatStake.findFirst({
+      where: {
+        id: stakeId,
+        userId,
+      },
+      include: { pool: true },
+    });
+
+    if (!stake) {
+      throw new NotFoundException('Stake not found');
+    }
+
+    const currentRewards = this.calculateRewards(stake);
+    const projectedYearlyRewards =
+      (stake.amount.toNumber() * stake.effectiveApyBps) / 10000;
+    const projectedTotalRewards =
+      (stake.amount.toNumber() * stake.effectiveApyBps * stake.lockDays) /
+      (10000 * 365);
+
+    return {
+      stakeId: stake.id,
+      currency: stake.currency,
+      amount: stake.amount.toNumber(),
+      currentRewards,
+      projectedYearlyRewards,
+      projectedTotalRewards,
+      effectiveApy: (stake.effectiveApyBps / 100).toFixed(2) + '%',
+      stakedAt: stake.stakedAt,
+      unlockAt: stake.unlockAt,
+      lastRewardClaim: stake.lastRewardClaim,
+      totalRewardsClaimed: stake.rewardsClaimed.toNumber(),
+    };
+  }
+
+  //
+  // EMERGENCY UNSTAKE FIAT (if applicable)
+  //
+
+  async emergencyUnstakeFiat(userId: string, dto: UnstakeFiatDto) {
+    const stake = await this.prisma.fiatStake.findFirst({
+      where: {
+        id: dto.stakeId,
+        userId,
+        currency: dto.currency,
+        status: 'ACTIVE',
+      },
+      include: { user: true },
+    });
+
+    if (!stake) {
+      throw new NotFoundException('Stake not found or already unstaked');
+    }
+
+    const EMERGENCY_FEE_BPS = parseInt(
+      process.env.EMERGENCY_WITHDRAWAL_FEE_BPS || '1000',
+    );
+    const penalty = (stake.amount.toNumber() * EMERGENCY_FEE_BPS) / 10000;
+    const amountAfterPenalty = new Decimal(stake.amount).minus(penalty);
+
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Update stake status
+      await tx.fiatStake.update({
+        where: { id: stake.id },
+        data: {
+          status: 'EMERGENCY_WITHDRAWN',
+          unstakedAt: new Date(),
+        },
+      });
+
+      // 2. Return principal minus penalty to user's available balance
+      await tx.fiatBalance.update({
+        where: {
+          userId_currency: {
+            userId,
+            currency: dto.currency,
+          },
+        },
+        data: {
+          available: { increment: amountAfterPenalty },
+          staked: { decrement: stake.amount },
+        },
+      });
+
+      // 3. Record emergency unstake on-chain
+      const { transactionHash } = await this.starknet.recordFiatUnstake(
+        userId,
+        stringToFelt252(dto.currency),
+        stake.id,
+      );
+
+      // 4. Create transaction records
+      await tx.fiatTransaction.createMany({
+        data: [
+          {
+            userId,
+            currency: dto.currency,
+            amount: amountAfterPenalty,
+            type: 'UNSTAKE_PRINCIPAL',
+            status: 'COMPLETED',
+            description: `Emergency unstaked principal from ${dto.currency} stake with penalty`,
+            reference: stake.id,
+          },
+          {
+            userId,
+            currency: dto.currency,
+            amount: new Decimal(penalty),
+            type: 'STAKING_REWARD',
+            status: 'COMPLETED',
+            description: `Emergency unstake penalty for ${dto.currency} stake`,
+            reference: stake.id,
+          },
+        ],
+      });
+
+      return {
+        success: true,
+        principalReturned: amountAfterPenalty.toNumber(),
+        penalty,
+        txHash: transactionHash,
+      };
+    });
   }
 }

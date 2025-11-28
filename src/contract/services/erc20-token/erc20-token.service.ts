@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { RpcProvider, uint256, CallData } from 'starknet';
+import { RpcProvider, uint256, CallData, Uint256 } from 'starknet';
 import { connectToStarknet, createNewContractInstance, getDeployerWallet } from '../../utils';
 import erc20 from '../../abi/erc20.json';
 import { TokenBalance } from '../../../types';
 import chalk from 'chalk';
+import { KeyManagementService } from 'src/wallet/key-management.service';
 
 @Injectable()
 export class TokenContractService {
@@ -17,7 +18,7 @@ export class TokenContractService {
     private readonly tokenAddressMap: Record<string, string>;
     private readonly decimalsMap: Record<string, number>;
 
-    constructor() {
+    constructor(private readonly keyManagementService: KeyManagementService) {
         this.provider = connectToStarknet();
         this._syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
         this._strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
@@ -209,5 +210,68 @@ export class TokenContractService {
         return this.decimalsMap[symbol.toUpperCase()] || 18;
     }
 
-    // Cache invalidation is now handled by the CacheInterceptor
+    /**
+  * Execute user transaction
+  */
+    async executeUserTransaction(
+        userId: string,
+        calls: any[],
+    ): Promise<{ transactionHash: string; receipt?: any }> {
+        try {
+            return await this.keyManagementService.executeTransaction(userId, calls);
+        } catch (error) {
+            console.error(`Failed to execute user transaction for ${userId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Approve token with user credentials
+     */
+    async approveTokenWithUserCredentials(
+        userId: string,
+        tokenAddress: string,
+        spenderAddress: string,
+        amount: Uint256,
+    ) {
+        const call = {
+            contractAddress: tokenAddress,
+            entrypoint: 'approve',
+            calldata: CallData.compile({
+                spender: spenderAddress,
+                amount,
+            }),
+        };
+
+        const result = await this.executeUserTransaction(userId, [call]);
+        return result;
+    }
+
+    /**
+     * Approve token with deployer credentials
+     */
+    async approveTokenWithDeployerCredentials(
+        tokenAddress: string,
+        spenderAddress: string,
+        amount: bigint,
+    ) {
+        const account = getDeployerWallet();
+
+        const call = {
+            contractAddress: tokenAddress,
+            entrypoint: 'approve',
+            calldata: CallData.compile({
+                spender: spenderAddress,
+                amount: {
+                    low: amount & BigInt('0xFFFFFFFFFFFFFFFF'),
+                    high: amount >> BigInt(128),
+                },
+            }),
+        };
+
+        const result = await account.execute(call);
+        await this.provider.waitForTransaction(result.transaction_hash);
+
+        return result;
+    }
 }

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MonnifyService } from '../monnify/monnify.service';
 import { Logger } from '@nestjs/common';
@@ -200,10 +206,11 @@ export class WalletService {
       const cryptoBalances = await Promise.all(
         user.cryptoWallets.map(async (wallet) => {
           // Fetch balances for multiple tokens in parallel
-          const tokenBalances = await this.contractService.getMultipleAccountBalances(
-            ['USDC', 'STRK', 'SYNC', 'ETH'],
-            wallet.address,
-          );
+          const tokenBalances =
+            await this.contractService.getMultipleAccountBalances(
+              ['USDC', 'STRK', 'SYNC', 'ETH'],
+              wallet.address,
+            );
 
           // Map token balances to the format expected by the frontend
           return tokenBalances.map((tokenBalance) => {
@@ -246,7 +253,11 @@ export class WalletService {
         } else if (currency === 'USD') {
           const usdToNgnRate = rateMap.get('NGN_USD');
           if (usdToNgnRate) {
-            const valueInNgn = multiplyAmount(balanceDecimal, usdToNgnRate, 'NGN');
+            const valueInNgn = multiplyAmount(
+              balanceDecimal,
+              usdToNgnRate,
+              'NGN',
+            );
             totalValueNGN = addAmounts(totalValueNGN, valueInNgn, 'NGN');
           }
         }
@@ -260,7 +271,11 @@ export class WalletService {
 
         if (tokenToUsdRate && usdToNgnRate) {
           // Convert crypto to USD, then USD to NGN
-          const valueInUsd = multiplyAmount(balanceDecimal, tokenToUsdRate, 'USD');
+          const valueInUsd = multiplyAmount(
+            balanceDecimal,
+            tokenToUsdRate,
+            'USD',
+          );
           const valueInNgn = multiplyAmount(valueInUsd, usdToNgnRate, 'NGN');
           totalValueNGN = addAmounts(totalValueNGN, valueInNgn, 'NGN');
         }
@@ -268,9 +283,10 @@ export class WalletService {
 
       // Calculate total in USD using Decimal
       const usdToNgnRate = rateMap.get('NGN_USD');
-      const totalValueUSD = usdToNgnRate && !usdToNgnRate.isZero()
-        ? totalValueNGN.div(usdToNgnRate)
-        : new Decimal(0);
+      const totalValueUSD =
+        usdToNgnRate && !usdToNgnRate.isZero()
+          ? totalValueNGN.div(usdToNgnRate)
+          : new Decimal(0);
 
       return {
         userId,
@@ -360,15 +376,40 @@ export class WalletService {
         throw new Error('Failed to create StarkNet account');
       }
 
-      return await this.prisma.cryptoWallet.create({
-        data: {
-          userId,
-          network: 'starknet',
-          address: result.accountAddress,
-          encryptedPrivateKey: result.encryptedPrivateKey,
-          currency,
-          isDefault: currency === 'STRK',
-        },
+      // Use transaction to ensure atomicity: create wallet + crypto balance
+      return await this.prisma.$transaction(async (tx) => {
+        const wallet = await tx.cryptoWallet.create({
+          data: {
+            userId,
+            network: 'starknet',
+            address: result.accountAddress,
+            encryptedPrivateKey: result.encryptedPrivateKey,
+            currency,
+            isDefault: currency === 'STRK',
+          },
+        });
+
+        // Create or update cryptoBalance for this user/currency/network
+        await tx.cryptoBalance.upsert({
+          where: {
+            userId_currency_network: {
+              userId,
+              currency,
+              network: 'starknet',
+            },
+          },
+          update: {}, // No-op if already exists
+          create: {
+            userId,
+            currency,
+            network: 'starknet',
+            available: new Decimal(0),
+            staked: new Decimal(0),
+            pending: new Decimal(0),
+          },
+        });
+
+        return wallet;
       });
     } catch (error) {
       this.logger.error(
@@ -512,9 +553,9 @@ export class WalletService {
     // Define fee structure by currency
     const feeStructure = {
       NGN: (amount: number) => Math.min(100, Math.max(10, amount * 0.01)), // 1% with min 10 and max 100 NGN
-      USD: (amount: number) => Math.min(10, Math.max(1, amount * 0.01)),   // 1% with min 1 and max 10 USD
-      GBP: (amount: number) => Math.min(8, Math.max(0.8, amount * 0.01)),  // 1% with min 0.8 and max 8 GBP
-      GHS: (amount: number) => Math.min(50, Math.max(5, amount * 0.01)),   // 1% with min 5 and max 50 GHS
+      USD: (amount: number) => Math.min(10, Math.max(1, amount * 0.01)), // 1% with min 1 and max 10 USD
+      GBP: (amount: number) => Math.min(8, Math.max(0.8, amount * 0.01)), // 1% with min 0.8 and max 8 GBP
+      GHS: (amount: number) => Math.min(50, Math.max(5, amount * 0.01)), // 1% with min 5 and max 50 GHS
       default: (amount: number) => amount * 0.01, // 1% for other currencies
     };
 
@@ -533,7 +574,7 @@ export class WalletService {
       // For example, using Monnify or another payment processor
       // Since getAccountBalance doesn't exist, we'll use a placeholder implementation
       // that sums up the balances from the database as a fallback
-      
+
       // Get the sum of all fiat balances for this currency
       const result = await this.prisma.fiatBalance.aggregate({
         where: { currency },
@@ -541,16 +582,15 @@ export class WalletService {
           available: true,
         },
       });
-      
+
       // Convert Decimal to number
       return result._sum.available?.toNumber() || 0;
-      
     } catch (error) {
       this.logger.error(`Failed to get bank balance for ${currency}:`, error);
-      
+
       // In a real app, you might want to implement a fallback mechanism here,
       // such as checking a cached balance or using a different provider
-      
+
       // For now, we'll rethrow the error
       throw new Error(`Failed to retrieve bank balance: ${error.message}`);
     }
@@ -562,10 +602,7 @@ export class WalletService {
    * @param dto The withdrawal request details
    * @returns The created withdrawal request
    */
-  async queueLargeWithdrawal(
-    userId: string,
-    dto: QueueWithdrawalDto,
-  ) {
+  async queueLargeWithdrawal(userId: string, dto: QueueWithdrawalDto) {
     // 1. Validate the user exists
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -594,15 +631,17 @@ export class WalletService {
     // 3. Check if currency is supported
     const supportedCurrencies = ['NGN', 'USD', 'GBP', 'GHS'];
     if (!supportedCurrencies.includes(dto.currency)) {
-      throw new BadRequestException(`Currency ${dto.currency} is not supported for large withdrawals`);
+      throw new BadRequestException(
+        `Currency ${dto.currency} is not supported for large withdrawals`,
+      );
     }
 
     // 4. Check if amount is above threshold for manual processing
     const largeWithdrawalThresholds = {
       NGN: 500000, // 500,000 NGN
-      USD: 1000,   // 1,000 USD
-      GBP: 800,    // 800 GBP
-      GHS: 10000,  // 10,000 GHS
+      USD: 1000, // 1,000 USD
+      GBP: 800, // 800 GBP
+      GHS: 10000, // 10,000 GHS
     };
 
     const threshold = largeWithdrawalThresholds[dto.currency] || 0;
@@ -616,7 +655,7 @@ export class WalletService {
     // First, we need to create a transaction record with all required fields
     const reference = `WDR-${Date.now()}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
     const fee = this.calculateWithdrawalFee(dto.amount, dto.currency);
-    
+
     // Create the transaction first
     const transaction = await this.prisma.transaction.create({
       data: {
@@ -636,7 +675,7 @@ export class WalletService {
         },
       },
     });
-    
+
     // Then create the withdrawal request linked to the transaction
     const withdrawalData = {
       userId,
@@ -652,7 +691,7 @@ export class WalletService {
         bankAccountId: dto.bankAccountId,
       },
     };
-    
+
     // Use Prisma's create method with raw SQL as a fallback
     let withdrawalRequest;
     try {
@@ -700,7 +739,7 @@ export class WalletService {
       where: { id: transaction.id },
       data: {
         metadata: {
-          ...(transaction.metadata as object || {}),
+          ...((transaction.metadata as object) || {}),
           withdrawalRequestId: withdrawalRequest.id,
         },
       },
@@ -725,12 +764,15 @@ export class WalletService {
       //   message: `A new large withdrawal request of ${withdrawalRequest.amount} ${withdrawalRequest.currency} has been submitted.`,
       //   data: withdrawalRequest,
       // });
-      
+
       this.logger.log(
         `Large withdrawal request created: ${withdrawalRequest.id} for ${withdrawalRequest.amount} ${withdrawalRequest.currency}`,
       );
     } catch (error) {
-      this.logger.error('Failed to send withdrawal notification to admin:', error);
+      this.logger.error(
+        'Failed to send withdrawal notification to admin:',
+        error,
+      );
       // Don't throw the error as we don't want to fail the withdrawal request
     }
   }

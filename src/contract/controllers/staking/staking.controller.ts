@@ -5,6 +5,26 @@ import { StakingContractService } from 'src/contract/services/staking/staking.se
 export class StakingController {
     constructor(private readonly stakingService: StakingContractService) { }
 
+    @Post('stake')
+    stake(@Body() body: any) {
+        return this.stakingService.stake(
+            body.userId,
+            body.tokenSymbol,
+            body.amount,
+            body.decimals,
+            body.lockDuration,
+        );
+    }
+
+    @Post('unstake')
+    unstake(@Body() body: any) {
+        return this.stakingService.unstake(
+            body.userId,
+            body.tokenSymbol,
+            body.stakeId,
+        );
+    }
+
     @Post('create-staking-pool')
     createStakingPool(@Body() body: any) {
         return this.stakingService.createStakingPool(
@@ -94,9 +114,14 @@ export class StakingController {
         return this.stakingService.getStakingPool(tokenSymbol);
     }
 
-    @Get('user/:userAddress/stakes/:tokenSymbol')
-    getUserStakes(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
+    @Get('user/:userAddress/:stakeId/:tokenSymbol')
+    getUserStake(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string, @Param('stakeId') stakeId: number) {
         return this.stakingService.getStakePosition(userAddress, tokenSymbol, stakeId);
+    }
+
+    @Get('stakes/:userAddress/:tokenSymbol')
+    getUserStakes(@Param('userAddress') userAddress: string, @Param('tokenSymbol') tokenSymbol: string) {
+        return this.stakingService.getStakePositions(userAddress, tokenSymbol);
     }
 
     @Get('calculate-rewards/:userAddress/:tokenSymbol/:stakeId')

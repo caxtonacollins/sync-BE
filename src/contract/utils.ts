@@ -210,3 +210,114 @@ export function stringToFelt252(text: string): string {
   const hex = Buffer.from(text, 'utf8').toString('hex');
   return `0x${hex}`;
 }
+
+/**
+ * Converts a felt value to a standardized contract address format
+ * @param value - The value to convert (can be string, number, bigint, or BigNumberish)
+ * @returns A 0x-prefixed hex string representing the contract address
+ */
+export function feltToContractAddress(value: any): string {
+  if (!value && value !== 0) return '0x0';
+  
+  try {
+    // Handle BigInt, string, or number inputs
+    const bigIntValue = typeof value === 'bigint' 
+      ? value 
+      : BigInt(value);
+    
+    // Convert to hex and ensure it's lowercase for consistency
+    const hex = bigIntValue.toString(16).toLowerCase();
+    
+    // Ensure the hex string is properly prefixed with 0x
+    return hex.startsWith('0x') ? hex : `0x${hex}`;
+  } catch (e) {
+    console.error('Error converting felt to contract address:', { 
+      input: value, 
+      error: e.message 
+    });
+    return '0x0';
+  }
+}
+
+export function felt252ToString(felt: any): string {
+  if (!felt) return '';
+  
+  // Convert to string if it's a BigInt or number
+  const hexString = typeof felt === 'bigint' || typeof felt === 'number' 
+    ? felt.toString(16) 
+    : String(felt);
+    
+  const hex = hexString.startsWith('0x') ? hexString.substring(2) : hexString;
+  
+  try {
+    return Buffer.from(hex, 'hex').toString('utf8');
+  } catch (e) {
+    console.error('Error converting felt to string:', { 
+      input: felt, 
+      hexString,
+      error: e.message 
+    });
+    return hexString; // Return the raw hex if conversion fails
+  }
+}
+
+export function convertToWei(amount: string | number, decimals: number): bigint {
+  if (typeof amount === 'string') {
+    // Remove any commas and trim whitespace
+    amount = amount.replace(/,/g, '').trim();
+
+    // Check if the string is a valid number
+    if (!/^\d+(\.\d+)?$/.test(amount)) {
+      throw new Error('Invalid number format');
+    }
+  }
+
+  const value = typeof amount === 'string' ? parseFloat(amount) : amount;
+  const factor = 10 ** decimals;
+  const result = BigInt(Math.floor(value * factor));
+
+  return result;
+}
+
+export function convertFromWei(
+  amountInWei: string | bigint,
+  decimals: number,
+): string {
+  const amount = BigInt(amountInWei);
+  const factor = 10 ** decimals;
+  const value = Number(amount) / factor;
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
+  });
+}
+
+/**
+ * Safely converts any value to a JSON-serializable format, handling BigInt values
+ * by converting them to strings with a '_bigint' suffix.
+ */
+export function toJSONSafeValue(value: any): any {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => toJSONSafeValue(item));
+  }
+
+  if (typeof value === 'object') {
+    const result: Record<string, any> = {};
+    for (const key in value) {
+      if (Object.prototype.hasOwnProperty.call(value, key)) {
+        result[key] = toJSONSafeValue(value[key]);
+      }
+    }
+    return result;
+  }
+
+  return value;
+}
