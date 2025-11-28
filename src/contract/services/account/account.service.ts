@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Account, RpcProvider, ec, stark, hash, CallData } from 'starknet';
+import { RpcProvider, ec, stark, hash, CallData } from 'starknet';
 import {
   connectToStarknet,
   createKeyPair,
@@ -8,7 +8,9 @@ import {
   getClassAt,
   uuidToFelt252,
   writeAbiToFile,
+  getDeployerWallet,
 } from '../../utils';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class AccountContractService {
@@ -18,7 +20,7 @@ export class AccountContractService {
   private accountAddress: string;
   private private_key: string;
 
-  constructor() {
+  constructor(private readonly prisma: PrismaService) {
     this.provider = connectToStarknet();
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
@@ -52,7 +54,7 @@ export class AccountContractService {
         calldata: [publicKey, userFelt252Id],
       };
 
-      const account = this.getDeployerWallet();
+      const account = getDeployerWallet();
 
       const { transaction_hash: txH } = await account.execute(call, {
         maxFee: 10 ** 15,
@@ -160,15 +162,5 @@ export class AccountContractService {
       0,
     );
     return OZcontractAddress;
-  }
-
-  /**
-   * Get deployer wallet instance
-   */
-  getDeployerWallet() {
-    if (!this.provider || !this.accountAddress || !this.private_key) {
-      throw new Error("credentials required to deploy deployer's wallet");
-    }
-    return new Account(this.provider, this.accountAddress, this.private_key);
   }
 }
