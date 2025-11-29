@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Account, RpcProvider, Contract, uint256 } from 'starknet';
+import { RpcProvider, Contract, uint256 } from 'starknet';
 import {
   connectToStarknet,
   writeAbiToFile,
@@ -10,8 +10,10 @@ import {
   felt252ToString,
   convertFromWei,
   feltToContractAddress,
+  getDeployerWallet,
 } from '../../utils';
 import { KeyManagementService } from 'src/wallet/key-management.service';
+import { getUserStarknetAddress } from '../../helpers/contract.helper';
 import { TokenContractService } from '../erc20-token/erc20-token.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -89,17 +91,7 @@ export class StakingContractService implements OnModuleInit {
     await this.initializationPromise;
   }
 
-  private getDeployerWallet() {
-    if (!this.provider || !this.accountAddress || !this.private_key) {
-      throw new Error("Credentials required for deployer's wallet");
-    }
-    const account = new Account(
-      this.provider,
-      this.accountAddress,
-      this.private_key,
-    );
-    return account;
-  }
+  // Use shared getDeployerWallet from contract utils
 
   // WRITE methods
   async stake(
@@ -111,15 +103,7 @@ export class StakingContractService implements OnModuleInit {
   ) {
     try {
       await this.waitForInitialization();
-
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { starknetAccountAddress: true },
-      });
-
-      if (!user?.starknetAccountAddress) {
-        throw new Error('User must have a Starknet account address');
-      }
+      const userAddress = await getUserStarknetAddress(this.prisma, userId);
 
       const amountInWei = convertToWei(amount, decimals);
       const amountU256 = uint256.bnToUint256(amountInWei);
@@ -155,7 +139,7 @@ export class StakingContractService implements OnModuleInit {
         contractAddress: this.stakingContractAddress,
         entrypoint: 'stake',
         calldata: [
-          user.starknetAccountAddress,
+          userAddress,
           tokenSymbol,
           amountU256.low,
           amountU256.high,
@@ -171,60 +155,36 @@ export class StakingContractService implements OnModuleInit {
 
   async unstake(userId: string, tokenSymbol: string, stakeId: number) {
     await this.waitForInitialization();
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { starknetAccountAddress: true },
-    });
-
-    if (!user?.starknetAccountAddress) {
-      throw new Error('User must have a Starknet account address');
-    }
+    const userAddress = await getUserStarknetAddress(this.prisma, userId);
 
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'unstake',
-      calldata: [user.starknetAccountAddress, tokenSymbol, stakeId],
+      calldata: [userAddress, tokenSymbol, stakeId],
     };
     return this.keyManagementService.executeTransaction(userId, [call]);
   }
 
   async claimRewards(userId: string, tokenSymbol: string, stakeId: number) {
     await this.waitForInitialization();
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { starknetAccountAddress: true },
-    });
-
-    if (!user?.starknetAccountAddress) {
-      throw new Error('User must have a Starknet account address');
-    }
+    const userAddress = await getUserStarknetAddress(this.prisma, userId);
 
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'claim_rewards',
-      calldata: [user.starknetAccountAddress, tokenSymbol, stakeId],
+      calldata: [userAddress, tokenSymbol, stakeId],
     };
     return this.keyManagementService.executeTransaction(userId, [call]);
   }
 
   async emergencyUnstake(userId: string, tokenSymbol: string, stakeId: number) {
     await this.waitForInitialization();
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { starknetAccountAddress: true },
-    });
-
-    if (!user?.starknetAccountAddress) {
-      throw new Error('User must have a Starknet account address');
-    }
+    const userAddress = await getUserStarknetAddress(this.prisma, userId);
 
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'emergency_unstake',
-      calldata: [user.starknetAccountAddress, tokenSymbol, stakeId],
+      calldata: [userAddress, tokenSymbol, stakeId],
     };
     return this.keyManagementService.executeTransaction(userId, [call]);
   }
@@ -246,7 +206,7 @@ export class StakingContractService implements OnModuleInit {
       convertFromWei(amount, decimals).replace(/,/g, '');
 
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'create_staking_pool',
@@ -280,7 +240,7 @@ export class StakingContractService implements OnModuleInit {
     bonusApyBps: number,
   ) {
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'update_pool_apy',
@@ -291,7 +251,7 @@ export class StakingContractService implements OnModuleInit {
 
   async togglePool(tokenSymbol: string) {
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'toggle_pool',
@@ -302,7 +262,7 @@ export class StakingContractService implements OnModuleInit {
 
   async pause() {
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'pause',
@@ -313,7 +273,7 @@ export class StakingContractService implements OnModuleInit {
 
   async unpause() {
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'unpause',
@@ -408,7 +368,7 @@ export class StakingContractService implements OnModuleInit {
 
   async updateBalanceMerkleRoot(merkleRoot: string) {
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'update_balance_merkle_root',
@@ -424,7 +384,7 @@ export class StakingContractService implements OnModuleInit {
     ipfsHash: string,
   ) {
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'create_reserve_snapshot',
@@ -435,7 +395,7 @@ export class StakingContractService implements OnModuleInit {
 
   async upgradeContract(classHash: string) {
     await this.waitForInitialization();
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'upgrade',

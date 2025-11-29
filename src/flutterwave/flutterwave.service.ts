@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '@prisma/client';
-import axios from 'axios';
+import { VirtualAccountUser } from '../types';
+import axios, { AxiosError } from 'axios';
 
 export interface ExchangeRateResponse {
   rate: number;
@@ -12,6 +12,22 @@ export interface ExchangeRateResponse {
     currency: string;
     amount: number;
   };
+}
+
+export interface VirtualAccountDetails {
+  id: string;
+  account_number: string;
+  account_name: string;
+  bank_name: string;
+  bank_code: string;
+  currency: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  tx_ref: string;
+  bvn?: string;
+  nin?: string;
 }
 
 @Injectable()
@@ -102,8 +118,13 @@ export class FlutterwaveService {
       throw new Error('Failed to fetch exchange rate: Unexpected error');
     }
   }
-
-  private async createVirtualAccount(user: User, currency: string) {
+  /**
+   * Creates a virtual account for a user
+   * @param user - The user to create the account for
+   * @param currency - The currency for the virtual account
+   * @returns The created virtual account details
+   */
+  private async createVirtualAccount(user: VirtualAccountUser, currency: string): Promise<VirtualAccountDetails | null> {
     if (!process.env.FLUTTERWAVE_CREATE_VIRTUAL_ACCOUNT_URL) {
       throw new Error('Flutterwave create virtual account URL not found');
     }
@@ -141,16 +162,31 @@ export class FlutterwaveService {
           if (axios.isAxiosError(err)) {
             const message = err.response?.data?.message || err.message;
             console.error(`Flutterwave Error ${message}`);
-          } else {
             console.error(`Unexpected error: ${err.message}`);
           }
           return null;
         });
 
-      if (response?.status === 'success') {
-        return response.data;
+      if (response?.status === 'success' && response.data) {
+        return {
+          id: response.data.id,
+          account_number: response.data.account_number,
+          account_name: response.data.account_name,
+          bank_name: response.data.bank_name,
+          bank_code: response.data.bank_code,
+          currency: response.data.currency,
+          status: response.data.status,
+          created_at: response.data.created_at,
+          updated_at: response.data.updated_at,
+          is_active: response.data.is_active,
+          tx_ref: response.data.tx_ref,
+          bvn: response.data.bvn,
+          nin: response.data.nin
+        };
+      } else if (response?.status === 'error') {
+        throw new Error(response?.message || 'Failed to create virtual account');
       } else {
-        return null;
+        throw new Error('Failed to create virtual account: Unknown error');
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -164,11 +200,18 @@ export class FlutterwaveService {
     }
   }
 
-  async createVirtualAccounts(user: User) {
-    const accounts: any[] = [];
+  /**
+   * Creates virtual accounts for a user in all supported currencies
+   * @param user - The user to create accounts for
+   * @returns An array of created virtual accounts
+   */
+  async createVirtualAccounts(user: VirtualAccountUser): Promise<VirtualAccountDetails[]> {
+    const accounts: VirtualAccountDetails[] = [];
     for (const currency of this.currencies) {
       const account = await this.createVirtualAccount(user, currency);
-      accounts.push(account);
+      if (account) {
+        accounts.push(account);
+      }
     }
     return accounts;
   }

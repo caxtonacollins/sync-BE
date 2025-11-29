@@ -118,13 +118,132 @@ export class WalletService {
     return wallets.map((w) => mapCryptoWalletWithUser(w as any));
   }
 
+  // async getUnifiedBalance(userId: string): Promise<UnifiedWalletBalance> {
+  //   try {
+  //     const user = await this.prisma.user.findUnique({
+  //       where: { id: userId },
+  //       include: {
+  //         fiatAccounts: {
+  //           where: { isActive: true },
+  //         },
+  //         cryptoWallets: {
+  //           where: { isActive: true },
+  //         },
+  //       },
+  //     });
+
+  //     if (!user) {
+  //       throw new NotFoundException('User not found');
+  //     }
+
+  //     // Get fiat balances
+  //     const fiatBalances = await Promise.all(
+  //       // eslint-disable-next-line @typescript-eslint/await-thenable
+  //       user.fiatAccounts.map((account) => {
+  //         const balance = account.balance;
+
+  //         // Convert from kobo to naira for NGN accounts
+  //         const convertedBalance = account.currency === 'NGN' ? balance / 100 : balance;
+
+  //         return {
+  //           currency: account.currency,
+  //           balance: convertedBalance,
+  //           accountId: account.id,
+  //           accountNumber: account.accountNumber,
+  //           bankName: account.bankName,
+  //           provider: account.provider,
+  //           isDefault: account.isDefault,
+  //         };
+  //       }),
+  //     );
+
+  //     // Get crypto balances - Fetch all token balances for each wallet
+  //     const cryptoBalances = await Promise.all(
+  //       user.cryptoWallets.map(async (wallet) => {
+  //         // Fetch balances for multiple tokens in parallel
+  //         const tokenBalances = await this.contractService.getMultipleAccountBalances(
+  //           ['USDC', 'STRK', 'SYNC', 'ETH'],
+  //           wallet.address,
+  //         );
+
+  //         // Map token balances to the format expected by the frontend
+  //         return tokenBalances.map((tokenBalance) => ({
+  //           currency: tokenBalance.symbol,
+  //           balance: Number(tokenBalance.formatted) || 0,
+  //           walletId: wallet.id,
+  //           network: wallet.network,
+  //           address: wallet.address,
+  //           isDefault: wallet.isDefault,
+  //         }));
+  //       }),
+  //     );
+
+  //     // Flatten the array of arrays
+  //     const flattenedCryptoBalances = cryptoBalances.flat();
+
+  //     // Get real-time exchange rates
+  //     const exchangeRates = await this.exchangeRateService.getExchangeRates();
+
+  //     // Create a map for quick rate lookups
+  //     const rateMap = new Map();
+  //     exchangeRates.forEach((rate) => {
+  //       const key = `${rate.fiatSymbol}_${rate.tokenSymbol}`;
+  //       rateMap.set(key, rate.rate);
+  //     });
+
+  //     let totalValueNGN = 0;
+
+  //     // Calculate fiat balances in NGN
+  //     fiatBalances.forEach(({ currency, balance }) => {
+  //       if (currency === 'NGN') {
+  //         totalValueNGN += balance;
+  //       } else if (currency === 'USD') {
+  //         const usdToNgnRate = rateMap.get('NGN_USD');
+  //         if (usdToNgnRate) {
+  //           totalValueNGN += balance * usdToNgnRate;
+  //         }
+  //       }
+  //     });
+
+  //     // Calculate crypto balances in NGN
+  //     flattenedCryptoBalances.forEach(({ currency, balance }) => {
+  //       const tokenToUsdRate = rateMap.get(`USD_${currency}`);
+  //       const usdToNgnRate = rateMap.get('NGN_USD');
+
+  //       if (tokenToUsdRate && usdToNgnRate) {
+  //         // Convert crypto to USD, then USD to NGN
+  //         const valueInUsd = Number(balance) * tokenToUsdRate;
+  //         const valueInNgn = valueInUsd * usdToNgnRate;
+  //         totalValueNGN += valueInNgn;
+  //       }
+  //     });
+
+  //     // Calculate total in USD
+  //     const totalValueUSD = totalValueNGN / rateMap.get('NGN_USD');
+
+  //     return {
+  //       userId,
+  //       fiatBalances,
+  //       cryptoBalances: flattenedCryptoBalances,
+  //       totalValueUSD,
+  //       totalValueNGN,
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Failed to get unified balance for user ${userId}:`,
+  //       error,
+  //     );
+  //     throw error;
+  //   }
+  // }
+
   async getUnifiedBalance(userId: string): Promise<UnifiedWalletBalance> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         include: {
-          fiatAccounts: { where: { isActive: true } },
-          cryptoWallets: { where: { isActive: true } },
+          fiatAccounts: true,
+          cryptoWallets: true,
           fiatBalances: true,
           cryptoBalances: true,
         },

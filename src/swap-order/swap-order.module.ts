@@ -6,12 +6,9 @@ import { WalletModule } from '../wallet/wallet.module';
 import { TransactionModule } from '../transaction/transaction.module';
 import { ContractModule } from '../contract/contract.module';
 import { UserModule } from '../user/user.module';
-import { UserService } from 'src/user/user.service';
-import { MonnifyService } from 'src/monnify/monnify.service';
 import { MonnifyModule } from 'src/monnify/monnify.module';
 import { PaymentModule } from 'src/payment/payment.module';
-import { PaymentService } from 'src/payment/payment.service';
-import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
   imports: [
@@ -22,14 +19,11 @@ import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
     forwardRef(() => UserModule),
     MonnifyModule,
     PaymentModule,
+    SharedModule,
   ],
   controllers: [SwapOrderController],
   providers: [
     SwapOrderService,
-    UserService,
-    MonnifyService,
-    PaymentService,
-    FlutterwaveService,
     {
       provide: 'SwapOrderService',
       useExisting: SwapOrderService,

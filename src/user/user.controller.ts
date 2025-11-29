@@ -615,21 +615,21 @@ export class UserController {
     return this.userService.remove(id);
   }
 
-  @Post('provision-accounts')
+  @Post('provision-crypto-accounts')
   @ApiOperation({
-    summary: 'Provision user accounts',
+    summary: 'Provision user crypto accounts',
     description:
-      'Provisions fiat and crypto accounts for the currently authenticated user.',
+      'Provisions crypto accounts for the currently authenticated user.',
   })
   @ApiResponse({
     status: 201,
     description: 'User accounts provisioned successfully',
   })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async provisionAccounts(@Req() req: RequestWithUser) {
+  async createCryptoAccounts(@Req() req: RequestWithUser) {
     try {
       const userId = req.user.userId;
-      return await this.userService.provisionUserAccounts(userId);
+      return await this.userService.createCryptoAccounts(userId);
     } catch (error) {
       console.error('Error provisioning accounts:', error);
       throw new BadRequestException('Failed to provision accounts.');

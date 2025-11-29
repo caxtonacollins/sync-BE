@@ -4,12 +4,17 @@ import { UserController } from './user.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { ContractModule } from '../contract/contract.module';
 import { FlutterwaveModule } from '../flutterwave/flutterwave.module';
-import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => ContractModule), FlutterwaveModule],
+  imports: [
+    PrismaModule, 
+    forwardRef(() => ContractModule), 
+    FlutterwaveModule,
+    SharedModule
+  ],
   controllers: [UserController],
-  providers: [UserService, FlutterwaveService],
+  providers: [UserService],
   exports: [UserService],
 })
 export class UserModule {}

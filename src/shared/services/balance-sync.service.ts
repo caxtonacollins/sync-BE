@@ -1,11 +1,14 @@
 import {
+  Inject,
+  forwardRef,
   Injectable,
   Logger,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import Decimal from 'decimal.js';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Decimal } from '@prisma/client/runtime/library';
+import { TokenContractService } from '../../contract/services/erc20-token/erc20-token.service';
 
 export interface BalanceUpdate {
   currency: string;
@@ -39,7 +42,11 @@ export interface FiatBalanceUpdate extends BalanceUpdate {
 export class BalanceSyncService {
   private readonly logger = new Logger(BalanceSyncService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => TokenContractService))
+    private readonly contractService: TokenContractService,
+  ) { }
 
   /**
    * Update or create a fiat balance in the database
@@ -522,7 +529,16 @@ export class BalanceSyncService {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
+        include: {
+          cryptoWallets: {
+            where: { isActive: true },
+          }
+        }
       });
+
+      const cryptoWallets = user ? await this.prisma.cryptoWallet.findMany({
+        where: { userId, isActive: true },
+      }) : [];
 
       if (!user) {
         throw new NotFoundException('User not found');
@@ -548,33 +564,107 @@ export class BalanceSyncService {
         ),
       );
 
-      // Create default crypto balances
-      const cryptoTokens = [
+      // Define supported tokens and their networks
+      const supportedTokens = [
         { currency: 'STRK', network: 'starknet' },
         { currency: 'ETH', network: 'starknet' },
         { currency: 'USDC', network: 'starknet' },
       ];
-      const cryptos = await Promise.all(
-        cryptoTokens.map(({ currency, network }) =>
-          this.prisma.cryptoBalance.upsert({
-            where: {
-              userId_currency_network: { userId, currency, network },
-            },
-            create: {
-              userId,
-              currency,
-              network,
-              available: new Decimal(0),
-              staked: new Decimal(0),
-              pending: new Decimal(0),
-            },
-            update: {},
-          }),
-        ),
-      );
+
+      // Process each crypto wallet
+      const updatedBalances: Array<{
+        id: string;
+        userId: string;
+        currency: string;
+        available: Decimal;
+        staked: Decimal;
+        pending: Decimal;
+        network: string;
+        createdAt: Date;
+        updatedAt: Date;
+      }> = [];
+
+      for (const wallet of cryptoWallets) {
+        try {
+          // Fetch balances for all supported tokens in parallel
+          const tokenBalances = await this.contractService.getMultipleAccountBalances(
+            supportedTokens.map(t => t.currency),
+            wallet.address,
+          );
+
+          // Update each token balance in the database
+          const walletBalances = await Promise.all(
+            tokenBalances.map(async (tokenBalance) => {
+              const amount = new Decimal(tokenBalance.formatted || 0);
+
+              const updated = await this.prisma.cryptoBalance.upsert({
+                where: {
+                  userId_currency_network: {
+                    userId,
+                    currency: tokenBalance.symbol,
+                    network: wallet.network,
+                  },
+                },
+                create: {
+                  userId,
+                  currency: tokenBalance.symbol,
+                  network: wallet.network,
+                  available: amount,
+                  staked: new Decimal(0),
+                  pending: new Decimal(0),
+                },
+                update: {
+                  available: amount,
+                  updatedAt: new Date(),
+                },
+              });
+
+              return updated;
+            })
+          );
+
+          // Type assertion to handle the array spreading with proper typing
+          updatedBalances.push(...(walletBalances.filter(Boolean) as typeof walletBalances[0][]));
+
+        } catch (error) {
+          this.logger.error(
+            `Error updating balances for wallet ${wallet.id}:`,
+            error.message,
+          );
+          // Continue with other wallets even if one fails
+          continue;
+        }
+      }
+
+      // If no active wallets, create default zero balances
+      if (cryptoWallets.length === 0) {
+        const defaultBalances = await Promise.all(
+          supportedTokens.map(({ currency, network }) =>
+            this.prisma.cryptoBalance.upsert({
+              where: {
+                userId_currency_network: { userId, currency, network },
+              },
+              create: {
+                userId,
+                currency,
+                network,
+                available: new Decimal(0),
+                staked: new Decimal(0),
+                pending: new Decimal(0),
+              },
+              update: {},
+            }),
+          ),
+        );
+        // Type assertion to handle the array spreading with proper typing
+        updatedBalances.push(...(defaultBalances as typeof defaultBalances[0][]));
+      }
 
       this.logger.debug(`Balances initialized for user ${userId}`);
-      return { fiats, cryptos };
+      return {
+        fiats,
+        cryptos: updatedBalances.filter((b): b is Exclude<typeof b, null | undefined> => b != null)
+      };
     } catch (error) {
       this.logger.error(
         `Failed to initialize balances for user ${userId}:`,

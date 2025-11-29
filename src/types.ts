@@ -10,6 +10,16 @@ export interface RegistrationStatus {
   accountAddress: string;
 }
 
+export interface VirtualAccountUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber?: string | null;
+  bvn?: string | null;
+  nin?: string | null;
+}
+
 export interface MultipleBalancesResponse {
   [key: string]: TokenBalance;
 }

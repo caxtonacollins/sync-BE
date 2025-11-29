@@ -1,15 +1,7 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import {
-  Account,
-  RpcProvider,
-  RPC,
-  uint256,
-  shortString,
-  CallData,
-  Uint256,
-} from 'starknet';
+import { RpcProvider, RPC, uint256, shortString } from 'starknet';
 import {
   connectToStarknet,
   convertToWei,
@@ -431,7 +423,7 @@ export class LiquidityPoolContractService {
     };
 
     try {
-      const account = getDeployerWallet();
+      // const account = getDeployerWallet();
       const tokenAddress =
         this.tokenContractService.getTokenAddress(tokenSymbol);
       if (!tokenAddress) throw new Error(`Token ${tokenSymbol} not supported`);

@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  UseGuards,
   Get,
   Query,
   Param,
@@ -11,7 +10,6 @@ import {
 } from '@nestjs/common';
 import { FlutterwaveService } from './flutterwave.service';
 import { User } from '@prisma/client';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 class UpdateBVNDto {
   bvn: string;

@@ -289,47 +289,6 @@ async function main() {
     });
   }
 
-  // Create fiat staking pools
-  const fiatPools = [
-    {
-      currency: 'NGN',
-      baseApyBps: 800, // 8%
-      bonusApyBps: 400, // 4%
-      minStakeAmount: 1000,
-      maxStakeAmount: 10000000,
-      decimals: 2,
-      isActive: true,
-    },
-    {
-      currency: 'USD',
-      baseApyBps: 600, // 6%
-      bonusApyBps: 300, // 3%
-      minStakeAmount: 100,
-      maxStakeAmount: 1000000,
-      decimals: 2,
-      isActive: true,
-    },
-    {
-      currency: 'GBP',
-      baseApyBps: 550, // 5.5%
-      bonusApyBps: 250, // 2.5%
-      minStakeAmount: 100,
-      maxStakeAmount: 1000000,
-      decimals: 2,
-      isActive: true,
-    },
-  ];
-
-  for (const pool of fiatPools) {
-    await prisma.fiatStakingPool.upsert({
-      where: { currency: pool.currency },
-      update: {},
-      create: pool,
-    });
-  }
-
-  console.log('✅ Staking pools seeded successfully');
-
   // Create audit logs
   const auditActions = [
     'USER_LOGIN',

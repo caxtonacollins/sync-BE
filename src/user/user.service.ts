@@ -6,13 +6,19 @@ import { CryptoWalletDto } from './dto/crypto-wallet.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import { UserFilterDto } from './dto/user-filter.dto';
-import { Prisma, VerificationStatus } from '@prisma/client';
+import { Prisma, VerificationStatus, FiatAccount } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
 import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
 import chalk from 'chalk';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { AccountContractService } from 'src/contract/services/account/account.service';
 import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
+import {
+  CreateVirtualAccountDto,
+  CreateVirtualAccountResponseDto,
+} from './dto/create-virtual-account.dto';
+import { VirtualAccountUser } from 'src/types';
+import { BalanceSyncService } from 'src/shared/services/balance-sync.service';
 
 @Injectable()
 export class UserService {
@@ -21,6 +27,7 @@ export class UserService {
     private flutterwaveService: FlutterwaveService,
     private readonly accountContractService: AccountContractService,
     private readonly liquidityPoolContractService: LiquidityPoolContractService,
+    private readonly balanceSyncService: BalanceSyncService,
   ) {}
 
   private readonly SALT_ROUNDS = 12;
@@ -31,18 +38,6 @@ export class UserService {
 
   async verifyPassword(plainText: string, hash: string): Promise<boolean> {
     return await bcrypt.compare(plainText, hash);
-  }
-
-  async createFiatAccount(fiatAccountDto: FiatAccountDto) {
-    return this.prisma.fiatAccount.create({
-      data: fiatAccountDto,
-    });
-  }
-
-  async createCryptoWallet(cryptoWalletDto: CryptoWalletDto) {
-    return this.prisma.cryptoWallet.create({
-      data: cryptoWalletDto,
-    });
   }
 
   async createUser(createUserDto: CreateUserDto) {
@@ -58,64 +53,23 @@ export class UserService {
           lastName: createUserDto.lastName,
           phoneNumber: createUserDto.phoneNumber,
           role: createUserDto.role,
-          status: createUserDto.status,
-          verificationStatus: createUserDto.verificationStatus,
-          bvn: createUserDto.bvn,
-          nin: createUserDto.nin,
+          status: createUserDto.status || 'ACTIVE',
+          verificationStatus: createUserDto.verificationStatus || 'PENDING',
         },
       });
 
-      const { password, ...userWithoutPassword } = user;
+      const { ...userWithoutPassword } = user;
       return userWithoutPassword;
     });
   }
 
-  async provisionUserAccounts(userId: string) {
+  async createCryptoAccounts(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    console.log('user', user);
     if (!user) {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    const fiatCurrencies = ['NGN']; // 'GHS', 'USD'
-
-    for (const currency of fiatCurrencies) {
-      try {
-        if (currency === 'NGN') {
-          const flutterwaveAccounts =
-            await this.flutterwaveService.createVirtualAccounts(user);
-
-          for (const fwAccount of flutterwaveAccounts) {
-            if (fwAccount) {
-              await this.prisma.fiatAccount.create({
-                data: {
-                  userId: user.id,
-                  provider: 'flutterwave',
-                  currency: fwAccount.currency || 'NGN',
-                  isDefault: true,
-                  accountNumber: fwAccount.account_number,
-                  accountName:
-                    fwAccount.account_name ||
-                    `${user.firstName} ${user.lastName}`,
-                  bankName: fwAccount.bank_name,
-                  bankCode: fwAccount.bank_code,
-                  accountReference: fwAccount.order_ref,
-                  accounts: fwAccount,
-                },
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Failed to create ${currency} fiat account:`, error);
-        if (currency === 'NGN') {
-          throw new Error(
-            `Failed to create Flutterwave virtual account: ${error.message}`,
-          );
-        }
-      }
-    }
-
+    // Create StarkNet account
     try {
       const accountResult = await this.accountContractService.createAccount(
         user.id,
@@ -141,29 +95,159 @@ export class UserService {
         },
       });
 
+      await this.balanceSyncService.initializeBalances(userId);
+
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           starknetAccountAddress: accountResult.accountAddress,
         },
       });
-
-      const defaultFiatAccount = await this.prisma.fiatAccount.findFirst({
-        where: { userId: user.id, isDefault: true },
-      });
-
-      if (defaultFiatAccount) {
-        await this.liquidityPoolContractService.registerUserToLiquidity(
-          accountResult.accountAddress,
-          defaultFiatAccount.id,
-        );
-      }
     } catch (contractError) {
       console.error('StarkNet account creation failed:', contractError);
       throw contractError;
     }
 
     return { success: true, message: 'Accounts provisioned successfully' };
+  }
+
+  async createVirtualAccount(
+    userId: string,
+    createVirtualAccountDto: CreateVirtualAccountDto,
+  ): Promise<CreateVirtualAccountResponseDto> {
+    // Find the user first
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phoneNumber: true,
+        bvn: true,
+        nin: true,
+        starknetAccountAddress: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Prepare update data with proper typing
+    const updateData: {
+      bvn?: string | null;
+      nin?: string | null;
+      updatedAt?: Date;
+    } = { updatedAt: new Date() };
+
+    if (createVirtualAccountDto.bvn) {
+      updateData.bvn = createVirtualAccountDto.bvn;
+    }
+    if (createVirtualAccountDto.nin) {
+      updateData.nin = createVirtualAccountDto.nin;
+    }
+
+    // Only update if there are fields to update
+    if (Object.keys(updateData).length > 1) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+      });
+    }
+
+    // Check if user already has a virtual account
+    const existingAccount = await this.prisma.fiatAccount.findFirst({
+      where: {
+        userId,
+        provider: 'flutterwave',
+        currency: 'NGN',
+      },
+    });
+
+    if (existingAccount) {
+      return {
+        success: true,
+        message: 'Virtual account already exists',
+        account: existingAccount as unknown as Record<string, any>,
+      };
+    }
+
+    // Create virtual account
+    try {
+      const userData = {
+        ...user,
+        bvn: createVirtualAccountDto.bvn || user.bvn || null,
+        nin: createVirtualAccountDto.nin || user.nin || null,
+      };
+
+      const flutterwaveAccounts =
+        await this.flutterwaveService.createVirtualAccounts(
+          userData as VirtualAccountUser,
+        );
+
+      if (!flutterwaveAccounts || flutterwaveAccounts.length === 0) {
+        throw new Error(
+          'Failed to create virtual account: No accounts were created',
+        );
+      }
+
+      const createdAccounts: FiatAccount[] = [];
+
+      for (const fwAccount of flutterwaveAccounts) {
+        if (fwAccount) {
+          const accountData: Prisma.FiatAccountCreateInput = {
+            id: undefined, // Let Prisma generate the ID
+            provider: 'flutterwave',
+            currency: fwAccount.currency || 'NGN',
+            isDefault: true,
+            accountNumber: fwAccount.account_number || '',
+            accountName:
+              fwAccount.account_name || `${user.firstName} ${user.lastName}`,
+            bankName: fwAccount.bank_name || null,
+            bankCode: fwAccount.bank_code || null,
+            accountReference: fwAccount.tx_ref || null,
+            balance: 0,
+            availableBalance: 0,
+            ledgerBalance: 0,
+            isActive: true,
+            user: {
+              connect: { id: userId },
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+
+          const createdAccount = await this.prisma.fiatAccount.create({
+            data: accountData,
+          });
+          createdAccounts.push(createdAccount);
+
+          // Link to liquidity pool if this is the first account and user has a StarkNet account
+          if (user.starknetAccountAddress) {
+            await this.liquidityPoolContractService.registerUserToLiquidity(
+              user.starknetAccountAddress,
+              createdAccount.id,
+            );
+          }
+        }
+      }
+
+      if (createdAccounts.length === 0) {
+        throw new Error('Failed to save virtual account to database');
+      }
+
+      const defaultAccount = createdAccounts[0];
+
+      return {
+        success: true,
+        message: 'Virtual account created successfully',
+        account: defaultAccount as unknown as Record<string, any>,
+      };
+    } catch (error: any) {
+      console.error('Failed to create virtual account:', error);
+      throw new Error(`Failed to create virtual account: ${error.message}`);
+    }
   }
 
   async findAll(filter: UserFilterDto): Promise<{
@@ -249,7 +333,10 @@ export class UserService {
       where: {
         cryptoWallets: {
           some: {
-            address,
+            address: {
+              equals: address,
+              mode: 'insensitive',
+            },
           },
         },
       },
@@ -258,7 +345,15 @@ export class UserService {
       },
     });
 
-    return user;
+    if (!user) {
+      throw new NotFoundException(
+        `User with crypto address ${address} not found`,
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
   async getByEmail(email: string) {

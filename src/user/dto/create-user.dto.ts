@@ -90,17 +90,19 @@ export class CreateUserDto {
   @IsEnum(VerificationStatus)
   verificationStatus?: VerificationStatus;
 
+  @IsOptional()
   @IsString()
   @Length(11, 11)
   @Matches(BVN_REGEX, {
     message: 'BVN must be 11 digits and start with valid prefixes (22-39)',
   })
-  bvn: string;
+  bvn?: string;
 
+  @IsOptional()
   @IsString()
   @Length(11, 11)
   @Matches(NIN_REGEX, {
     message: 'NIN must be 11 digits and start with 1-9',
   })
-  nin: string;
+  nin?: string;
 }
