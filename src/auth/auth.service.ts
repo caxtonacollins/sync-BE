@@ -13,7 +13,7 @@ import { KeyManagementService } from './key-management.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import { ethers } from 'ethers';
-import { LoginDto } from './dto/login.dto';
+import { LoginDto } from 'src/types/dto/auth';
 
 @Injectable()
 export class AuthService {

@@ -3,7 +3,7 @@ import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { ContractModule } from '../contract/contract.module';
-import { FlutterwaveModule } from '../flutterwave/flutterwave.module';
+import { FlutterwaveModule } from '../payment/flutterwave/flutterwave.module';
 import { SharedModule } from '../shared/shared.module';
 
 @Module({

@@ -14,7 +14,7 @@ import {
 import chalk from 'chalk';
 import { UserService } from 'src/user/user.service';
 import { TokenContractService } from '../erc20-token/erc20-token.service';
-import { KeyManagementService } from 'src/wallet/key-management.service';
+import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
 
 @Injectable()
 export class LiquidityPoolContractService {

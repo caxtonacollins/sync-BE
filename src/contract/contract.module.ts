@@ -1,12 +1,12 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
-import { WalletModule } from '../wallet/wallet.module';
+import { WalletModule } from '../transaction/wallet/wallet.module';
 import { SwapOrderModule } from '../swap-order/swap-order.module';
 import { UserModule } from '../user/user.module';
 import { CacheModule } from '../cache/cache.module';
-import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
-import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
-import { KeyManagementService } from '../wallet/key-management.service';
+import { ExchangeRateModule } from '../transaction/exchange-rate-and-pragma/exchange-rate.module';
+import { FlutterwaveService } from 'src/payment/flutterwave/flutterwave.service';
+import { KeyManagementService } from '../transaction/wallet/key-management.service';
 import { LiquidityController } from './controllers/liquidity/liquidity.controller';
 import { StakingController } from './controllers/staking/staking.controller';
 import { AccountFactoryController } from './controllers/account-factory/account-factory.controller';

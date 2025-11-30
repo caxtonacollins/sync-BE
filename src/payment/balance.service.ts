@@ -7,7 +7,7 @@ import {
 import { Transaction } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { FlutterwaveService } from '../flutterwave/flutterwave.service';
+import { FlutterwaveService } from './flutterwave/flutterwave.service';
 import Decimal from 'decimal.js';
 import { Prisma } from '@prisma/client';
 import {
@@ -21,12 +21,10 @@ import {
 
 @Injectable()
 export class BalanceService {
-  private readonly logger = new Logger(BalanceService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly flutterwaveService: FlutterwaveService,
-    private readonly config: ConfigService,
   ) {}
 
   async creditAccount(

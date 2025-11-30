@@ -1,12 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import Decimal from 'decimal.js';
 import { Prisma } from '@prisma/client';
-import { WalletService } from '../wallet/wallet.service';
+import { WalletService } from '../transaction/wallet/wallet.service';
 import { TransactionService } from '../transaction/transaction.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSwapOrderDto, SwapType } from './dto/create-swap-order.dto';
-import { UpdateSwapOrderDto } from './dto/update-swap-order.dto';
-import { SwapOrderFilterDto } from './dto/swap-order-filter.dto';
+import { CreateSwapOrderDto, SwapType } from '../types/dto/swap-order/create-swap-order.dto';
+import { UpdateSwapOrderDto } from '../types/dto/swap-order/update-swap-order.dto';
+import { SwapOrderFilterDto } from '../types/dto/swap-order/swap-order-filter.dto';
 import { UserService } from 'src/user/user.service';
 import { PaymentService } from 'src/payment/payment.service';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';

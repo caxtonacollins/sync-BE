@@ -11,7 +11,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { CreateFiatTransferDto } from './dto/create-fiat-transfer.dto';
+import { CreateFiatTransferDto } from '../types/dto/transaction/create-fiat-transfer.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -21,8 +21,8 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { TransactionService } from './transaction.service';
-import { TxFilterDto } from './dto/tx-filter.dto';
-import { UpdateTxDto } from './dto/update-tx.dto';
+import { TxFilterDto } from '../types/dto/transaction/tx-filter.dto';
+import { UpdateTxDto } from '../types/dto/transaction/update-tx.dto';
 
 @ApiTags('Transactions')
 @ApiBearerAuth()

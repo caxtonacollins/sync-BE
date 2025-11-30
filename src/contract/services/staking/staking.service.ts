@@ -12,7 +12,7 @@ import {
   feltToContractAddress,
   getDeployerWallet,
 } from '../../utils';
-import { KeyManagementService } from 'src/wallet/key-management.service';
+import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
 import { getUserStarknetAddress } from '../../helpers/contract.helper';
 import { TokenContractService } from '../erc20-token/erc20-token.service';
 import { PrismaService } from 'src/prisma/prisma.service';

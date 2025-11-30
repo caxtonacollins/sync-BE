@@ -13,9 +13,9 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SwapOrderService } from './swap-order.service';
-import { CreateSwapOrderDto } from './dto/create-swap-order.dto';
-import { UpdateSwapOrderDto } from './dto/update-swap-order.dto';
-import { SwapOrderFilterDto } from './dto/swap-order-filter.dto';
+import { CreateSwapOrderDto } from '../types/dto/swap-order/create-swap-order.dto';
+import { UpdateSwapOrderDto } from '../types/dto/swap-order/update-swap-order.dto';
+import { SwapOrderFilterDto } from '../types/dto/swap-order/swap-order-filter.dto';
 import { Request } from 'express';
 
 interface JwtUser {

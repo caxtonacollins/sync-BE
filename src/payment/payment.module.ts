@@ -4,7 +4,7 @@ import { PaymentService } from './payment.service';
 import { BalanceService } from './balance.service';
 import { BalanceController } from './balance.controller';
 import { PrismaModule } from '../prisma/prisma.module';
-import { FlutterwaveModule } from '../flutterwave/flutterwave.module';
+import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 
 @Module({
   imports: [ConfigModule, PrismaModule, FlutterwaveModule],

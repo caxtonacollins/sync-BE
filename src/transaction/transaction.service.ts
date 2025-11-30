@@ -5,8 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { TxFilterDto } from './dto/tx-filter.dto';
-import { UpdateTxDto } from './dto/update-tx.dto';
+import { TxFilterDto } from '../types/dto/transaction/tx-filter.dto';
+import { UpdateTxDto } from '../types/dto/transaction/update-tx.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import Decimal from 'decimal.js';
 

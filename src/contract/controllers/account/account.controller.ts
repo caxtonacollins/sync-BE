@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { AccountContractService } from 'src/contract/services/account/account.service';
-import { CreateAccountDto } from 'src/contract/controllers/dto';
+import { CreateAccountDto } from 'src/types';
 
 @UseInterceptors(CacheInterceptor)
 @Controller('account')

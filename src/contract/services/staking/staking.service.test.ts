@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StakingContractService } from './staking.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { KeyManagementService } from 'src/wallet/key-management.service';
+import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
 import { TokenContractService } from '../erc20-token/erc20-token.service';
 
 describe('StakingContractService', () => {

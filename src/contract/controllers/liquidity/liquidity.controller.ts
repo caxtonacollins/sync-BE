@@ -6,18 +6,9 @@ import {
   Query,
   UseInterceptors,
 } from '@nestjs/common';
-import {
-  SetAccountClassHashDto,
-  CreateAccountDto,
-  TransferOwnershipDto,
-  SwapFiatToTokenDto,
-  SwapTokenToFiatDto,
-  UpgradeAccountFactoryDto,
-  MintTokenDto,
-  SetLiquidityContractAddressDto,
-} from 'src/contract/controllers/dto';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
+import { CreateAccountDto, TransferOwnershipDto, SwapFiatToTokenDto, SwapTokenToFiatDto, UpgradeAccountFactoryDto, SetLiquidityContractAddressDto } from 'src/types';
 
 @UseInterceptors(CacheInterceptor)
 @Controller('liquidity')

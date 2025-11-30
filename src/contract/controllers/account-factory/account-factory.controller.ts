@@ -1,10 +1,6 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
-import {
-  UpgradeAccountFactoryDto,
-  TransferOwnershipDto,
-  SetAccountClassHashDto,
-} from 'src/contract/controllers/dto';
 import { AccountFactoryContractService } from 'src/contract/services/account-factory/account-factory.service';
+import { UpgradeAccountFactoryDto, TransferOwnershipDto, SetAccountClassHashDto } from 'src/types';
 
 @Controller('account-factory')
 export class AccountFactoryController {

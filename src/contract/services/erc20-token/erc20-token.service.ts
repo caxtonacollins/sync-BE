@@ -8,7 +8,7 @@ import {
 import erc20 from '../../abi/erc20.json';
 import { TokenBalance } from '../../../types';
 import chalk from 'chalk';
-import { KeyManagementService } from 'src/wallet/key-management.service';
+import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
 
 @Injectable()
 export class TokenContractService {

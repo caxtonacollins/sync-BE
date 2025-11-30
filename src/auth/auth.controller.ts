@@ -1,13 +1,17 @@
 import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
 import { Public } from './decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
-import { Enable2FADto, Verify2FADto } from './dto/enable-2fa.dto';
-import { ChangePasswordDto } from './dto/change-password.dto';
-import { MfaVerifyDto } from './dto/mfa-setup.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
+// import { LoginDto } from './dto/login.dto';
+// import { Enable2FADto, Verify2FADto } from './dto/enable-2fa.dto';
+// import { ChangePasswordDto } from './dto/change-password.dto';
+// import { MfaVerifyDto } from './dto/mfa-setup.dto';
+// import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request } from 'express';
+import { ChangePasswordDto, LoginDto, Verify2FADto } from 'src/types/dto/auth';
+import { RefreshTokenDto } from 'src/types/dto/auth/refresh-token.dto';
+import { Enable2FADto } from 'src/types/dto/auth/enable-2fa.dto';
+import { MfaVerifyDto } from 'src/types/dto/auth/mfa-setup.dto';
 
 interface JwtUser {
   sub: string;
@@ -36,7 +40,7 @@ export class AuthController {
   @Public()
   @Post('refresh')
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshToken(refreshTokenDto.refresh_token);
+    return this.authService.refreshToken(refreshTokenDto.refreshToken);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -51,7 +55,7 @@ export class AuthController {
     @Req() req: RequestWithUser,
     @Body() enable2FADto: Enable2FADto,
   ) {
-    return this.authService.enable2FA(req.user.sub, enable2FADto.otpCode);
+    return this.authService.enable2FA(req.user.sub, enable2FADto.code);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -60,7 +64,7 @@ export class AuthController {
     @Req() req: RequestWithUser,
     @Body() verify2FADto: Verify2FADto,
   ) {
-    return this.authService.verify2FA(req.user.sub, verify2FADto.otpCode);
+    return this.authService.verify2FA(req.user.sub, verify2FADto.code);
   }
 
   @UseGuards(JwtAuthGuard)

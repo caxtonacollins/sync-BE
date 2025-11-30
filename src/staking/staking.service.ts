@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { CryptoStakingService } from 'src/crypto-staking/crypto-staking.service';
-import { FiatStakingService } from 'src/fiat-staking/fiat-staking.service';
-import { ExchangeRateService } from 'src/exchange-rate/exchange-rate.service';
+import { CryptoStakingService } from 'src/staking/crypto-staking/crypto-staking.service';
+import { FiatStakingService } from 'src/staking/fiat-staking/fiat-staking.service';
+import { ExchangeRateService } from 'src/transaction/exchange-rate-and-pragma/exchange-rate.service';
 import { Stake } from 'src/types';
 
 @Injectable()

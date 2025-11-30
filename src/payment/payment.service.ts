@@ -1,6 +1,9 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import axios from 'axios';
-import { FlutterwaveService } from '../flutterwave/flutterwave.service';
+import { FlutterwaveService } from './flutterwave/flutterwave.service';
+import { WalletService } from 'src/transaction/wallet/wallet.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
+
 
 @Injectable()
 export class PaymentService {

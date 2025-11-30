@@ -8,7 +8,7 @@ import * as bcrypt from 'bcrypt';
 import { UserFilterDto } from './dto/user-filter.dto';
 import { Prisma, VerificationStatus, FiatAccount } from '@prisma/client';
 import { PaginationDto } from './dto/pagination.dto';
-import { FlutterwaveService } from 'src/flutterwave/flutterwave.service';
+import { FlutterwaveService } from 'src/payment/flutterwave/flutterwave.service';
 import chalk from 'chalk';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { AccountContractService } from 'src/contract/services/account/account.service';

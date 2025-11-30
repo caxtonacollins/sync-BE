@@ -1,6 +1,6 @@
 import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { SwapOrderService } from 'src/swap-order/swap-order.service';
-import { ExchangeRateService } from 'src/exchange-rate/exchange-rate.service';
+import { ExchangeRateService } from 'src/transaction/exchange-rate-and-pragma/exchange-rate.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { felt252ToUuid } from 'src/contract/utils';
 import Decimal from 'decimal.js';

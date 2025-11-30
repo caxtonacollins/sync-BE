@@ -1,6 +1,6 @@
 import { Body, Controller, Param, Post, Get } from '@nestjs/common';
-import { MintTokenDto } from 'src/contract/controllers/dto';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
+import { MintTokenDto } from 'src/types/dto/contract';
 
 @Controller('token')
 export class Erc20TokenController {
