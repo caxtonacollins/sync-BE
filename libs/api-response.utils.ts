@@ -2,6 +2,17 @@ import Decimal from 'decimal.js';
 import { toApiString, getCurrencyDecimals } from './currency.utils';
 
 /**
+ * Standard API response format
+ */
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+  statusCode?: number;
+}
+
+/**
  * Utility functions for formatting API responses
  * Ensures all financial amounts are returned as strings for precision
  */
