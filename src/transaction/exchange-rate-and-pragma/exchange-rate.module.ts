@@ -3,7 +3,7 @@ import { ExchangeRateController } from './exchange-rate.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ExchangeRateService } from './exchange-rate.service';
 import { ContractModule } from '../../contract/contract.module';
-import { FlutterwaveService } from '../../payment/flutterwave/flutterwave.service';
+import { PaymentModule } from 'src/payment/payment.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { UserModule } from '../../user/user.module';
 import { PragmaModule } from './pragma.module';
@@ -15,9 +15,10 @@ import { PragmaModule } from './pragma.module';
     forwardRef(() => WalletModule),
     forwardRef(() => UserModule),
     PragmaModule,
+    forwardRef(() => PaymentModule),
   ],
   controllers: [ExchangeRateController],
-  providers: [ExchangeRateService, FlutterwaveService],
+  providers: [ExchangeRateService],
   exports: [ExchangeRateService],
 })
 export class ExchangeRateModule {}

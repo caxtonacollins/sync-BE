@@ -3,6 +3,8 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
@@ -24,6 +26,7 @@ export class BalanceService {
 
   constructor(
     private readonly prisma: PrismaService,
+        @Inject(forwardRef(() => FlutterwaveService))
     private readonly flutterwaveService: FlutterwaveService,
   ) {}
 

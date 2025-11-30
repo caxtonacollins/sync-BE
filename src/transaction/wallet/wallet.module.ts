@@ -2,10 +2,9 @@ import { Module, forwardRef } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { KeyManagementService } from './key-management.service';
 import { PrismaModule } from '../../prisma/prisma.module';
-import { MonnifyService } from '../../payment/monnify/monnify.service';
 import { ContractModule } from '../../contract/contract.module';
 import { WalletController } from './wallet.controller';
-import { FlutterwaveService } from '../../payment/flutterwave/flutterwave.service';
+import { PaymentModule } from 'src/payment/payment.module';
 import { ExchangeRateModule } from '../exchange-rate-and-pragma/exchange-rate.module';
 import { SharedModule } from '../../shared/shared.module';
 
@@ -15,13 +14,12 @@ import { SharedModule } from '../../shared/shared.module';
     forwardRef(() => ContractModule),
     forwardRef(() => ExchangeRateModule),
     SharedModule,
+    forwardRef(() => PaymentModule),
   ],
   controllers: [WalletController],
   providers: [
     WalletService,
     KeyManagementService,
-    MonnifyService,
-    FlutterwaveService,
   ],
   exports: [WalletService, KeyManagementService],
 })

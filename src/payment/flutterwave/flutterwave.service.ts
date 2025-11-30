@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { VirtualAccountUser } from '../../types/domain';
 import axios, { AxiosError } from 'axios';
 import { WalletService } from 'src/transaction/wallet/wallet.service';
@@ -63,7 +63,7 @@ export class FlutterwaveService {
 
   constructor(
     private prisma: PrismaService,
-    private balanceService: BalanceService,
+        @Inject(forwardRef(() => BalanceService)) private balanceService: BalanceService,
     private auditLogService: AuditLogService,
   ) {
     this.headers = {

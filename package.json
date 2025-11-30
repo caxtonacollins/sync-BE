@@ -22,6 +22,7 @@
     "test:payout": "ts-node -r tsconfig-paths/register scripts/test-payout.ts"
   },
   "dependencies": {
+    "@nestjs/axios": "^4.0.1",
     "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
