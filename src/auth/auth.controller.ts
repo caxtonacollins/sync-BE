@@ -162,8 +162,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('security/passkey/disable')
-  async disablePasskey() {
-    return { message: 'Passkey disable not yet implemented' };
+  async disablePasskey(@Req() req: RequestWithUser) {
+    return this.authService.disablePasskey(req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)

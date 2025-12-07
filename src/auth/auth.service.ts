@@ -534,10 +534,8 @@ export class AuthService {
     await this.prisma.authChallenge.create({
       data: {
         challenge: options.challenge,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-        user: {
-          connect: { id: user.id }
-        }
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 mins
       },
     });
 
@@ -607,20 +605,17 @@ export class AuthService {
         },
       });
 
-      await this.prisma.authChallenge.delete({ where: { id: challengeRecord.id } });
+      // await this.prisma.authChallenge.delete({ where: { id: challengeRecord.id } });
     }
 
     return { verified };
   }
 
   async generateAuthenticationOptions(email: string) {
-    console.log("generateAuthenticationOptions email", email);
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: { passkeyAuthenticators: true },
     });
-
-    console.log("generateAuthenticationOptions user", user);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -665,16 +660,6 @@ export class AuthService {
     }
 
     const { user } = authenticator;
-
-    // Clean up any expired challenges for this user
-    await this.prisma.authChallenge.deleteMany({
-      where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { userId: user.id }
-        ]
-      },
-    });
 
     // Find the challenge for this user
     const challengeRecord = await this.prisma.authChallenge.findFirst({
@@ -816,5 +801,12 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
+  }
+
+  async disablePasskey(userId: string) {
+    await this.prisma.passkeyAuthenticator.deleteMany({
+      where: { userId },
+    });
+    return { message: 'Passkey disabled successfully' };
   }
 }
