@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Req, Query } from '@nestjs/common';
 import { Public } from './decorators/public.decorator';
 import { AuthService } from './auth.service';
 // import { LoginDto } from './dto/login.dto';
@@ -118,17 +118,34 @@ export class AuthController {
     return this.authService.disable2FA(req.user.sub);
   }
 
-  // Placeholder endpoints for passkey and biometric (to be implemented)
   @UseGuards(JwtAuthGuard)
-  @Get('passkey/register')
-  async passkeyRegister() {
-    return { message: 'Passkey registration not yet implemented' };
+  @Get('passkey/register-options')
+  async getPasskeyRegistrationOptions(@Req() req: RequestWithUser) {
+    return this.authService.generateRegistrationOptions(req.user.sub, req.user.email);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('passkey/register/verify')
-  async passkeyRegisterVerify() {
-    return { message: 'Passkey verification not yet implemented' };
+  @Post('passkey/register-verify')
+  async verifyPasskeyRegistration(
+    @Req() req: RequestWithUser,
+    @Body() body: any,
+  ) {
+    return this.authService.verifyRegistration(req.user.sub, body);
+  }
+
+  @Public()
+  @Get('passkey/login-options')
+  async getPasskeyAuthenticationOptions(
+    @Req() req: Request,
+    @Query('email') email: string
+  ) {
+    return this.authService.generateAuthenticationOptions(email);
+  }
+
+  @Public()
+  @Post('passkey/login-verify')
+  async verifyPasskeyAuthentication(@Body() body: any) {
+    return this.authService.verifyAuthentication(body);
   }
 
   @UseGuards(JwtAuthGuard)

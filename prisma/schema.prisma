@@ -113,14 +113,37 @@ model User {
   paymentPinAttempts    Int       @default(0)
   paymentPinLockedUntil DateTime?
 
+  // Passkey
+  webauthnUserID   String?   @unique @default(cuid())
+
   // Relations
-  transactions      Transaction[]
-  swapOrders        SwapOrder[]
-  sessions          Session[]
-  auditLogs         AuditLog[]
-  encryptedKey      EncryptedKey?
-  FiatTransaction   FiatTransaction[]
-  WithdrawalRequest WithdrawalRequest[]
+  transactions          Transaction[]
+  swapOrders            SwapOrder[]
+  sessions              Session[]
+  auditLogs             AuditLog[]
+  encryptedKey          EncryptedKey?
+  FiatTransaction       FiatTransaction[]
+  WithdrawalRequest     WithdrawalRequest[]
+  passkeyAuthenticators PasskeyAuthenticator[]
+  authChallenges       AuthChallenge[]
+}
+
+model PasskeyAuthenticator {
+  id                    String   @id @default(cuid())
+  credentialID          String   @unique
+  credentialPublicKey   String
+  counter               BigInt
+  credentialDeviceType  String
+  credentialBackedUp    Boolean
+  transports            String[] // e.g., "internal", "hybrid", "usb", "nfc", "ble"
+
+  userId String         @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model FiatAccount {
@@ -576,4 +599,15 @@ model ExchangeRate {
   createdAt   DateTime @default(now())
 
   @@unique([fiatSymbol, tokenSymbol])
+}
+
+model AuthChallenge {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }

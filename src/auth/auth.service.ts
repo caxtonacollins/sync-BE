@@ -12,8 +12,29 @@ import { SessionService } from '../session/session.service';
 import { KeyManagementService } from './key-management.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
+import { randomBytes } from 'crypto';
 import { ethers } from 'ethers';
 import { LoginDto } from 'src/types/dto/auth';
+import {
+  AuthenticationResponseJSON,
+  RegistrationResponseJSON,
+  VerifiedAuthenticationResponse,
+  verifyAuthenticationResponse,
+  generateAuthenticationOptions,
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  AuthenticatorTransportFuture,
+  VerifiedRegistrationResponse,
+  WebAuthnCredential,
+} from '@simplewebauthn/server';
+import * as crypto from 'crypto';
+import * as base64url from 'base64url';
+
+const rpName = 'Sync';
+// Use environment variable or fallback to 'localhost' for development
+const rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
+// Use environment variable or fallback to localhost:3000 for development
+const origin = process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +47,11 @@ export class AuthService {
     private sessionService: SessionService,
     private readonly keyManagementService: KeyManagementService,
   ) {}
+
+  // private getChallenge(): string {
+  //   // Generate a secure random challenge
+  //   return randomBytes(32).toString('base64url');
+  // }
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -343,9 +369,13 @@ export class AuthService {
       },
     });
 
+    const passkeyAuthenticators = await this.prisma.passkeyAuthenticator.findMany({
+      where: { userId },
+    });
+
     return {
       mfaEnabled: user.twoFactorEnabled,
-      passkeyEnabled: false, // TODO: Implement passkey support
+      passkeyEnabled: passkeyAuthenticators.length > 0,
       biometricsEnabled: false, // TODO: Implement biometric support
       lastPasswordChange: user.updatedAt.toISOString(),
       recentLogins: recentSessions.map((session) => ({
@@ -452,6 +482,275 @@ export class AuthService {
     });
 
     return { message: 'MFA enabled successfully' };
+  }
+
+  async generateRegistrationOptions(userId: string, email: string) {
+    // Clean up any existing challenges for this user
+    await this.prisma.authChallenge.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lt: new Date() } },
+          { userId }
+        ]
+      },
+    });
+
+    let user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { passkeyAuthenticators: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Generate a new webauthnUserID if it doesn't exist
+    if (!user.webauthnUserID) {
+      const newWebauthnUserID = crypto.randomUUID();
+      user = await this.prisma.user.update({
+        where: { id: userId },
+        data: { webauthnUserID: newWebauthnUserID },
+        include: { passkeyAuthenticators: true },
+      });
+    }
+
+    if (!user.webauthnUserID) {
+      throw new BadRequestException('Could not create a webauthn user ID');
+    }
+
+    const options = await generateRegistrationOptions({
+      rpName,
+      rpID,
+      userID: Buffer.from(user.webauthnUserID),
+      userName: user.firstName + ' ' + user.lastName,
+      userDisplayName: user.firstName + ' ' + user.lastName,
+      attestationType: 'none',
+      authenticatorSelection: {
+        residentKey: 'required',
+        userVerification: 'required'
+      },
+    });
+
+    await this.prisma.authChallenge.create({
+      data: {
+        challenge: options.challenge,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+        user: {
+          connect: { id: user.id }
+        }
+      },
+    });
+
+    return options;
+  }
+
+  async verifyRegistration(userId: string, body: RegistrationResponseJSON) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { passkeyAuthenticators: true }
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Find the challenge for this user
+    const challengeRecord = await this.prisma.authChallenge.findFirst({
+      where: {
+        userId: user.id,
+        expiresAt: { gte: new Date() }
+      },
+    });
+
+    if (!challengeRecord || !challengeRecord.challenge) {
+      throw new BadRequestException('Challenge not found or expired');
+    }
+
+    let verification: VerifiedRegistrationResponse;
+
+    try {
+      verification = await verifyRegistrationResponse({
+        response: body,
+        expectedChallenge: challengeRecord.challenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+      });
+
+    } catch (error) {
+      const err = error as Error;
+      throw new BadRequestException(err.message || 'Failed to verify registration');
+    }
+
+    const { verified, registrationInfo } = verification;
+
+    if (verified && registrationInfo) {
+      const { credential, credentialBackedUp } = registrationInfo;
+      const { id: credentialID, publicKey: credentialPublicKey, counter } = credential;
+
+      const existingAuthenticator = await this.prisma.passkeyAuthenticator.findUnique({
+        where: { credentialID },
+      });
+
+      if (existingAuthenticator) {
+        throw new BadRequestException('This authenticator has already been registered.');
+      }
+
+      await this.prisma.passkeyAuthenticator.create({
+        data: {
+          userId: user.id,
+          credentialID: credentialID,
+          credentialPublicKey: Buffer.from(credentialPublicKey).toString('base64url'),
+          counter: counter,
+          credentialDeviceType: 'singleDevice', // Adjust as needed
+          credentialBackedUp: credentialBackedUp,
+          transports: body.response.transports ?? [],
+        },
+      });
+
+      await this.prisma.authChallenge.delete({ where: { id: challengeRecord.id } });
+    }
+
+    return { verified };
+  }
+
+  async generateAuthenticationOptions(email: string) {
+    console.log("generateAuthenticationOptions email", email);
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { passkeyAuthenticators: true },
+    });
+
+    console.log("generateAuthenticationOptions user", user);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const options = await generateAuthenticationOptions({
+      userVerification: 'required',
+      rpID,
+      allowCredentials: user.passkeyAuthenticators.map((auth) => ({
+        id: auth.credentialID,
+        type: 'public-key',
+        transports: auth.transports as AuthenticatorTransportFuture[],
+      })),
+    });
+
+    await this.prisma.authChallenge.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        challenge: options.challenge,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      },
+      update: {
+        challenge: options.challenge,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      },
+    });
+
+    return { userId: user.id, options };
+  }
+
+  async verifyAuthentication(body: { userId: string; assertion: AuthenticationResponseJSON }) {
+    const { userId, assertion } = body;
+
+    const authenticator = await this.prisma.passkeyAuthenticator.findUnique({
+      where: { credentialID: assertion.id },
+      include: { user: true },
+    });
+
+    if (!authenticator) {
+      throw new NotFoundException('Authenticator not found');
+    }
+
+    const { user } = authenticator;
+
+    // Clean up any expired challenges for this user
+    await this.prisma.authChallenge.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lt: new Date() } },
+          { userId: user.id }
+        ]
+      },
+    });
+
+    // Find the challenge for this user
+    const challengeRecord = await this.prisma.authChallenge.findFirst({
+      where: {
+        userId: user.id,
+        expiresAt: { gte: new Date() }
+      },
+    });
+
+    if (!challengeRecord) {
+      throw new BadRequestException('Challenge not found or expired');
+    }
+
+    let verification: VerifiedAuthenticationResponse;
+    try {
+      const credential: WebAuthnCredential = {
+        id: authenticator.credentialID,
+        publicKey: Buffer.from(authenticator.credentialPublicKey, 'base64url'),
+        counter: Number(authenticator.counter),
+        transports: authenticator.transports as AuthenticatorTransportFuture[],
+      };
+
+      verification = await verifyAuthenticationResponse({
+        response: assertion,
+        expectedChallenge: challengeRecord.challenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        credential,
+        requireUserVerification: true,
+      });
+    } catch (error) {
+      const err = error as Error;
+      console.error('Passkey Authentication Verification Error:', err);
+      throw new BadRequestException(err.message || 'Failed to verify authentication');
+    }
+
+    const { verified, authenticationInfo } = verification;
+
+    if (verified) {
+      await this.prisma.passkeyAuthenticator.update({
+        where: { id: authenticator.id },
+        data: { counter: authenticationInfo.newCounter },
+      });
+
+      await this.prisma.authChallenge.delete({ where: { id: challengeRecord.id } });
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() },
+      });
+
+      const [accessToken, refreshToken] = await Promise.all([
+        this.jwtService.signAsync(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '59m' },
+        ),
+        this.jwtService.signAsync(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '7d' },
+        ),
+      ]);
+
+      return {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+        },
+      };
+    }
+
+    throw new UnauthorizedException('Passkey verification failed');
   }
 
   async refreshToken(refreshToken: string) {
