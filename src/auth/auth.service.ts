@@ -29,6 +29,7 @@ import {
 } from '@simplewebauthn/server';
 import * as crypto from 'crypto';
 import * as base64url from 'base64url';
+import { Response } from 'express';
 
 const rpName = 'Sync';
 // Use environment variable or fallback to 'localhost' for development
@@ -40,6 +41,7 @@ const origin = process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000';
 export class AuthService {
   private readonly MAX_LOGIN_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION = 30; // minutes
+  private readonly refreshCookieName = 'refresh_token';
 
   constructor(
     private prisma: PrismaService,
@@ -48,10 +50,32 @@ export class AuthService {
     private readonly keyManagementService: KeyManagementService,
   ) {}
 
-  // private getChallenge(): string {
-  //   // Generate a secure random challenge
-  //   return randomBytes(32).toString('base64url');
-  // }
+  private setRefreshCookie(res: Response, token: string) {
+    const isProd = process.env.NODE_ENV === 'production';
+    const sameSite = process.env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict' | undefined;
+
+    res.cookie(this.refreshCookieName, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: sameSite || (isProd ? 'none' : 'lax'),
+      path: '/auth',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+  }
+
+  private clearRefreshCookie(res: Response) {
+    const isProd = process.env.NODE_ENV === 'production';
+    const sameSite = process.env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict' | undefined;
+
+    res.clearCookie(this.refreshCookieName, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: sameSite || (isProd ? 'none' : 'lax'),
+      path: '/auth',
+    });
+  }
+
+
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -108,7 +132,12 @@ export class AuthService {
     return result;
   }
 
-  async login(loginDto: LoginDto, ipAddress: string, userAgent: string) {
+  async login(
+    loginDto: LoginDto,
+    ipAddress: string,
+    userAgent: string,
+    res: Response,
+  ) {
     const user = await this.validateUser(loginDto.email, loginDto.password);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -131,7 +160,6 @@ export class AuthService {
       }
     }
 
-    // Generate tokens
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
         { sub: user.id, email: user.email, role: user.role },
@@ -143,7 +171,6 @@ export class AuthService {
       ),
     ]);
 
-    // Create session
     await this.sessionService.create({
       user: { connect: { id: user.id } },
       token: refreshToken,
@@ -157,9 +184,10 @@ export class AuthService {
       },
     });
 
+    this.setRefreshCookie(res, refreshToken);
+
     return {
       access_token: accessToken,
-      refresh_token: refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -647,7 +675,12 @@ export class AuthService {
     return { userId: user.id, options };
   }
 
-  async verifyAuthentication(body: { userId: string; assertion: AuthenticationResponseJSON }) {
+  async verifyAuthentication(
+    body: { userId: string; assertion: AuthenticationResponseJSON },
+    res: Response,
+    ipAddress: string,
+    userAgent: string,
+  ) {
     const { userId, assertion } = body;
 
     const authenticator = await this.prisma.passkeyAuthenticator.findUnique({
@@ -722,9 +755,24 @@ export class AuthService {
         ),
       ]);
 
+      // Create session
+      await this.sessionService.create({
+        user: { connect: { id: user.id } },
+        token: refreshToken,
+        ipAddress,
+        userAgent,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        deviceInfo: {
+          userAgent,
+          ipAddress,
+          lastActive: new Date(),
+        },
+      });
+
+      this.setRefreshCookie(res, refreshToken);
+
       return {
         access_token: accessToken,
-        refresh_token: refreshToken,
         user: {
           id: user.id,
           email: user.email,
@@ -738,25 +786,25 @@ export class AuthService {
     throw new UnauthorizedException('Passkey verification failed');
   }
 
-  async refreshToken(refreshToken: string) {
+  async refreshToken(refreshToken: string | undefined, res: Response) {
     try {
-      // Verify the refresh token
+      if (!refreshToken) {
+        throw new UnauthorizedException('Refresh token missing');
+      }
+
       const payload = await this.jwtService.verifyAsync(refreshToken);
 
-      // Find the session with this refresh token
       const session = await this.sessionService.findByToken(refreshToken);
 
       if (!session) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      // Check if session is expired
       if (session.expiresAt < new Date()) {
         await this.sessionService.remove(session.id);
         throw new UnauthorizedException('Refresh token expired');
       }
 
-      // Get user details
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
       });
@@ -765,7 +813,6 @@ export class AuthService {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      // Generate new tokens
       const [newAccessToken, newRefreshToken] = await Promise.all([
         this.jwtService.signAsync(
           { sub: user.id, email: user.email, role: user.role },
@@ -777,7 +824,8 @@ export class AuthService {
         ),
       ]);
 
-      // Update session with new refresh token
+      this.setRefreshCookie(res, newRefreshToken);
+
       await this.sessionService.update(session.id, {
         token: newRefreshToken,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
@@ -789,7 +837,6 @@ export class AuthService {
 
       return {
         access_token: newAccessToken,
-        refresh_token: newRefreshToken,
         user: {
           id: user.id,
           email: user.email,
@@ -801,6 +848,21 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
+  }
+
+  async logout(refreshToken: string | undefined, res: Response) {
+    this.clearRefreshCookie(res);
+
+    if (!refreshToken) {
+      return { message: 'Logged out' };
+    }
+
+    const session = await this.sessionService.findByToken(refreshToken);
+    if (session) {
+      await this.sessionService.remove(session.id);
+    }
+
+    return { message: 'Logged out' };
   }
 
   async disablePasskey(userId: string) {

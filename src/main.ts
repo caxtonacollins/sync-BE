@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
@@ -15,10 +16,12 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors();
-  // app.enableCors({
-  //   origin: 'http://localhost:3000',
-  // });
+  app.use(cookieParser());
+
+  app.enableCors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Sync API')

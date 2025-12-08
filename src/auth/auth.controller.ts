@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Req, Query } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Req, Query, Res } from '@nestjs/common';
 import { Public } from './decorators/public.decorator';
 import { AuthService } from './auth.service';
 // import { LoginDto } from './dto/login.dto';
@@ -8,8 +8,8 @@ import { AuthService } from './auth.service';
 // import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request } from 'express';
+import { Response } from 'express';
 import { ChangePasswordDto, LoginDto, Verify2FADto } from 'src/types/dto/auth';
-import { RefreshTokenDto } from 'src/types/dto/auth/refresh-token.dto';
 import { Enable2FADto } from 'src/types/dto/auth/enable-2fa.dto';
 import { MfaVerifyDto } from 'src/types/dto/auth/mfa-setup.dto';
 
@@ -29,18 +29,30 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  async login(@Body() loginDto: LoginDto, @Req() req: Request) {
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     return this.authService.login(
       loginDto,
       req.ip || '127.0.0.1',
       req.headers['user-agent'] || 'unknown',
+      res,
     );
   }
 
   @Public()
   @Post('refresh')
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshToken(refreshTokenDto.refreshToken);
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies?.refresh_token;
+    return this.authService.refreshToken(refreshToken, res);
+  }
+
+  @Post('logout')
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies?.refresh_token;
+    return this.authService.logout(refreshToken, res);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -144,8 +156,17 @@ export class AuthController {
 
   @Public()
   @Post('passkey/login-verify')
-  async verifyPasskeyAuthentication(@Body() body: any) {
-    return this.authService.verifyAuthentication(body);
+  async verifyPasskeyAuthentication(
+    @Body() body: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.authService.verifyAuthentication(
+      body,
+      res,
+      req.ip || '127.0.0.1',
+      req.headers['user-agent'] || 'unknown',
+    );
   }
 
   @UseGuards(JwtAuthGuard)
