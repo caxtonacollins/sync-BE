@@ -11,6 +11,7 @@ import { UserService } from 'src/user/user.service';
 import { PaymentService } from 'src/payment/payment.service';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
+import { DexIntegrationService } from 'src/contract/services/dex/dex-integration.service';
 
 @Injectable()
 export class SwapOrderService {
@@ -24,6 +25,7 @@ export class SwapOrderService {
     private readonly LiquidityPoolContractService: LiquidityPoolContractService,
     private readonly userService: UserService,
     private readonly paymentService: PaymentService,
+    private readonly dexIntegrationService: DexIntegrationService,
   ) {}
 
   async create(dto: CreateSwapOrderDto) {
@@ -94,12 +96,44 @@ export class SwapOrderService {
     const swapOrder = await this.create(dto);
 
     try {
-      if (dto.swapType === SwapType.TOKENTOFIAT) {
-        await this.executeTokenToFiatSwap(swapOrder);
-      } else if (dto.swapType === SwapType.FIATTOTOKEN) {
-        await this.executeFiatToTokenSwap(swapOrder);
+      // Check liquidity and route to appropriate provider
+      const routingResult = await this.dexIntegrationService.routeSwap(
+        dto.fromCurrency,
+        dto.toCurrency,
+        dto.fromAmount,
+        dto.swapType,
+      );
+
+      this.logger.log(
+        `Swap routing decision: Provider=${routingResult.provider}, HasLiquidity=${routingResult.liquidityCheck.hasSufficientLiquidity}`,
+      );
+
+      // Update swap order with provider info
+      await this.update(swapOrder.id, {
+        metadata: {
+          provider: routingResult.provider,
+          liquidityCheck: {
+            available: routingResult.liquidityCheck.availableLiquidity.toString(),
+            required: routingResult.liquidityCheck.requiredLiquidity.toString(),
+          },
+        },
+      });
+
+      if (routingResult.provider === 'sync') {
+        // Use Sync liquidity pool
+        if (dto.swapType === SwapType.TOKENTOFIAT) {
+          await this.executeTokenToFiatSwap(swapOrder);
+        } else if (dto.swapType === SwapType.FIATTOTOKEN) {
+          await this.executeFiatToTokenSwap(swapOrder);
+        } else {
+          throw new Error('Invalid swap type');
+        }
       } else {
-        throw new Error('Invalid swap type');
+        // Route to external DEX (Uniswap or Starknet DEX)
+        this.logger.log(
+          `Routing swap to external DEX: ${routingResult.provider}`,
+        );
+        await this.executeDexSwap(swapOrder, routingResult);
       }
     } catch (error) {
       this.logger.error(`Swap execution failed for order ${swapOrder.id}`);
@@ -187,11 +221,6 @@ export class SwapOrderService {
       throw new NotFoundException('User not found');
     }
 
-    const fiatAccount = await this.walletService.getFiatAccountForUser(userId);
-    if (!fiatAccount) {
-      throw new Error('User does not have a fiat account for payment');
-    }
-
     const cryptoWallet = await this.walletService.getCryptoWallets(userId);
     if (!cryptoWallet || cryptoWallet.length === 0) {
       throw new Error(
@@ -205,15 +234,6 @@ export class SwapOrderService {
       throw new Error('User is not registered to contract');
     }
 
-    const fiatBalance =
-      await this.paymentService.getAccountBalance(fiatAccount);
-
-    if (fiatBalance < fromAmount) {
-      throw new Error(
-        `Insufficient fiat balance. Required: ${fromAmount}, Available: ${fiatBalance}`,
-      );
-    }
-
     // calculate the fee to be paid
     const fee = await this.LiquidityPoolContractService.getFeeBPS();
     const feeToNumber = Number(fee);
@@ -223,7 +243,7 @@ export class SwapOrderService {
       `Charging ${fromAmount} ${fromCurrency} from user's fiat account`,
     );
     const amountToCharge = fromAmount + feeAmount;
-    await this.paymentService.charge(fiatAccount, amountToCharge, fromCurrency);
+    await this.paymentService.charge(user.id, amountToCharge, fromCurrency);
 
     this.logger.log(
       `Successfully charged ${fromAmount} ${fromCurrency} from user ${userId}`,
@@ -282,20 +302,13 @@ export class SwapOrderService {
     }
 
     try {
-      const fiatAccount = await this.walletService.getFiatAccountForUser(
-        swapOrder.userId,
-      );
-      if (!fiatAccount) {
-        throw new Error('User does not have a fiat account for payout');
-      }
-
       // Initiate payout
       this.logger.log(
         `Initiating fiat payout of ${swapOrder.toAmount} ${swapOrder.toCurrency} to user ${swapOrder.userId}`,
       );
 
       const payoutResult = await this.paymentService.initiatePayout(
-        fiatAccount,
+        swapOrder.userId,
         Number(new Decimal(swapOrder.toAmount || 0).toNumber()),
         swapOrder.toCurrency,
       );
@@ -305,7 +318,7 @@ export class SwapOrderService {
       );
 
       // TODO: Store payout reference in a separate PayoutRecord table if needed
-      // For now, will just log it
+      // For now, i just log it
     } catch (error) {
       this.logger.error(
         `Failed to initiate payout for swap ${swapOrderId}: ${error.message}`,
@@ -321,8 +334,67 @@ export class SwapOrderService {
     }
   }
 
+  /**
+   * Execute swap via external DEX (Uniswap or Starknet DEX)
+   */
+  private async executeDexSwap(swapOrder: any, routingResult: any) {
+    const {
+      id: swapOrderId,
+      fromCurrency,
+      toCurrency,
+      fromAmount,
+      userId,
+    } = swapOrder;
+
+    this.logger.log(
+      `Executing DEX swap for order ${swapOrderId}: ${fromAmount} ${fromCurrency} -> ${toCurrency}`,
+    );
+
+    const cryptoWallet = await this.walletService.getCryptoWallets(userId);
+    if (!cryptoWallet || cryptoWallet.length === 0) {
+      throw new Error('User does not have a crypto wallet');
+    }
+
+    const cryptoWalletAddress = cryptoWallet[0].address;
+
+    try {
+      // Get quote from DEX
+      const quote = routingResult.quote;
+      if (!quote) {
+        throw new Error('DEX quote not available');
+      }
+
+      // Execute swap via DEX
+      // NOTE: This requires actual DEX integration
+      // For Starknet, use JediSwap, Ekubo, or bridge to Ethereum for Uniswap
+      const dexResult = await this.dexIntegrationService.executeDexSwap(
+        cryptoWalletAddress,
+        fromCurrency,
+        toCurrency,
+        fromAmount,
+        quote.toAmount * 0.99, // 1% slippage tolerance
+      );
+
+      await this.update(swapOrder.id, {
+        status: 'processing',
+        transactionHash: dexResult.txHash,
+        toAmount: quote.toAmount,
+        fee: quote.fee,
+      });
+
+      this.logger.log(
+        `DEX swap transaction sent: ${dexResult.txHash} for order ${swapOrderId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `DEX swap execution failed for order ${swapOrderId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
   private isKnownToken(currency: string): boolean {
-    const knownTokens = ['ETH', 'STRK', 'USDC']; // Add more as needed
+    const knownTokens = ['ETH', 'STRK', 'USDC', 'sNGN']; // Add sNGN
     return knownTokens.includes(currency.toUpperCase());
   }
 }

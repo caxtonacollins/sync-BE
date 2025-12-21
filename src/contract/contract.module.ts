@@ -18,6 +18,7 @@ import { TokenContractService } from './services/erc20-token/erc20-token.service
 import { LiquidityEventProcessorService } from './services/event-processor/event-processor.service';
 import { LiquidityPoolContractService } from './services/liquidity-pool/liquidity-pool.service';
 import { StakingContractService } from './services/staking/staking.service';
+import { DexIntegrationService } from './services/dex/dex-integration.service';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { StakingContractService } from './services/staking/staking.service';
     TokenContractService,
     LiquidityEventProcessorService,
     StakingContractService,
+    DexIntegrationService, // Placeholder for future DEX integration
   ],
   exports: [
     AccountContractService,
@@ -52,6 +54,7 @@ import { StakingContractService } from './services/staking/staking.service';
     TokenContractService,
     LiquidityEventProcessorService,
     StakingContractService,
+    DexIntegrationService, // Placeholder for future DEX integration
   ],
 })
 export class ContractModule {}

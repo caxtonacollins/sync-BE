@@ -100,8 +100,7 @@ export class StakingController {
   createReserveSnapshot(@Body() body: any) {
     return this.stakingService.createReserveSnapshot(
       body.currency,
-      body.balance,
-      body.signature,
+      BigInt(body.balance),
       body.ipfsHash,
     );
   }

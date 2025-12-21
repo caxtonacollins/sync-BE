@@ -17,7 +17,7 @@ export class AccountController {
   @Post('create-account')
   async createAccount(@Body() createAccountDto: CreateAccountDto) {
     return await this.accountService.createAccount(
-      createAccountDto.fiatAccountId,
+      createAccountDto.userId,
     );
   }
 

@@ -4,7 +4,13 @@ import {
   IsOptional,
   IsUUID,
   IsDateString,
+  IsObject,
 } from 'class-validator';
+
+export class LiquidityCheckDto {
+  @IsString() available: string;
+  @IsString() required: string;
+}
 
 export class UpdateSwapOrderDto {
   @IsOptional()
@@ -41,7 +47,14 @@ export class UpdateSwapOrderDto {
 
   @IsOptional()
   @IsDateString()
-  updatedAt?: string;
+  completedAt?: Date;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: {
+    provider: string;
+    liquidityCheck: LiquidityCheckDto;
+  };
 
   @IsOptional()
   @IsString()

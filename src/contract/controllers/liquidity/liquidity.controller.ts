@@ -21,7 +21,7 @@ export class LiquidityController {
   ) {
     return await this.contractService.registerUserToLiquidity(
       registerUserToLiquidityDto.userContractAddress,
-      registerUserToLiquidityDto.fiatAccountId,
+      registerUserToLiquidityDto.userId,
     );
   }
 

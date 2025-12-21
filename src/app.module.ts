@@ -16,7 +16,6 @@ import { FlutterwaveModule } from './payment/flutterwave/flutterwave.module';
 import { TransferModule } from './transaction/transfer/transfer.module';
 import { PaymentModule } from './payment/payment.module';
 import { CacheModule } from './cache/cache.module';
-import { FiatStakingModule } from './staking/fiat-staking/fiat-staking.module';
 import { StakingModule } from './staking/staking.module';
 import { CryptoStakingModule } from './staking/crypto-staking/crypto-staking.module';
 import { BalanceSyncModule } from './transaction/balance-sync/balance-sync.module';
@@ -37,7 +36,6 @@ import { BalanceSyncModule } from './transaction/balance-sync/balance-sync.modul
     FlutterwaveModule,
     TransferModule,
     PaymentModule,
-    FiatStakingModule,
     StakingModule,
     CryptoStakingModule,
     BalanceSyncModule,

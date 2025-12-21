@@ -18,6 +18,7 @@ export class TokenContractService {
   private readonly _usdcTokenAddress: string;
   private readonly _ethTokenAddress: string;
   private readonly _btcTokenAddress: string;
+  private readonly _sngnTokenAddress: string;
 
   private readonly tokenAddressMap: Record<string, string>;
   private readonly decimalsMap: Record<string, number>;
@@ -29,6 +30,7 @@ export class TokenContractService {
     this._usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
     this._ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
     this._btcTokenAddress = process.env.BTC_TOKEN_ADDRESS || '';
+    this._sngnTokenAddress = process.env.SNGN_TOKEN_ADDRESS || '';
 
     this.tokenAddressMap = {
       SYNC: this._syncTokenAddress,
@@ -36,6 +38,7 @@ export class TokenContractService {
       USDC: this._usdcTokenAddress,
       ETH: this._ethTokenAddress,
       BTC: this._btcTokenAddress,
+      SNGN: this._sngnTokenAddress,
     };
 
     this.decimalsMap = {
@@ -44,6 +47,7 @@ export class TokenContractService {
       USDC: 6,
       ETH: 18,
       BTC: 18,
+      SNGN: 18, // sNGN uses 18 decimals (1 Naira = 1 sNGN)
     };
   }
 

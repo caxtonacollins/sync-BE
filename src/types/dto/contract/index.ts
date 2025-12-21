@@ -2,7 +2,7 @@ import { IsOptional, IsString } from 'class-validator';
 
 export class CreateAccountDto {
   @IsOptional()
-  fiatAccountId: string;
+  userId: string;
 
   @IsOptional()
   userContractAddress: string;

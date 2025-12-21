@@ -35,6 +35,7 @@ export const CURRENCY_DECIMALS: Record<string, number> = {
   WBTC: 8, // Wrapped Bitcoin (8 decimals)
   BTC: 8, // Bitcoin (8 decimals)
   SYNC: 18, // Sync Token
+  sNGN: 2, // Sync Naira (2 decimals)
 };
 
 /**

@@ -1,23 +1,19 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { Account, RpcProvider, RPC } from 'starknet';
-import { connectToStarknet, createNewContractInstance } from '../../utils';
+import { RpcProvider, RPC } from 'starknet';
+import { connectToStarknet, createNewContractInstance, getDeployerWallet } from '../../utils';
 
 @Injectable()
 export class AccountFactoryContractService {
   private provider: RpcProvider;
   private accountFactoryAddress: string;
   private accountContractHash: string;
-  private accountAddress: string;
-  private private_key: string;
 
   constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {
     this.provider = connectToStarknet();
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
-    this.accountAddress = process.env.DEPLOYER_ADDRESS || '';
-    this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
   }
 
   /**
@@ -33,7 +29,7 @@ export class AccountFactoryContractService {
       calldata: [classHash],
     };
 
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
     await account.execute(call);
 
     // Invalidate cache
@@ -84,7 +80,7 @@ export class AccountFactoryContractService {
         calldata: [newOwnerAddress],
       };
 
-      const account = this.getDeployerWallet();
+      const account = getDeployerWallet();
 
       const { transaction_hash: txH } = await account.execute(call, {
         maxFee: 10 ** 15,
@@ -115,9 +111,6 @@ export class AccountFactoryContractService {
     if (!this.accountFactoryAddress)
       throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
 
-    if (!this.private_key || !this.accountAddress)
-      throw new Error('account credentials required');
-
     const accountFactoryClass = await this.provider.getClassAt(
       this.accountFactoryAddress,
     );
@@ -130,7 +123,7 @@ export class AccountFactoryContractService {
       calldata: [classHash],
     };
 
-    const account = this.getDeployerWallet();
+    const account = getDeployerWallet();
 
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
@@ -146,12 +139,4 @@ export class AccountFactoryContractService {
     }
   }
 
-  /**
-   * Get deployer wallet instance
-   */
-  private getDeployerWallet() {
-    if (!this.provider || !this.accountAddress || !this.private_key)
-      throw new Error("credentials required to deploy deployer's wallet");
-    return new Account(this.provider, this.accountAddress, this.private_key);
-  }
 }

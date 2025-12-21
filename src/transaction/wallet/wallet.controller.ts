@@ -14,7 +14,6 @@ import {
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { Logger } from '@nestjs/common';
-import { CreateFiatAccountDto } from '../../types/dto/dto/create-fiat-account.dto';
 import { CreateCryptoWalletDto } from '../../types/dto/dto/create-crypto-wallet.dto';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 
@@ -53,49 +52,6 @@ export class WalletController {
       return await this.walletService.getWalletSummary(userId);
     } catch (error) {
       this.logger.error('Failed to get wallet summary:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get fiat accounts
-   */
-  @Get('fiat-accounts')
-  async getFiatAccounts(@Request() req) {
-    try {
-      const userId = req.user.sub;
-      if (!userId) {
-        throw new BadRequestException('User ID not found in request');
-      }
-      return await this.walletService.getFiatAccounts(userId);
-    } catch (error) {
-      this.logger.error('Failed to get fiat accounts:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create fiat account
-   */
-  @Post('fiat-account')
-  @HttpCode(HttpStatus.CREATED)
-  async createFiatAccount(
-    @Request() req,
-    @Body(ValidationPipe) createFiatAccountDto: CreateFiatAccountDto,
-  ) {
-    try {
-      const userId = req.user.sub;
-
-      if (!userId) {
-        throw new BadRequestException('User ID is required');
-      }
-
-      return await this.walletService.createFiatAccount(
-        userId,
-        createFiatAccountDto.currency,
-      );
-    } catch (error) {
-      this.logger.error('Failed to create fiat account:', error);
       throw error;
     }
   }

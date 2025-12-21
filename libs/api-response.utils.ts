@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { toApiString, getCurrencyDecimals } from './currency.utils';
+import { toApiString } from './currency.utils';
 
 /**
  * Standard API response format

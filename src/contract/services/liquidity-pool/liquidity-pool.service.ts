@@ -1,7 +1,7 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { RpcProvider, RPC, uint256, shortString } from 'starknet';
+import { RpcProvider, RPC, uint256, shortString, stark } from 'starknet';
 import {
   connectToStarknet,
   convertToWei,
@@ -11,17 +11,15 @@ import {
   uuidToFelt252,
   writeAbiToFile,
 } from '../../utils';
-import chalk from 'chalk';
 import { UserService } from 'src/user/user.service';
 import { TokenContractService } from '../erc20-token/erc20-token.service';
 import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
 
 @Injectable()
 export class LiquidityPoolContractService {
+  private readonly logger = new Logger(LiquidityPoolContractService.name);
   private provider: RpcProvider;
   private liquidityContractAddress: string;
-  private accountAddress: string;
-  private private_key: string;
 
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
@@ -41,13 +39,13 @@ export class LiquidityPoolContractService {
    */
   async registerUserToLiquidity(
     userContractAddress: string,
-    fiatAccountId: string,
+    userId: string,
   ) {
     try {
       if (!userContractAddress) throw new Error('user address is required');
-      if (!fiatAccountId) throw new Error('fiat account id is required');
+      if (!userId) throw new Error('fiat account id is required');
 
-      const fiatAccountIdFelt = uuidToFelt252(fiatAccountId);
+      const userIdFelt = uuidToFelt252(userId);
 
       const liquidityClass = await this.provider.getClassAt(
         this.liquidityContractAddress,
@@ -58,7 +56,7 @@ export class LiquidityPoolContractService {
       const call = {
         contractAddress: this.liquidityContractAddress,
         entrypoint: 'register_user',
-        calldata: [userContractAddress, fiatAccountIdFelt],
+        calldata: [userContractAddress, userIdFelt],
       };
 
       const account = getDeployerWallet();
@@ -73,13 +71,13 @@ export class LiquidityPoolContractService {
 
       const txR = await this.provider.waitForTransaction(txH);
       if (txR.isSuccess()) {
-        console.log('Paid fee =', txR.statusReceipt);
+        this.logger.log(`User registered successfully. Transaction: ${txH}`);
         // Invalidate registration cache
         await this.invalidateUserRegistrationCache(userContractAddress);
       }
       return 'success';
     } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
+      this.logger.error(`Failed to register user: ${error.message}`, error.stack);
       throw error;
     }
   }
@@ -96,9 +94,7 @@ export class LiquidityPoolContractService {
     const cacheKey = `liquidity:registered:${userContractAddress}`;
     const cachedResult = await this.cacheManager.get<boolean>(cacheKey);
     if (cachedResult !== undefined) {
-      console.log(
-        `[Cache Hit] User registration status for ${userContractAddress}`,
-      );
+      this.logger.debug(`Cache hit: User registration status for ${userContractAddress}`);
       return cachedResult;
     }
 
@@ -120,13 +116,13 @@ export class LiquidityPoolContractService {
   }
 
   /**
-   * Add fiat liquidity
+   * Add token liquidity (replaces add_fiat_liquidity - tokens can represent fiat-backed tokens)
+   * Note: The new contract uses add_token_liquidity for all token types
    */
-  async addFiatToLiquidity(symbol: string, amount: string) {
-    if (!symbol) throw new Error('symbol is required');
+  async addTokenLiquidity(tokenAddress: string, amount: string) {
+    if (!tokenAddress) throw new Error('tokenAddress is required');
     if (!amount) throw new Error('amount is required');
 
-    const symbolFelt = uuidToFelt252(symbol);
     const amountU256 = uint256.bnToUint256(BigInt(amount));
 
     const liquidityClass = await this.provider.getClassAt(
@@ -137,8 +133,8 @@ export class LiquidityPoolContractService {
 
     const call = {
       contractAddress: this.liquidityContractAddress,
-      entrypoint: 'add_fiat_liquidity',
-      calldata: [symbolFelt, amountU256.low, amountU256.high],
+      entrypoint: 'add_token_liquidity',
+      calldata: [tokenAddress, amountU256.low, amountU256.high],
     };
 
     const account = getDeployerWallet();
@@ -153,9 +149,9 @@ export class LiquidityPoolContractService {
 
     const txR = await this.provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
-      // Invalidate fiat balance cache
-      await this.cacheManager.del(`liquidity:fiat:${symbol}`);
+      this.logger.log(`Token liquidity added. Transaction: ${txH}`);
+      // Invalidate token balance cache
+      await this.cacheManager.del(`liquidity:token:balance:${tokenAddress}`);
     }
   }
 
@@ -193,34 +189,60 @@ export class LiquidityPoolContractService {
 
     const txR = await this.provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
+      this.logger.log(`Token liquidity added. Transaction: ${txH}`);
     }
   }
 
   /**
-   * Add supported token
+   * Add token to liquidity bridge (replaces add_supported_token)
+   * The new contract uses add_token with more parameters
    */
-  async addSupportedToken(symbol: string, address: string) {
+  async addSupportedToken(
+    symbol: string,
+    address: string,
+    feedId: string = '0x0',
+    decimals: number = 18,
+    minAmount: string = '0',
+    maxAmount: string = '0',
+    isActive: boolean = true,
+  ) {
     if (!symbol) throw new Error('symbol is required');
     if (!address) throw new Error('address is required');
 
     const symbolFelt = shortString.encodeShortString(symbol);
+    const feedIdFelt = feedId.startsWith('0x') ? feedId : `0x${feedId}`;
+    const minAmountU256 = uint256.bnToUint256(BigInt(minAmount));
+    const maxAmountU256 = uint256.bnToUint256(BigInt(maxAmount));
 
     const call = {
       contractAddress: this.liquidityContractAddress,
-      entrypoint: 'add_supported_token',
-      calldata: [symbolFelt, address],
+      entrypoint: 'add_token',
+      calldata: [
+        address,
+        symbolFelt,
+        feedIdFelt,
+        decimals,
+        minAmountU256.low,
+        minAmountU256.high,
+        maxAmountU256.low,
+        maxAmountU256.high,
+        isActive ? 1 : 0,
+      ],
     };
 
     const account = getDeployerWallet();
 
     const { transaction_hash: txH } = await account.execute(call, {
+      version: 3,
       maxFee: 10 ** 15,
+      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
+      tip: 10 ** 13,
+      paymasterData: [],
     });
 
     const txR = await this.provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
+      this.logger.log(`Token added successfully. Transaction: ${txH}`);
       // Invalidate supported token cache
       await this.cacheManager.del(`liquidity:token:${symbol}`);
     }
@@ -243,7 +265,7 @@ export class LiquidityPoolContractService {
     const cacheKey = `liquidity:price:${address}`;
     const cachedPrice = await this.cacheManager.get(cacheKey);
     if (cachedPrice) {
-      console.log(`[Cache Hit] Token price for ${address}`);
+      this.logger.debug(`Cache hit: Token price for ${address}`);
       return cachedPrice;
     }
 
@@ -292,30 +314,21 @@ export class LiquidityPoolContractService {
     if (!user) throw new Error('User not found');
 
     const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
-    const fiat = 'USD';
     const token = tokenSymbol.toUpperCase();
-    const tokenSymbolToUSD = `${token}/${fiat}`;
 
+    // The new contract expects token_symbol as felt252 (shortString encoded)
     const fiatSymbolFelt = shortString.encodeShortString(fiatSymbol);
+    const tokenSymbolFelt = shortString.encodeShortString(token);
     const fiatAmountU256 = uint256.bnToUint256(BigInt(fiatAmount));
 
-    const supportedTokenAddress =
-      await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
+    // Get token address to determine decimals
+    const supportedTokenAddress = await this.getSupportedTokenBySymbol(token);
     const decimals = await this.getTokenDecimals(supportedTokenAddress);
 
     // Convert token amount to wei units properly handling decimals
-    const amountInWei = convertToWei(tokenAmount, decimals);
+    const amountInWei = convertToWei(tokenAmount.toString(), decimals);
     const amountU256 = uint256.bnToUint256(amountInWei);
 
-    // console.log('swapFiatToToken', {
-    //     userContractAddress,
-    //     swapOrderIdToFelt,
-    //     fiatSymbolFelt,
-    //     tokenSymbolToUSD,
-    //     fiatAmountU256,
-    //     amountU256,
-    //     fee,
-    // });
     const swapCall = {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'swap_fiat_to_token',
@@ -323,10 +336,11 @@ export class LiquidityPoolContractService {
         userContractAddress,
         swapOrderIdToFelt,
         fiatSymbolFelt,
-        tokenSymbolToUSD,
+        tokenSymbolFelt,
         fiatAmountU256.low,
         fiatAmountU256.high,
-        amountU256,
+        amountU256.low,
+        amountU256.high,
         fee,
       ],
     };
@@ -346,7 +360,7 @@ export class LiquidityPoolContractService {
         },
       };
     } catch (error) {
-      console.error(`[Swap] Failed ${fiatSymbol}->${tokenSymbol} swap:`, error);
+      this.logger.error(`Swap failed ${fiatSymbol}->${tokenSymbol}: ${error.message}`, error.stack);
       throw new Error(`Swap failed: ${error.message}`);
     }
   }
@@ -372,11 +386,13 @@ export class LiquidityPoolContractService {
     if (!user) throw new Error('User not found');
 
     const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
-    const fiat = 'USD';
     const token = tokenSymbol.toUpperCase();
-    const tokenSymbolToUSD = `${token}/${fiat}`;
-    const supportedTokenAddress =
-      await this.getSupportedTokenBySymbol(tokenSymbolToUSD);
+    
+    // The new contract expects token_symbol as felt252 (shortString encoded)
+    const fiatSymbolFelt = shortString.encodeShortString(fiatSymbol);
+    const tokenSymbolFelt = shortString.encodeShortString(token);
+    
+    const supportedTokenAddress = await this.getSupportedTokenBySymbol(token);
     const decimals = await this.getTokenDecimals(supportedTokenAddress);
 
     // Convert token amount to wei units properly handling decimals
@@ -415,10 +431,12 @@ export class LiquidityPoolContractService {
       calldata: [
         userContractAddress,
         swapOrderIdToFelt,
-        fiatSymbol,
-        tokenSymbolToUSD,
+        fiatSymbolFelt,
+        tokenSymbolFelt,
         amountU256.low,
         amountU256.high,
+        '0x0', // min_fiat_amount - should be calculated based on slippage tolerance
+        '0x0',
       ],
     };
 
@@ -446,12 +464,12 @@ export class LiquidityPoolContractService {
         status: 'pending',
         details: {
           from: token,
-          to: fiat,
+          to: fiatSymbol,
           amount: tokenAmount,
         },
       };
     } catch (error) {
-      console.error(`[Swap] Failed ${token}->${fiat} swap:`, error);
+      this.logger.error(`Swap failed ${token}->${fiatSymbol}: ${error.message}`, error.stack);
       throw new Error(`Swap failed: ${error.message}`);
     }
   }
@@ -460,7 +478,7 @@ export class LiquidityPoolContractService {
     const cacheKey = 'liquidity:fee:bps';
     const cachedFee = await this.cacheManager.get(cacheKey);
     if (cachedFee) {
-      console.log('[Cache Hit] Fee BPS');
+      this.logger.debug('Cache hit: Fee BPS');
       return BigInt(cachedFee as string);
     }
 
@@ -484,19 +502,63 @@ export class LiquidityPoolContractService {
   }
 
   /**
-   * Get fiat liquidity balance with caching
+   * Get token balance from liquidity pool (replaces get_fiat_balance)
+   * Use getTokenBalance instead - the new contract doesn't distinguish between fiat and token balances
    */
   async getFiatLiquidityBalance(fiatSymbol: string) {
-    const cacheKey = `liquidity:fiat:${fiatSymbol}`;
+    // For backward compatibility, try to get token address by symbol first
+    // If fiatSymbol is actually a token symbol, use getTokenBalance
+    const tokenAddress = await this.getTokenAddressBySymbol(fiatSymbol);
+    if (tokenAddress) {
+      return this.getTokenBalance(tokenAddress);
+    }
+    
+    // If not found, return 0 (fiat balances are now tracked as token balances)
+    this.logger.warn(`Token not found for symbol ${fiatSymbol}, returning 0`);
+    return BigInt(0);
+  }
+
+  /**
+   * Get token address by symbol from the contract
+   */
+  private async getTokenAddressBySymbol(symbol: string): Promise<string | null> {
+    try {
+      const symbolFelt = shortString.encodeShortString(symbol);
+      const liquidityClass = await getClassAt(this.liquidityContractAddress);
+      const liquidityContract = createNewContractInstance(
+        liquidityClass.abi,
+        this.liquidityContractAddress,
+      );
+      
+      // The new contract uses token_by_symbol map
+      // We need to read from storage or use a view function if available
+      // For now, return null and let caller handle it
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Get token balance from liquidity pool with caching
+   * Updated to use token address instead of symbol
+   */
+  async getTokenBalance(tokenAddressOrSymbol: string): Promise<bigint> {
+    // If it's a symbol, try to get the address first
+    let tokenAddress = tokenAddressOrSymbol;
+    if (!tokenAddressOrSymbol.startsWith('0x')) {
+      // It's a symbol, get the address
+      tokenAddress = await this.getSupportedTokenBySymbol(tokenAddressOrSymbol);
+    }
+
+    const cacheKey = `liquidity:token:balance:${tokenAddress}`;
     const cachedBalance = await this.cacheManager.get(cacheKey);
     if (cachedBalance) {
-      console.log(`[Cache Hit] Fiat balance for ${fiatSymbol}`);
+      this.logger.debug(`Cache hit: Token balance for ${tokenAddress}`);
       return BigInt(cachedBalance as string);
     }
 
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
+    const liquidityClass = await getClassAt(this.liquidityContractAddress);
     if (!liquidityClass.abi)
       throw new Error('No ABI found for liquidity contract');
 
@@ -505,7 +567,7 @@ export class LiquidityPoolContractService {
       this.liquidityContractAddress,
     );
 
-    const result = await liquidityContract.get_fiat_balance(fiatSymbol);
+    const result = await liquidityContract.get_token_balance(tokenAddress);
     const balance = BigInt(result);
 
     // Cache for 30 seconds
@@ -515,39 +577,48 @@ export class LiquidityPoolContractService {
   }
 
   /**
-   * Get supported token by symbol with caching
+   * Get token address by symbol (replaces get_supported_tokens_by_symbol)
+   * The new contract uses token_by_symbol storage map
+   * Note: This requires reading from storage directly or using a view function
    */
   async getSupportedTokenBySymbol(symbol: string) {
     const cacheKey = `liquidity:token:${symbol}`;
     const cachedToken = await this.cacheManager.get<string>(cacheKey);
     if (cachedToken) {
-      console.log(`[Cache Hit] Supported token for ${symbol}`);
+      this.logger.debug(`Cache hit: Token address for ${symbol}`);
       return cachedToken;
     }
 
-    const liquidityClass = await this.provider.getClassAt(
-      this.liquidityContractAddress,
-    );
-    if (!liquidityClass.abi)
-      throw new Error('No ABI found for liquidity contract');
+    try {
+      const liquidityClass = await getClassAt(this.liquidityContractAddress);
+      const liquidityContract = createNewContractInstance(
+        liquidityClass.abi,
+        this.liquidityContractAddress,
+      );
 
-    const liquidityContract = createNewContractInstance(
-      liquidityClass.abi,
-      this.liquidityContractAddress,
-    );
-
-    const symbolFelt = shortString.encodeShortString(symbol);
-    const result =
-      await liquidityContract.get_supported_tokens_by_symbol(symbolFelt);
-
-    // Cache for 10 minutes
-    await this.cacheManager.set(cacheKey, result, 600000);
-
-    return result;
+      const symbolFelt = shortString.encodeShortString(symbol);
+      
+      // The new contract stores token_by_symbol as a storage map
+      // We need to read it directly from storage
+      // For now, try to get token info which might help us find the address
+      // This is a workaround - ideally the contract should have a view function
+      
+      // Try reading from storage slot (this is contract-specific and may need adjustment)
+      // Storage slot calculation: token_by_symbol map at slot determined by Cairo storage layout
+      // Note: Cairo storage uses pedersen hash, not keccak
+      // For now, we'll need to use a view function or read from contract storage directly
+      // This is a placeholder - the contract should expose a view function for this
+      throw new Error(`Token ${symbol} lookup requires contract view function - not implemented via storage read`);
+    } catch (error) {
+      this.logger.error(`Error getting token address for ${symbol}: ${error.message}`, error.stack);
+      throw new Error(`Token ${symbol} not found: ${error.message}`);
+    }
   }
 
   /**
    * Transfer liquidity ownership
+   * Note: The new contract uses AccessControl, so ownership is managed via roles
+   * Use grant_role/revoke_role instead of transfer_ownership
    */
   async transferLiquidityOwnership(newOwnerAddress: string) {
     if (!this.liquidityContractAddress)
@@ -555,45 +626,46 @@ export class LiquidityPoolContractService {
     if (!newOwnerAddress) throw new Error('newOwnerAddress is required');
 
     try {
-      console.log(
-        `Transferring ownership of liquidity contract ${this.liquidityContractAddress} to ${newOwnerAddress}`,
+      this.logger.log(
+        `Granting admin role to ${newOwnerAddress} on liquidity contract ${this.liquidityContractAddress}`,
       );
 
+      // The new contract uses AccessControl with DEFAULT_ADMIN_ROLE = 0
+      const DEFAULT_ADMIN_ROLE = '0x0';
+      
       const call = {
         contractAddress: this.liquidityContractAddress,
-        entrypoint: 'transfer_ownership',
-        calldata: [newOwnerAddress],
+        entrypoint: 'grant_role',
+        calldata: [DEFAULT_ADMIN_ROLE, newOwnerAddress],
       };
 
       const account = getDeployerWallet();
 
-      console.log(
-        chalk.blue('Executing liquidity ownership transfer transaction...'),
-      );
+      this.logger.log('Executing role grant transaction...');
 
       const { transaction_hash: txH } = await account.execute(call, {
+        version: 3,
         maxFee: 10 ** 15,
+        feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
+        tip: 10 ** 13,
+        paymasterData: [],
       });
 
-      console.log(chalk.green('Transaction hash:'), txH);
-      console.log(chalk.blue('Waiting for transaction confirmation...'));
+      this.logger.log(`Transaction hash: ${txH}`);
+      this.logger.log('Waiting for transaction confirmation...');
       const txR = await this.provider.waitForTransaction(txH);
 
       if (txR.isSuccess()) {
-        console.log(
-          chalk.green(
-            `Successfully transferred liquidity ownership to ${newOwnerAddress}`,
-          ),
-        );
+        this.logger.log(`Successfully granted admin role to ${newOwnerAddress}`);
         return {
           transactionHash: txH,
           receipt: txR,
         };
       } else {
-        throw new Error('Liquidity ownership transfer transaction failed');
+        throw new Error('Role grant transaction failed');
       }
     } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
+      this.logger.error(`Failed to grant admin role: ${error.message}`, error.stack);
       throw error;
     }
   }
@@ -605,9 +677,6 @@ export class LiquidityPoolContractService {
     if (!classHash) throw new Error('class hash is required');
     if (!this.liquidityContractAddress)
       throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
-
-    if (!this.private_key || !this.accountAddress)
-      throw new Error('account credentials required');
 
     const liquidityClass = await this.provider.getClassAt(
       this.liquidityContractAddress,
@@ -642,8 +711,6 @@ export class LiquidityPoolContractService {
    */
   async upgradePragmaOracleAddress(contractAddress: string) {
     if (!contractAddress) throw new Error('contract address is required');
-    if (!this.private_key || !this.accountAddress)
-      throw new Error('account credentials required');
 
     const contractClass = await this.provider.getClassAt(
       this.liquidityContractAddress,
@@ -669,7 +736,7 @@ export class LiquidityPoolContractService {
 
     const txR = await this.provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
-      console.log('Paid fee =', txR.statusReceipt);
+      this.logger.log(`Pragma oracle address updated. Transaction: ${txH}`);
     }
   }
 

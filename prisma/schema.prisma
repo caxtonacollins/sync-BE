@@ -90,17 +90,11 @@ model User {
 
   starknetAccountAddress String? @unique
 
-  // Fiat Accounts
-  fiatAccounts  FiatAccount[]
   cryptoWallets CryptoWallet[]
-
-  // Balances (New - for staking)
-  fiatBalances   FiatBalance[]
   cryptoBalances CryptoBalance[]
 
   // Staking
   cryptoStakes CryptoStake[]
-  fiatStakes   FiatStake[]
 
   // Security
   twoFactorEnabled Boolean   @default(false)
@@ -122,7 +116,6 @@ model User {
   sessions              Session[]
   auditLogs             AuditLog[]
   encryptedKey          EncryptedKey?
-  FiatTransaction       FiatTransaction[]
   WithdrawalRequest     WithdrawalRequest[]
   passkeyAuthenticators PasskeyAuthenticator[]
   authChallenges       AuthChallenge[]
@@ -144,54 +137,6 @@ model PasskeyAuthenticator {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
-}
-
-model FiatAccount {
-  id                   String    @id @default(uuid())
-  userId               String
-  user                 User      @relation(fields: [userId], references: [id])
-  provider             String // "monnify", "paystack", etc.
-  accountNumber        String
-  accountName          String
-  bankName             String?
-  bankCode             String?
-  balance              Decimal   @default(0) @db.Decimal(20, 2)
-  availableBalance     Decimal?  @default(0) @db.Decimal(20, 2)
-  ledgerBalance        Decimal?  @default(0) @db.Decimal(20, 2)
-  currency             String    @default("NGN")
-  isDefault            Boolean   @default(false)
-  isActive             Boolean   @default(true)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  verifiedAt           DateTime?
-  contractCode         String?
-  accountReference     String?
-  reservationReference String?
-  reservedAccountType  String?
-  collectionChannel    String?
-  customerEmail        String?
-  customerName         String?
-  accounts             Json?
-
-  transactions Transaction[]
-}
-
-// FIAT BALANCE MANAGEMENT
-model FiatBalance {
-  id        String  @id @default(cuid())
-  userId    String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currency  String // 'NGN', 'USD', 'GBP', 'GHS', 'ZAR'
-  available Decimal @default(0) @db.Decimal(20, 2) // Available for trading/withdrawal
-  staked    Decimal @default(0) @db.Decimal(20, 2) // Locked in staking
-  pending   Decimal @default(0) @db.Decimal(20, 2) // Pending deposits/withdrawals
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, currency])
-  @@index([userId])
-  @@index([currency])
 }
 
 // CRYPTO BALANCE MANAGEMENT
@@ -278,97 +223,6 @@ model CryptoStake {
   @@index([onChainTxHash])
 }
 
-// FIAT STAKING (Hybrid System)
-model FiatStakingPool {
-  id             String  @id @default(cuid())
-  currency       String  @unique // 'NGN', 'USD', 'GBP', 'GHS', 'ZAR'
-  baseApyBps     Int // Base APY in basis points
-  bonusApyBps    Int // Maximum bonus APY
-  minStakeAmount Decimal @db.Decimal(20, 2)
-  maxStakeAmount Decimal @db.Decimal(20, 2)
-  totalStaked    Decimal @default(0) @db.Decimal(20, 2)
-  totalStakers   Int     @default(0)
-  isActive       Boolean @default(true)
-
-  // Bank account reference (encrypted)
-  bankAccountReference String?
-  decimals             Int     @default(2) // 2 for most fiat currencies
-
-  // On-chain references
-  contractAddress String? // FiatStakingProof contract address
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  stakes FiatStake[]
-
-  @@index([currency])
-  @@index([isActive])
-}
-
-model FiatStake {
-  id     String          @id @default(cuid())
-  userId String
-  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  poolId String
-  pool   FiatStakingPool @relation(fields: [poolId], references: [id])
-
-  currency            String
-  amount              Decimal @db.Decimal(20, 2)
-  lockDays            Int
-  lockDurationSeconds BigInt
-
-  stakedAt        DateTime  @default(now())
-  unlockAt        DateTime
-  unstakedAt      DateTime?
-  lastRewardClaim DateTime  @default(now())
-
-  rewardsClaimed Decimal     @default(0) @db.Decimal(20, 2)
-  status         StakeStatus @default(ACTIVE)
-
-  // APY at time of staking
-  baseApyBps      Int
-  bonusApyBps     Int
-  effectiveApyBps Int
-
-  // On-chain references (for proof)
-  onChainTxHash       String?
-  onChainStakeId      Int?
-  onChainRecorded     Boolean @default(false)
-  merkleProofVerified Boolean @default(false)
-  lastVerifiedBatch   Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId, currency, status])
-  @@index([status])
-  @@index([poolId])
-  @@index([onChainTxHash])
-}
-
-// FIAT TRANSACTIONS (New - separate from main Transaction)
-model FiatTransaction {
-  id          String            @id @default(cuid())
-  userId      String
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currency    String
-  amount      Decimal           @db.Decimal(20, 2)
-  type        TransactionType
-  status      TransactionStatus
-  description String
-  reference   String? // Links to stake ID or other reference
-  metadata    Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId, currency])
-  @@index([type])
-  @@index([status])
-  @@index([reference])
-}
-
 // MERKLE TREE VERIFICATION (For Fiat Staking Transparency)
 model MerkleTreeBatch {
   id          String  @id @default(cuid())
@@ -435,7 +289,7 @@ model Transaction {
   user            User      @relation(fields: [userId], references: [id])
   type            String // "deposit", "withdrawal", "swap", "transfer"
   status          String // "pending", "completed", "failed", "reversed"
-  amount          Decimal   @db.Decimal(38, 18) // Supports both fiat (2 decimals) and crypto (18 decimals)
+  amount          Decimal   @db.Decimal(38, 18)
   currency        String
   fee             Decimal   @default(0) @db.Decimal(38, 18)
   netAmount       Decimal   @db.Decimal(38, 18)
@@ -448,8 +302,6 @@ model Transaction {
   transactionHash String?
 
   // Relations
-  fiatAccountId  String?
-  fiatAccount    FiatAccount?  @relation(fields: [fiatAccountId], references: [id])
   cryptoWalletId String?
   cryptoWallet   CryptoWallet? @relation(fields: [cryptoWalletId], references: [id])
   swapOrderId    String?
@@ -486,11 +338,6 @@ model SwapOrder {
   @@index([status])
   @@index([fromCurrency, toCurrency])
   @@index([transactionHash])
-}
-
-enum SwapType {
-  TOKENTOFIAT
-  FIATTOTOKEN
 }
 
 model Session {
@@ -567,7 +414,7 @@ model SystemSetting {
 model LiquidityPool {
   id          String   @id @default(uuid())
   symbol      String   @unique // e.g., 'NGN', 'USDC'
-  type        String // 'fiat' or 'token'
+  type        String // 'token'
   balance     Decimal  @default(0) @db.Decimal(38, 18)
   isActive    Boolean  @default(true)
   lastUpdated DateTime @updatedAt
@@ -594,7 +441,7 @@ model ExchangeRate {
   id          String   @id @default(uuid())
   fiatSymbol  String
   tokenSymbol String
-  rate        Decimal  @db.Decimal(20, 8) // Fintech standard: 8 decimal places for exchange rates
+  rate        Decimal  @db.Decimal(20, 8)
   lastUpdated DateTime @updatedAt
   createdAt   DateTime @default(now())
 

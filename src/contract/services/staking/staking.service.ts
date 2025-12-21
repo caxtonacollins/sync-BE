@@ -21,8 +21,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class StakingContractService implements OnModuleInit {
   private provider: RpcProvider;
   private stakingContractAddress: string;
-  private accountAddress: string;
-  private private_key: string;
   private contract: Contract;
   private initializationPromise: Promise<void>;
 
@@ -33,16 +31,14 @@ export class StakingContractService implements OnModuleInit {
   ) {
     this.provider = connectToStarknet();
     this.stakingContractAddress = process.env.STAKING_CONTRACT_ADDRESS || '';
-    this.accountAddress = process.env.DEPLOYER_ADDRESS || '';
-    this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
-    // this.initializationPromise = this.initializeContract().catch((error) => {
-    //   console.error('Failed to initialize staking contract:', error);
-    //   throw error;
-    // });
+    this.initializationPromise = this.initializeContract().catch((error) => {
+      console.error('Failed to initialize staking contract:', error);
+      throw error;
+    });
   }
 
   async onModuleInit() {
-    // await this.initializationPromise;
+    await this.initializationPromise;
   }
 
   private async initializeContract(): Promise<void> {
@@ -287,7 +283,7 @@ export class StakingContractService implements OnModuleInit {
     currency: string,
     amount: bigint,
     lockDuration: number,
-    stakeId: string,
+    stakeId: number, // Changed from string to number to match contract u64
   ) {
     await this.waitForInitialization();
 
@@ -299,23 +295,29 @@ export class StakingContractService implements OnModuleInit {
     if (!user?.starknetAccountAddress) {
       throw new Error('User must have a Starknet account address');
     }
+
+    // Convert currency to felt252
+    const currencyFelt = stringToFelt252(currency);
 
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'record_fiat_stake',
       calldata: [
         user.starknetAccountAddress,
-        currency,
+        currencyFelt,
         uint256.bnToUint256(amount).low,
         uint256.bnToUint256(amount).high,
-        lockDuration,
-        stakeId,
+        BigInt(lockDuration),
+        BigInt(stakeId),
       ],
     };
-    return this.keyManagementService.executeTransaction(userId, [call]);
+    
+    // Only owner can call this - use deployer wallet, not user's wallet
+    const account = getDeployerWallet();
+    return await account.execute(call);
   }
 
-  async recordFiatUnstake(userId: string, currency: string, stakeId: string) {
+  async recordFiatUnstake(userId: string, currency: string, stakeId: number) {
     await this.waitForInitialization();
 
     const user = await this.prisma.user.findUnique({
@@ -327,19 +329,25 @@ export class StakingContractService implements OnModuleInit {
       throw new Error('User must have a Starknet account address');
     }
 
+    // Convert currency to felt252
+    const currencyFelt = stringToFelt252(currency);
+
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'record_fiat_unstake',
-      calldata: [user.starknetAccountAddress, currency, stakeId],
+      calldata: [user.starknetAccountAddress, currencyFelt, BigInt(stakeId)],
     };
-    return this.keyManagementService.executeTransaction(userId, [call]);
+    
+    // Only owner can call this - use deployer wallet
+    const account = getDeployerWallet();
+    return await account.execute(call);
   }
 
   async recordFiatRewardClaim(
     userId: string,
     currency: string,
-    stakeId: string,
-    rewards: string,
+    stakeId: number,
+    rewards: bigint,
   ) {
     await this.waitForInitialization();
 
@@ -352,18 +360,24 @@ export class StakingContractService implements OnModuleInit {
       throw new Error('User must have a Starknet account address');
     }
 
+    // Convert currency to felt252
+    const currencyFelt = stringToFelt252(currency);
+
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'record_fiat_reward_claim',
       calldata: [
         user.starknetAccountAddress,
-        currency,
-        stakeId,
-        uint256.bnToUint256(BigInt(rewards)).low,
-        uint256.bnToUint256(BigInt(rewards)).high,
+        currencyFelt,
+        BigInt(stakeId),
+        uint256.bnToUint256(rewards).low,
+        uint256.bnToUint256(rewards).high,
       ],
     };
-    return this.keyManagementService.executeTransaction(userId, [call]);
+    
+    // Only owner can call this - use deployer wallet
+    const account = getDeployerWallet();
+    return await account.execute(call);
   }
 
   async updateBalanceMerkleRoot(merkleRoot: string) {
@@ -380,15 +394,24 @@ export class StakingContractService implements OnModuleInit {
   async createReserveSnapshot(
     currency: string,
     balance: bigint,
-    signature: string,
     ipfsHash: string,
   ) {
     await this.waitForInitialization();
     const account = getDeployerWallet();
+    
+    // Convert currency to felt252
+    const currencyFelt = stringToFelt252(currency);
+    const ipfsHashFelt = stringToFelt252(ipfsHash);
+    
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'create_reserve_snapshot',
-      calldata: [currency, balance, signature, ipfsHash],
+      calldata: [
+        currencyFelt,
+        uint256.bnToUint256(balance).low,
+        uint256.bnToUint256(balance).high,
+        ipfsHashFelt,
+      ],
     };
     return await account.execute(call);
   }

@@ -128,8 +128,6 @@ export class WebhookController {
         
         // Get or create fiat account for the user
         try {
-          const fiatAccount = await this.walletService.getFiatAccountForUser(customer.id) || 
-            await this.walletService.createFiatAccount(customer.id, currency || 'NGN');
           
           this.logger.log('Successfully processed Flutterwave payment', {
             userId: customer.id,

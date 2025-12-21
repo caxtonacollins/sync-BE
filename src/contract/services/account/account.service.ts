@@ -17,15 +17,11 @@ export class AccountContractService {
   private provider: RpcProvider;
   private accountFactoryAddress: string;
   private accountContractHash: string;
-  private accountAddress: string;
-  private private_key: string;
 
   constructor(private readonly prisma: PrismaService) {
     this.provider = connectToStarknet();
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS || '';
     this.accountContractHash = process.env.ACCOUNT_CONTRACT_HASH || '';
-    this.accountAddress = process.env.DEPLOYER_ADDRESS || '';
-    this.private_key = process.env.DEPLOYER_PRIVATE_KEY || '';
   }
 
   /**
