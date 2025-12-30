@@ -8,11 +8,9 @@ import { CacheModule } from '../cache/cache.module';
 import { ExchangeRateModule } from '../transaction/exchange-rate-and-pragma/exchange-rate.module';
 import { LiquidityController } from './controllers/liquidity/liquidity.controller';
 import { StakingController } from './controllers/staking/staking.controller';
-import { AccountFactoryController } from './controllers/account-factory/account-factory.controller';
 import { AccountController } from './controllers/account/account.controller';
 import { EventsController } from './controllers/events/events.controller';
 import { Erc20TokenController } from './controllers/erc20-token/erc20-token.controller';
-import { AccountFactoryContractService } from './services/account-factory/account-factory.service';
 import { AccountContractService } from './services/account/account.service';
 import { TokenContractService } from './services/erc20-token/erc20-token.service';
 import { LiquidityEventProcessorService } from './services/event-processor/event-processor.service';
@@ -33,28 +31,25 @@ import { DexIntegrationService } from './services/dex/dex-integration.service';
   controllers: [
     LiquidityController,
     StakingController,
-    AccountFactoryController,
     AccountController,
     EventsController,
     Erc20TokenController,
   ],
   providers: [
     AccountContractService,
-    AccountFactoryContractService,
     LiquidityPoolContractService,
     TokenContractService,
     LiquidityEventProcessorService,
     StakingContractService,
-    DexIntegrationService, // Placeholder for future DEX integration
+    DexIntegrationService,
   ],
   exports: [
     AccountContractService,
-    AccountFactoryContractService,
     LiquidityPoolContractService,
     TokenContractService,
     LiquidityEventProcessorService,
     StakingContractService,
-    DexIntegrationService, // Placeholder for future DEX integration
+    DexIntegrationService,
   ],
 })
 export class ContractModule {}

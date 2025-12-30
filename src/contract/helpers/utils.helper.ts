@@ -3,24 +3,20 @@ import { promises as fs } from 'fs';
 import crypto from 'crypto';
 
 export function connectToStarknet() {
-  if (!process.env.STARKNET_NODE_URL_8)
-    throw new Error('STARKNET_NODE_URL_8 is not defined');
+  if (!process.env.STARKNET_NODE_URL)
+    throw new Error('STARKNET_NODE_URL is not defined');
   return new RpcProvider({
-    nodeUrl: process.env.STARKNET_NODE_URL_8,
+    nodeUrl: process.env.STARKNET_NODE_URL,
   });
 }
 
-export function connectToStarknet7() {
-  return new RpcProvider({
-    nodeUrl: process.env.STARKNET_NODE_URL_7,
-  });
-}
 
 export function getDeployerWallet() {
   const provider = connectToStarknet();
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY || '';
   const address = process.env.DEPLOYER_ADDRESS || '';
-  return new Account(provider, address, privateKey);
+  const account = new Account({ provider, address, signer: privateKey });
+  return account;
 }
 
 export function createKeyPair() {
@@ -80,7 +76,7 @@ export async function writeAbiToFile(classHash: any, fileName: string) {
 
 export function createNewContractInstance(abi: Abi, address: string) {
   const provider = connectToStarknet();
-  return new Contract(abi, address, provider);
+  return new Contract({ abi, address, providerOrAccount: provider });
 }
 
 export function uuidToFelt252(uuid: string): string {

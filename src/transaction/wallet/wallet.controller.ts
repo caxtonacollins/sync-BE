@@ -74,7 +74,7 @@ export class WalletController {
 
       return await this.walletService.createCryptoWallet(
         userId,
-        createCryptoWalletDto.currency,
+        createCryptoWalletDto.tokenSymbol,
       );
     } catch (error) {
       this.logger.error('Failed to create crypto wallet:', error);

@@ -11,7 +11,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { TokenContractService } from '../../contract/services/erc20-token/erc20-token.service';
 
 export interface BalanceUpdate {
-  currency: string;
+  tokenSymbol: string;
   network?: string; // For crypto balances
   availableAmount: Decimal;
   stakedAmount?: Decimal;
@@ -23,7 +23,7 @@ export interface CryptoBalanceUpdate extends BalanceUpdate {
 }
 
 export interface FiatBalanceUpdate extends BalanceUpdate {
-  currency: string; // e.g., 'NGN', 'USD'
+  tokenSymbol: string; // e.g., 'NGN', 'USD'
 }
 
 /**
@@ -49,71 +49,23 @@ export class BalanceSyncService {
   ) { }
 
   /**
-   * Update or create a fiat balance in the database
-   * Used before sending balance changes to blockchain
-   */
-  async updateFiatBalance(
-    userId: string,
-    currency: string,
-    update: Partial<FiatBalanceUpdate>,
-  ) {
-    try {
-      const balance = await this.prisma.fiatBalance.upsert({
-        where: {
-          userId_currency: { userId, currency },
-        },
-        create: {
-          userId,
-          currency,
-          available: update.availableAmount || new Decimal(0),
-          staked: update.stakedAmount || new Decimal(0),
-          pending: update.pendingAmount || new Decimal(0),
-        },
-        update: {
-          ...(update.availableAmount !== undefined && {
-            available: update.availableAmount,
-          }),
-          ...(update.stakedAmount !== undefined && {
-            staked: update.stakedAmount,
-          }),
-          ...(update.pendingAmount !== undefined && {
-            pending: update.pendingAmount,
-          }),
-          updatedAt: new Date(),
-        },
-      });
-
-      this.logger.debug(
-        `Fiat balance updated for user ${userId}, currency ${currency}`,
-      );
-      return balance;
-    } catch (error) {
-      this.logger.error(
-        `Failed to update fiat balance for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
    * Update or create a crypto balance in the database
    * Used before sending balance changes to blockchain
    */
   async updateCryptoBalance(
     userId: string,
-    currency: string,
+    tokenSymbol: string,
     network: string,
     update: Partial<CryptoBalanceUpdate>,
   ) {
     try {
       const balance = await this.prisma.cryptoBalance.upsert({
         where: {
-          userId_currency_network: { userId, currency, network },
+          userId_tokenSymbol_network: { userId, tokenSymbol, network },
         },
         create: {
           userId,
-          currency,
+          tokenSymbol,
           network,
           available: update.availableAmount || new Decimal(0),
           staked: update.stakedAmount || new Decimal(0),
@@ -134,7 +86,7 @@ export class BalanceSyncService {
       });
 
       this.logger.debug(
-        `Crypto balance updated for user ${userId}, currency ${currency} on ${network}`,
+        `Crypto balance updated for user ${userId}, tokenSymbol ${tokenSymbol} on ${network}`,
       );
       return balance;
     } catch (error) {
@@ -147,97 +99,11 @@ export class BalanceSyncService {
   }
 
   /**
-   * Increment fiat balance (for deposits, transfers in, etc.)
-   */
-  async incrementFiatBalance(
-    userId: string,
-    currency: string,
-    amount: Decimal,
-    type: 'available' | 'staked' | 'pending' = 'available',
-  ) {
-    try {
-      const balance = await this.prisma.fiatBalance.upsert({
-        where: {
-          userId_currency: { userId, currency },
-        },
-        create: {
-          userId,
-          currency,
-          available: type === 'available' ? amount : new Decimal(0),
-          staked: type === 'staked' ? amount : new Decimal(0),
-          pending: type === 'pending' ? amount : new Decimal(0),
-        },
-        update: {
-          [type]: { increment: amount },
-          updatedAt: new Date(),
-        },
-      });
-
-      this.logger.debug(
-        `Fiat balance incremented by ${amount.toString()} for user ${userId}, currency ${currency}`,
-      );
-      return balance;
-    } catch (error) {
-      this.logger.error(
-        `Failed to increment fiat balance for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Decrement fiat balance (for withdrawals, transfers out, staking, etc.)
-   */
-  async decrementFiatBalance(
-    userId: string,
-    currency: string,
-    amount: Decimal,
-    type: 'available' | 'staked' | 'pending' = 'available',
-  ) {
-    try {
-      // First, check if balance is sufficient
-      const currentBalance = await this.prisma.fiatBalance.findUnique({
-        where: {
-          userId_currency: { userId, currency },
-        },
-      });
-
-      if (!currentBalance || currentBalance[type].lessThan(amount)) {
-        throw new BadRequestException(
-          `Insufficient ${type} balance for ${currency}`,
-        );
-      }
-
-      const balance = await this.prisma.fiatBalance.update({
-        where: {
-          userId_currency: { userId, currency },
-        },
-        data: {
-          [type]: { decrement: amount },
-          updatedAt: new Date(),
-        },
-      });
-
-      this.logger.debug(
-        `Fiat balance decremented by ${amount.toString()} for user ${userId}, currency ${currency}`,
-      );
-      return balance;
-    } catch (error) {
-      this.logger.error(
-        `Failed to decrement fiat balance for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
    * Increment crypto balance
    */
   async incrementCryptoBalance(
     userId: string,
-    currency: string,
+    tokenSymbol: string,
     network: string,
     amount: Decimal,
     type: 'available' | 'staked' | 'pending' = 'available',
@@ -245,11 +111,11 @@ export class BalanceSyncService {
     try {
       const balance = await this.prisma.cryptoBalance.upsert({
         where: {
-          userId_currency_network: { userId, currency, network },
+          userId_tokenSymbol_network: { userId, tokenSymbol, network },
         },
         create: {
           userId,
-          currency,
+          tokenSymbol,
           network,
           available: type === 'available' ? amount : new Decimal(0),
           staked: type === 'staked' ? amount : new Decimal(0),
@@ -262,7 +128,7 @@ export class BalanceSyncService {
       });
 
       this.logger.debug(
-        `Crypto balance incremented by ${amount.toString()} for user ${userId}, currency ${currency} on ${network}`,
+        `Crypto balance incremented by ${amount.toString()} for user ${userId}, tokenSymbol ${tokenSymbol} on ${network}`,
       );
       return balance;
     } catch (error) {
@@ -279,7 +145,7 @@ export class BalanceSyncService {
    */
   async decrementCryptoBalance(
     userId: string,
-    currency: string,
+    tokenSymbol: string,
     network: string,
     amount: Decimal,
     type: 'available' | 'staked' | 'pending' = 'available',
@@ -288,19 +154,19 @@ export class BalanceSyncService {
       // First, check if balance is sufficient
       const currentBalance = await this.prisma.cryptoBalance.findUnique({
         where: {
-          userId_currency_network: { userId, currency, network },
+          userId_tokenSymbol_network: { userId, tokenSymbol, network },
         },
       });
 
       if (!currentBalance || currentBalance[type].lessThan(amount)) {
         throw new BadRequestException(
-          `Insufficient ${type} balance for ${currency} on ${network}`,
+          `Insufficient ${type} balance for ${tokenSymbol} on ${network}`,
         );
       }
 
       const balance = await this.prisma.cryptoBalance.update({
         where: {
-          userId_currency_network: { userId, currency, network },
+          userId_tokenSymbol_network: { userId, tokenSymbol, network },
         },
         data: {
           [type]: { decrement: amount },
@@ -309,7 +175,7 @@ export class BalanceSyncService {
       });
 
       this.logger.debug(
-        `Crypto balance decremented by ${amount.toString()} for user ${userId}, currency ${currency} on ${network}`,
+        `Crypto balance decremented by ${amount.toString()} for user ${userId}, tokenSymbol ${tokenSymbol} on ${network}`,
       );
       return balance;
     } catch (error) {
@@ -322,47 +188,14 @@ export class BalanceSyncService {
   }
 
   /**
-   * Get current fiat balance for a user and currency
-   * FAST - reads from database cache
-   */
-  async getFiatBalance(userId: string, currency: string) {
-    try {
-      const balance = await this.prisma.fiatBalance.findUnique({
-        where: {
-          userId_currency: { userId, currency },
-        },
-      });
-
-      if (!balance) {
-        // Return zero balance if not found
-        return {
-          userId,
-          currency,
-          available: new Decimal(0),
-          staked: new Decimal(0),
-          pending: new Decimal(0),
-        };
-      }
-
-      return balance;
-    } catch (error) {
-      this.logger.error(
-        `Failed to get fiat balance for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
    * Get current crypto balance for a user
    * FAST - reads from database cache
    */
-  async getCryptoBalance(userId: string, currency: string, network: string) {
+  async getCryptoBalance(userId: string, tokenSymbol: string, network: string) {
     try {
       const balance = await this.prisma.cryptoBalance.findUnique({
         where: {
-          userId_currency_network: { userId, currency, network },
+          userId_tokenSymbol_network: { userId, tokenSymbol, network },
         },
       });
 
@@ -370,7 +203,7 @@ export class BalanceSyncService {
         // Return zero balance if not found
         return {
           userId,
-          currency,
+          tokenSymbol,
           network,
           available: new Decimal(0),
           staked: new Decimal(0),
@@ -382,25 +215,6 @@ export class BalanceSyncService {
     } catch (error) {
       this.logger.error(
         `Failed to get crypto balance for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Get all fiat balances for a user
-   * FAST - reads from database cache
-   */
-  async getAllFiatBalances(userId: string) {
-    try {
-      const balances = await this.prisma.fiatBalance.findMany({
-        where: { userId },
-      });
-      return balances;
-    } catch (error) {
-      this.logger.error(
-        `Failed to get all fiat balances for user ${userId}:`,
         error,
       );
       throw error;
@@ -427,59 +241,12 @@ export class BalanceSyncService {
   }
 
   /**
-   * Transfer balance between types (e.g., available -> staked)
-   * Used when staking/unstaking
-   */
-  async transferFiatBalance(
-    userId: string,
-    currency: string,
-    amount: Decimal,
-    fromType: 'available' | 'staked' | 'pending',
-    toType: 'available' | 'staked' | 'pending',
-  ) {
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        // Get current balance
-        const balance = await tx.fiatBalance.findUnique({
-          where: {
-            userId_currency: { userId, currency },
-          },
-        });
-
-        if (!balance || balance[fromType].lessThan(amount)) {
-          throw new BadRequestException(
-            `Insufficient ${fromType} balance for ${currency}`,
-          );
-        }
-
-        // Update balance
-        return await tx.fiatBalance.update({
-          where: {
-            userId_currency: { userId, currency },
-          },
-          data: {
-            [fromType]: { decrement: amount },
-            [toType]: { increment: amount },
-            updatedAt: new Date(),
-          },
-        });
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to transfer fiat balance for user ${userId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
    * Transfer balance between types for crypto
    * Used when staking/unstaking
    */
   async transferCryptoBalance(
     userId: string,
-    currency: string,
+    tokenSymbol: string,
     network: string,
     amount: Decimal,
     fromType: 'available' | 'staked' | 'pending',
@@ -490,20 +257,20 @@ export class BalanceSyncService {
         // Get current balance
         const balance = await tx.cryptoBalance.findUnique({
           where: {
-            userId_currency_network: { userId, currency, network },
+            userId_tokenSymbol_network: { userId, tokenSymbol, network },
           },
         });
 
         if (!balance || balance[fromType].lessThan(amount)) {
           throw new BadRequestException(
-            `Insufficient ${fromType} balance for ${currency} on ${network}`,
+            `Insufficient ${fromType} balance for ${tokenSymbol} on ${network}`,
           );
         }
 
         // Update balance
         return await tx.cryptoBalance.update({
           where: {
-            userId_currency_network: { userId, currency, network },
+            userId_tokenSymbol_network: { userId, tokenSymbol, network },
           },
           data: {
             [fromType]: { decrement: amount },
@@ -544,38 +311,20 @@ export class BalanceSyncService {
         throw new NotFoundException('User not found');
       }
 
-      // Create default fiat balances
-      const fiatCurrencies = ['NGN', 'USD', 'GBP'];
-      const fiats = await Promise.all(
-        fiatCurrencies.map((currency) =>
-          this.prisma.fiatBalance.upsert({
-            where: {
-              userId_currency: { userId, currency },
-            },
-            create: {
-              userId,
-              currency,
-              available: new Decimal(0),
-              staked: new Decimal(0),
-              pending: new Decimal(0),
-            },
-            update: {},
-          }),
-        ),
-      );
-
       // Define supported tokens and their networks
       const supportedTokens = [
-        { currency: 'STRK', network: 'starknet' },
-        { currency: 'ETH', network: 'starknet' },
-        { currency: 'USDC', network: 'starknet' },
+        { tokenSymbol: 'STRK', network: 'starknet' },
+        { tokenSymbol: 'ETH', network: 'starknet' },
+        { tokenSymbol: 'USDC', network: 'starknet' },
+        // { tokenSymbol: 'BTC', network: 'starknet' },
+        { tokenSymbol: 'sNGN', network: 'starknet' },
       ];
 
       // Process each crypto wallet
       const updatedBalances: Array<{
         id: string;
         userId: string;
-        currency: string;
+        tokenSymbol: string;
         available: Decimal;
         staked: Decimal;
         pending: Decimal;
@@ -588,7 +337,7 @@ export class BalanceSyncService {
         try {
           // Fetch balances for all supported tokens in parallel
           const tokenBalances = await this.contractService.getMultipleAccountBalances(
-            supportedTokens.map(t => t.currency),
+            supportedTokens.map(t => t.tokenSymbol),
             wallet.address,
           );
 
@@ -599,15 +348,15 @@ export class BalanceSyncService {
 
               const updated = await this.prisma.cryptoBalance.upsert({
                 where: {
-                  userId_currency_network: {
+                  userId_tokenSymbol_network: {
                     userId,
-                    currency: tokenBalance.symbol,
+                    tokenSymbol: tokenBalance.symbol,
                     network: wallet.network,
                   },
                 },
                 create: {
                   userId,
-                  currency: tokenBalance.symbol,
+                  tokenSymbol: tokenBalance.symbol,
                   network: wallet.network,
                   available: amount,
                   staked: new Decimal(0),
@@ -639,14 +388,14 @@ export class BalanceSyncService {
       // If no active wallets, create default zero balances
       if (cryptoWallets.length === 0) {
         const defaultBalances = await Promise.all(
-          supportedTokens.map(({ currency, network }) =>
+          supportedTokens.map(({ tokenSymbol, network }) =>
             this.prisma.cryptoBalance.upsert({
               where: {
-                userId_currency_network: { userId, currency, network },
+                userId_tokenSymbol_network: { userId, tokenSymbol, network },
               },
               create: {
                 userId,
-                currency,
+                tokenSymbol,
                 network,
                 available: new Decimal(0),
                 staked: new Decimal(0),
@@ -662,7 +411,6 @@ export class BalanceSyncService {
 
       this.logger.debug(`Balances initialized for user ${userId}`);
       return {
-        fiats,
         cryptos: updatedBalances.filter((b): b is Exclude<typeof b, null | undefined> => b != null)
       };
     } catch (error) {

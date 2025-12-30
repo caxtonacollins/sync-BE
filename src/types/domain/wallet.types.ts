@@ -14,14 +14,14 @@ export interface WalletSummaryResponse {
 export interface UnifiedWalletBalance {
   userId: string;
   fiatBalances: {
-    currency: string;
+    tokenSymbol: string;
     balance: string;
     accountId: string;
     provider: string;
     isDefault: boolean;
   }[];
   cryptoBalances: {
-    currency: string;
+    tokenSymbol: string;
     balance: string;
     address: string;
     network: string;
@@ -31,7 +31,7 @@ export interface UnifiedWalletBalance {
 export interface WalletTransaction {
   id: string;
   type: 'fiat' | 'crypto';
-  currency: string;
+  tokenSymbol: string;
   amount: number;
   status: string;
   reference: string;

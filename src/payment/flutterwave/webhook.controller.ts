@@ -83,7 +83,7 @@ export class WebhookController {
   }
 
   private async handleSuccessfulCharge(data: any) {
-    const { id, tx_ref, amount, currency, status, customer } = data;
+    const { id, tx_ref, amount, tokenSymbol, status, customer } = data;
     
     if (!tx_ref || !customer?.id) {
       throw new BadRequestException('Invalid charge data');
@@ -109,7 +109,7 @@ export class WebhookController {
       amount: amountDecimal,
       netAmount: netAmount,
       fee: fee,
-      currency: currency || 'NGN',
+      tokenSymbol: tokenSymbol || 'NGN',
       status: status === 'successful' ? 'COMPLETED' : 'FAILED',
       type: 'DEPOSIT',
       reference: tx_ref,
@@ -133,7 +133,7 @@ export class WebhookController {
             userId: customer.id,
             transactionId: transaction[0].id,
             amount,
-            currency: currency || 'NGN',
+            tokenSymbol: tokenSymbol || 'NGN',
             reference: tx_ref
           });
           
@@ -161,7 +161,7 @@ export class WebhookController {
   }
 
   private async handleTransferCompleted(data: any) {
-    const { reference, status, amount, currency } = data;
+    const { reference, status, amount, tokenSymbol } = data;
     
     if (!reference) {
       throw new BadRequestException('Missing reference in transfer data');
@@ -197,7 +197,7 @@ export class WebhookController {
       this.logger.error('Transfer failed', {
         reference,
         amount,
-        currency,
+        tokenSymbol,
         transactionId: transaction.id,
         userId: transaction.userId
       });
@@ -212,7 +212,7 @@ export class WebhookController {
   }
 
   private async handleTransferFailed(data: any) {
-    const { reference, amount, currency } = data;
+    const { reference, amount, tokenSymbol } = data;
     
     if (!reference) {
       throw new BadRequestException('Missing reference in transfer data');
@@ -247,7 +247,7 @@ export class WebhookController {
     this.logger.error('Transfer failed', {
       reference,
       amount,
-      currency,
+      tokenSymbol,
       transactionId: transaction.id,
       userId: transaction.userId
     });

@@ -33,7 +33,7 @@ export class TransactionController {
   // GET /transactions/user/abc123?
   // type=deposit&
   // status=completed&
-  // currency=USD&
+  // tokenSymbol=USD&
   // minAmount=100&
   // maxAmount=1000&
   // page=1&
@@ -48,14 +48,12 @@ export class TransactionController {
   async getTransactionsForUser(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: TxFilterDto,
-    @Query('includeFiatAccount') includeFiatAccount?: string,
     @Query('includeCryptoWallet') includeCryptoWallet?: string,
     @Query('includeSwapOrder') includeSwapOrder?: string,
   ) {
     const parseBoolean = (val?: string) => val === 'true';
 
     return this.transactionService.getTransactionsForUser(id, query, {
-      fiatAccount: parseBoolean(includeFiatAccount),
       cryptoWallet: parseBoolean(includeCryptoWallet),
       swapOrder: parseBoolean(includeSwapOrder),
     });
@@ -67,7 +65,7 @@ export class TransactionController {
   @ApiQuery({ name: 'userId', required: false })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'type', required: false })
-  @ApiQuery({ name: 'currency', required: false })
+  @ApiQuery({ name: 'tokenSymbol', required: false })
   @ApiQuery({ name: 'page', required: false, type: 'number' })
   @ApiQuery({ name: 'limit', required: false, type: 'number' })
   @ApiResponse({
@@ -78,7 +76,7 @@ export class TransactionController {
     @Query('userId') userId?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
-    @Query('currency') currency?: string,
+    @Query('tokenSymbol') tokenSymbol?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -86,7 +84,7 @@ export class TransactionController {
       userId,
       status,
       type,
-      currency,
+      tokenSymbol,
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 10,
     });
@@ -111,17 +109,5 @@ export class TransactionController {
     @Body() updateDto: UpdateTxDto,
   ) {
     return this.transactionService.updateStatus(id, updateDto);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('fiat')
-  transferFiat(@Body() dto: CreateFiatTransferDto, @Req() req) {
-    const senderUserId = req.user.sub;
-    return this.transactionService.transferFiat(
-      senderUserId,
-      dto.recipientEmail,
-      dto.amount,
-      dto.currency,
-    );
   }
 }

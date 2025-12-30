@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { MonnifyService } from '../../payment/monnify/monnify.service';
 import { Logger } from '@nestjs/common';
-import { FiatAccount, CryptoWallet } from '@prisma/client';
+import { CryptoWallet } from '@prisma/client';
 import { ExchangeRateService } from '../exchange-rate-and-pragma/exchange-rate.service';
 import { QueueWithdrawalDto } from '../../types/dto/dto/queue-withdrawal.dto';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
@@ -20,16 +20,17 @@ import {
   parseAmount,
   multiplyAmount,
   addAmounts,
+  divideAmount,
 } from '../../../libs/currency.utils';
 import { ensureUserExists } from 'src/common/helpers/db.helper';
 import {
   mapCryptoWalletWithUser,
 } from 'src/common/helpers/mapper.helper';
+import { UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor } from '@nestjs/cache-manager';
 
 export interface WalletSummaryResponse {
-  totalBalanceNGN: number;
   totalBalanceUSD: number;
-  syncTokenBalance: number;
   ethTokenBalance: number;
   strkTokenBalance: number;
   usdcTokenBalance: number;
@@ -43,7 +44,7 @@ export interface WalletSummaryResponse {
 export interface UnifiedWalletBalance {
   userId: string;
   cryptoBalances: {
-    currency: string;
+    tokenSymbol: string;
     balance: string;
     walletId: string;
     network: string;
@@ -51,13 +52,12 @@ export interface UnifiedWalletBalance {
     isDefault: boolean;
   }[];
   totalValueUSD: string;
-  totalValueNGN: string;
 }
 
 export interface WalletTransaction {
   id: string;
   type: 'fiat' | 'crypto';
-  currency: string;
+  tokenSymbol: string;
   amount: number;
   status: string;
   reference: string;
@@ -66,12 +66,12 @@ export interface WalletTransaction {
 }
 
 @Injectable()
+  @UseInterceptors(CacheInterceptor)
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly monnifyService: MonnifyService,
     @Inject(forwardRef(() => TokenContractService))
     private readonly contractService: TokenContractService,
     @Inject(forwardRef(() => AccountContractService))
@@ -102,23 +102,25 @@ export class WalletService {
         throw new NotFoundException('User not found');
       }
 
-      // Get crypto balances from database cache (FAST - no blockchain calls)
-      const cryptoBalances = user.cryptoBalances.map((dbBalance) => {
-        const wallet = user.cryptoWallets.find(
-          (w) =>
-            w.currency === dbBalance.currency &&
-            w.network === dbBalance.network,
-        );
+      const cryptoBalances = await Promise.all(
+        user.cryptoWallets.map(async (wallet) => {
+          // Fetch balances for multiple tokens in parallel
+          const tokenBalances = await this.contractService.getMultipleAccountBalances(
+            ['USDC', 'STRK', 'sNGN', 'ETH'],
+            wallet.address,
+          );
 
-        return {
-          currency: dbBalance.currency,
-          balance: toApiString(dbBalance.available, dbBalance.currency),
-          walletId: wallet?.id || '',
-          network: dbBalance.network,
-          address: wallet?.address || '',
-          isDefault: wallet?.isDefault || false,
-        };
-      });
+          // Map token balances to the format expected by the frontend
+          return tokenBalances.map((tokenBalance) => ({
+            tokenSymbol: tokenBalance.symbol,
+            balance: tokenBalance.formatted || '0',
+            walletId: wallet.id,
+            network: wallet.network,
+            address: wallet.address,
+            isDefault: wallet.isDefault,
+          }));
+        }),
+      );
 
       // Get real-time exchange rates
       const exchangeRates = await this.exchangeRateService.getExchangeRates();
@@ -130,55 +132,49 @@ export class WalletService {
         rateMap.set(key, new Decimal(String(rate.rate)));
       });
 
-      let totalValueNGN = new Decimal(0);
+      let totalValueUSD = new Decimal(0);
+      const flattenedCryptoBalances = cryptoBalances.flat();
 
-      // Calculate crypto balances in NGN using Decimal for precision
-      cryptoBalances.forEach(({ currency, balance }) => {
-        const balanceDecimal = parseAmount(balance, currency);
-        const tokenToUsdRate = rateMap.get(`USD_${currency}`);
-        const usdToNgnRate = rateMap.get('NGN_USD');
+      for (const { tokenSymbol, balance } of flattenedCryptoBalances) {
+        const balanceDecimal = parseAmount(balance, tokenSymbol);
 
-        if (tokenToUsdRate && usdToNgnRate) {
-          // Convert crypto to USD, then USD to NGN
-          const valueInUsd = multiplyAmount(
-            balanceDecimal,
-            tokenToUsdRate,
-            'USD',
-          );
-          const valueInNgn = multiplyAmount(valueInUsd, usdToNgnRate, 'NGN');
-          totalValueNGN = addAmounts(totalValueNGN, valueInNgn, 'NGN');
+        if (tokenSymbol === 'sNGN') {
+          // For sNGN, convert to USD using NGN_USD rate
+          const ngnToUsdRate = rateMap.get('NGN_USD');
+          if (ngnToUsdRate) {
+            const valueInUsd = divideAmount(balanceDecimal, ngnToUsdRate, 'USD');
+            totalValueUSD = totalValueUSD.plus(valueInUsd);
+          }
+        } else if (tokenSymbol === 'USDC' || tokenSymbol === 'USDT') {
+          // For stablecoins, they're already in USD
+          totalValueUSD = totalValueUSD.plus(balanceDecimal);
+        } else {
+          // For other tokens, get their USD rate
+          const tokenToUsdRate = rateMap.get(`USD_${tokenSymbol}`);
+          if (tokenToUsdRate) {
+            const valueInUsd = multiplyAmount(balanceDecimal, tokenToUsdRate, 'USD');
+                      totalValueUSD = totalValueUSD.plus(valueInUsd);
+          }
         }
-      });
-
-      // Calculate total in USD using Decimal
-      const usdToNgnRate = rateMap.get('NGN_USD');
-      const totalValueUSD =
-        usdToNgnRate && !usdToNgnRate.isZero()
-          ? totalValueNGN.div(usdToNgnRate)
-          : new Decimal(0);
-
-      this.logger.debug(
-        `Unified balance retrieved from cache for user ${userId}. Crypto: ${cryptoBalances.length}`,
-      );
+      }
 
       return {
         userId,
-        cryptoBalances,
-        totalValueUSD: toApiString(totalValueUSD, 'USD'),
-        totalValueNGN: toApiString(totalValueNGN, 'NGN'),
+        cryptoBalances: flattenedCryptoBalances,
+        totalValueUSD: toApiString(totalValueUSD, 'USD')
       };
     } catch (error) {
       this.logger.error(
         `Failed to get unified balance for user ${userId}:`,
         error,
       );
-      throw error;
+      throw new Error("Failed to get unified balance");
     }
   }
 
   async createCryptoWallet(
     userId: string,
-    currency: string = 'STRK',
+    tokenSymbol: string = 'STRK',
   ): Promise<CryptoWallet> {
     try {
       await ensureUserExists(this.prisma, userId);
@@ -196,26 +192,26 @@ export class WalletService {
           data: {
             userId,
             network: 'starknet',
-            address: result.accountAddress,
-            encryptedPrivateKey: result.encryptedPrivateKey,
-            currency,
-            isDefault: currency === 'STRK',
+            address: result.accountAddress!,
+            encryptedPrivateKey: result.encryptedPrivateKey!,
+            tokenSymbol,
+            isDefault: tokenSymbol === 'STRK',
           },
         });
 
-        // Create or update cryptoBalance for this user/currency/network
+        // Create or update cryptoBalance for this user/tokenSymbol/network
         await tx.cryptoBalance.upsert({
           where: {
-            userId_currency_network: {
+            userId_tokenSymbol_network: {
               userId,
-              currency,
+              tokenSymbol,
               network: 'starknet',
             },
           },
           update: {}, // No-op if already exists
           create: {
             userId,
-            currency,
+            tokenSymbol,
             network: 'starknet',
             available: new Decimal(0),
             staked: new Decimal(0),
@@ -230,7 +226,7 @@ export class WalletService {
         `Failed to create crypto wallet for user ${userId}:`,
         error,
       );
-      throw error;
+      throw new Error("Failed to create crypto wallet");
     }
   }
 
@@ -242,7 +238,6 @@ export class WalletService {
       const transactions = await this.prisma.transaction.findMany({
         where: { userId },
         include: {
-          fiatAccount: true,
           cryptoWallet: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -251,8 +246,8 @@ export class WalletService {
 
       return transactions.map((tx) => ({
         id: tx.id,
-        type: tx.fiatAccount ? 'fiat' : 'crypto',
-        currency: tx.currency,
+        type: 'crypto',
+        tokenSymbol: tx.tokenSymbol,
         amount: new Decimal(tx.amount).toNumber(),
         status: tx.status,
         reference: tx.reference,
@@ -264,7 +259,7 @@ export class WalletService {
         `Failed to get transaction history for user ${userId}:`,
         error,
       );
-      throw error;
+      throw new Error("Failed to get transaction history");
     }
   }
 
@@ -279,7 +274,6 @@ export class WalletService {
 
       const tokenBalances = {
         STRK: 0,
-        SYNC: 0,
         ETH: 0,
         USDC: 0,
         sNGN: 0,
@@ -288,7 +282,7 @@ export class WalletService {
       if (defaultCryptoWallet) {
         // Use batch method to fetch all token balances in parallel
         const balances = await this.contractService.getMultipleAccountBalances(
-          ['STRK', 'SYNC', 'ETH', 'USDC', 'sNGN'],
+          ['STRK', 'ETH', 'USDC', 'sNGN'],
           defaultCryptoWallet.address,
         );
 
@@ -329,9 +323,7 @@ export class WalletService {
       const transactionFeeDiscount = 0;
 
       return {
-        totalBalanceNGN: Number(balance.totalValueNGN),
         totalBalanceUSD: Number(balance.totalValueUSD),
-        syncTokenBalance: tokenBalances.SYNC,
         ethTokenBalance: tokenBalances.ETH,
         strkTokenBalance: tokenBalances.STRK,
         usdcTokenBalance: tokenBalances.USDC,

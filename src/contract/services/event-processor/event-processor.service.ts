@@ -272,7 +272,7 @@ export class LiquidityEventProcessorService {
         type: 'deposit',
         status: 'completed',
         amount: parseFloat(amount_formatted || amount),
-        currency: fiat_symbol || 'USD',
+        tokenSymbol: fiat_symbol || 'USD',
         netAmount: parseFloat(amount_formatted || amount),
         reference: transaction_id,
         blockNumber: evt.blockNumber,
@@ -489,7 +489,7 @@ export class LiquidityEventProcessorService {
         data: {
           status: 'completed',
           completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
-          toAmount: fiat_amount,
+          amount: fiat_amount,
           fee: parseFloat(feeStr),
           blockNumber: evt.blockNumber,
           transactionHash: evt.transactionHash,
@@ -501,9 +501,9 @@ export class LiquidityEventProcessorService {
         // Fiat → Token: increment available token balance
         await tx.cryptoBalance.update({
           where: {
-            userId_currency_network: {
+            userId_tokenSymbol_network: {
               userId: pendingSwapOrder.userId,
-              currency: token_symbol,
+              tokenSymbol: token_symbol,
               network: 'starknet',
             },
           },
@@ -515,9 +515,9 @@ export class LiquidityEventProcessorService {
         // Token → Fiat: decrement available token balance
         await tx.cryptoBalance.update({
           where: {
-            userId_currency_network: {
+            userId_tokenSymbol_network: {
               userId: pendingSwapOrder.userId,
-              currency: token_symbol,
+              tokenSymbol: token_symbol,
               network: 'starknet',
             },
           },
@@ -541,7 +541,7 @@ export class LiquidityEventProcessorService {
           type: 'swap',
           status: 'completed',
           amount: parseFloat(String(token_amount)),
-          currency: token_symbol,
+          tokenSymbol: token_symbol,
           fee: parseFloat(feeStr),
           netAmount: fiat_amount,
           reference: pendingSwapOrder.reference,

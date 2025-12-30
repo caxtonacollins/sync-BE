@@ -67,7 +67,7 @@ export class KeyManagementService {
 
       const privateKey = decryptPrivateKey(wallet.encryptedPrivateKey);
 
-      const account = new Account(this.provider, wallet.address, privateKey);
+      const account = new Account({provider: this.provider, address: wallet.address, signer: privateKey});
 
       this.logger.log(
         `Account accessed for user ${userId}, wallet ${wallet.address}`,
@@ -99,7 +99,7 @@ export class KeyManagementService {
       const account = await this.getUserAccount(userId, walletAddress);
 
       const { transaction_hash } = await account.execute(calls, {
-        maxFee: 10 ** 15,
+        // feeDataAvailabilityMode: 'L1',
       });
 
       this.logger.log(
@@ -221,7 +221,7 @@ export class KeyManagementService {
         id: true,
         address: true,
         network: true,
-        currency: true,
+        tokenSymbol: true,
         isDefault: true,
         createdAt: true,
       },

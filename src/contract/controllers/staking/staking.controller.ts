@@ -41,7 +41,7 @@ export class StakingController {
   recordFiatStake(@Body() body: any) {
     return this.stakingService.recordFiatStake(
       body.userId,
-      body.currency,
+      body.tokenSymbol,
       body.amount,
       body.lockDuration,
       body.stakeId,
@@ -52,7 +52,7 @@ export class StakingController {
   recordFiatUnstake(@Body() body: any) {
     return this.stakingService.recordFiatUnstake(
       body.userId,
-      body.currency,
+      body.tokenSymbol,
       body.stakeId,
     );
   }
@@ -61,7 +61,7 @@ export class StakingController {
   recordFiatRewardClaim(@Body() body: any) {
     return this.stakingService.recordFiatRewardClaim(
       body.userId,
-      body.currency,
+      body.tokenSymbol,
       body.stakeId,
       body.rewards,
     );
@@ -99,7 +99,7 @@ export class StakingController {
   @Post('create-reserve-snapshot')
   createReserveSnapshot(@Body() body: any) {
     return this.stakingService.createReserveSnapshot(
-      body.currency,
+      body.tokenSymbol,
       BigInt(body.balance),
       body.ipfsHash,
     );

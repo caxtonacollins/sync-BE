@@ -3,7 +3,7 @@ import { IsString, IsNumber, IsOptional, IsNotEmpty } from 'class-validator';
 
 export class CreateExchangeRateDto {
   @ApiProperty({
-    description: 'Fiat currency symbol (e.g., USD, NGN, EUR)',
+    description: 'Fiat tokenSymbol symbol (e.g., USD, NGN, EUR)',
     example: 'NGN',
   })
   @IsString()
@@ -11,7 +11,7 @@ export class CreateExchangeRateDto {
   fiatSymbol: string;
 
   @ApiProperty({
-    description: 'Cryptocurrency symbol (e.g., BTC, ETH, USDT)',
+    description: 'CryptotokenSymbol symbol (e.g., BTC, ETH, USDT)',
     example: 'BTC',
   })
   @IsString()
@@ -42,10 +42,10 @@ export class ExchangeRateResponseDto {
   @ApiProperty({ description: 'Unique identifier of the exchange rate' })
   id: string;
 
-  @ApiProperty({ description: 'Fiat currency symbol' })
+  @ApiProperty({ description: 'Fiat tokenSymbol symbol' })
   fiatSymbol: string;
 
-  @ApiProperty({ description: 'Cryptocurrency symbol' })
+  @ApiProperty({ description: 'CryptotokenSymbol symbol' })
   tokenSymbol: string;
 
   @ApiProperty({ description: 'Current exchange rate' })
@@ -57,7 +57,7 @@ export class ExchangeRateResponseDto {
 
 export class ExchangeRateFilterDto {
   @ApiProperty({
-    description: 'Filter by fiat currency symbol',
+    description: 'Filter by fiat tokenSymbol symbol',
     required: false,
   })
   @IsOptional()
@@ -65,7 +65,7 @@ export class ExchangeRateFilterDto {
   fiatSymbol?: string;
 
   @ApiProperty({
-    description: 'Filter by cryptocurrency symbol',
+    description: 'Filter by cryptotokenSymbol symbol',
     required: false,
   })
   @IsOptional()

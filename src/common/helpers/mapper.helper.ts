@@ -9,7 +9,7 @@ export function mapCryptoWalletWithUser(wallet: CryptoWallet & { user?: any }) {
     isRegisteredToLiquidity: wallet.isRegisteredToLiquidity,
     address: wallet.address,
     balance: 0,
-    currency: wallet.currency,
+    tokenSymbol: wallet.tokenSymbol,
     initials: `${(firstName[0] || '') + (lastName[0] || '')}`,
     isDefault: wallet.isDefault,
   };

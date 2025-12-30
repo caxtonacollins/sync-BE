@@ -57,7 +57,7 @@ export class FlutterwaveController {
             publicKey: { type: 'string' },
             txRef: { type: 'string' },
             amount: { type: 'number' },
-            currency: { type: 'string' },
+            tokenSymbol: { type: 'string' },
             customer: {
               type: 'object',
               properties: {
@@ -108,7 +108,7 @@ export class FlutterwaveController {
           publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY || '',
           txRef,
           amount: initializePaymentDto.amount,
-          currency: initializePaymentDto.currency || 'NGN',
+          tokenSymbol: initializePaymentDto.tokenSymbol || 'NGN',
           customer: {
             email: user.email,
             name: `${user.firstName} ${user.lastName}`,
@@ -116,7 +116,7 @@ export class FlutterwaveController {
           },
           customizations: {
             title: 'Sync Payment',
-            description: `Fund your Sync wallet with ${initializePaymentDto.currency || 'NGN'} ${initializePaymentDto.amount}`,
+            description: `Fund your Sync wallet with ${initializePaymentDto.tokenSymbol || 'NGN'} ${initializePaymentDto.amount}`,
             logo: 'https://your-logo-url.com/logo.png',
           },
         },
@@ -155,7 +155,7 @@ export class FlutterwaveController {
         verifyPaymentDto.transaction_id,
         userId,
         verifyPaymentDto.amount || 0,
-        verifyPaymentDto.currency || 'NGN'
+        verifyPaymentDto.tokenSymbol || 'NGN'
       );
 
       return {
@@ -181,13 +181,13 @@ export class FlutterwaveController {
 
   @Get('get-exchange-rate')
   async getExchangeRate(
-    @Query('sourceCurrency') sourceCurrency: string,
-    @Query('destinationCurrency') destinationCurrency: string,
+    @Query('sourcetokenSymbol') sourcetokenSymbol: string,
+    @Query('destinationtokenSymbol') destinationtokenSymbol: string,
     @Query('amount') amount: number,
   ) {
     return this.flutterwaveService.getExchangeRate(
-      sourceCurrency,
-      destinationCurrency,
+      sourcetokenSymbol,
+      destinationtokenSymbol,
       amount,
     );
   }

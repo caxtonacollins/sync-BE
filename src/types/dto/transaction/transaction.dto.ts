@@ -11,7 +11,7 @@ export class TransactionQueryDto {
   type?: string;
 
   @ApiProperty({ required: false })
-  currency?: string;
+  tokenSymbol?: string;
 
   @ApiProperty({ required: false, default: 1 })
   page?: number;

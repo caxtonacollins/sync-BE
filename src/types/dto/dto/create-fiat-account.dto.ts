@@ -4,7 +4,7 @@ export class CreateFiatAccountDto {
   @IsOptional()
   @IsString()
   @IsIn(['NGN', 'USD', 'GHS'], {
-    message: 'Currency must be one of: NGN, USD, GHS',
+    message: 'tokenSymbol must be one of: NGN, USD, GHS',
   })
-  currency?: string = 'NGN';
+  tokenSymbol?: string = 'NGN';
 }

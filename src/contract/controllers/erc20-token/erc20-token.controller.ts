@@ -7,12 +7,19 @@ export class Erc20TokenController {
   constructor(private readonly contractService: TokenContractService) {}
 
   @Post('mint-token')
-  async mintToken(@Body() mintTokenDto: MintTokenDto) {
-    return await this.contractService.mintToken(
-      mintTokenDto.receiverAddress,
-      mintTokenDto.amount,
-      mintTokenDto.syncTokenAddress,
-    );
+  async mintToken(
+    @Body() mintTokenDto: MintTokenDto
+  ): Promise<{ transaction_hash: string }> {
+    try {
+      const { transactionHash } = await this.contractService.mintToken(
+        mintTokenDto.receiverAddress,
+        mintTokenDto.amount,
+        mintTokenDto.syncTokenAddress,
+      );
+      return { transaction_hash: transactionHash };
+    } catch (error) {
+      throw new Error(error.message);
+    }
   }
 
   @Get('balance/:userAddress/:symbol')

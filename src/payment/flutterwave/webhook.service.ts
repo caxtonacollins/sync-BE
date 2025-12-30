@@ -1,8 +1,16 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { 
+  Injectable, 
+  Logger, 
+  BadRequestException, 
+  ForbiddenException, 
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { FlutterwaveWebhookDto } from 'src/types/dto/flutterwave/webhook.dto';
+import { TransactionType, TransactionStatus, Prisma } from '@prisma/client';
+import { BalanceService } from '../balance.service';
 
 @Injectable()
 export class WebhookService {
@@ -12,101 +20,251 @@ export class WebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly balanceService: BalanceService,
   ) {
-    const secretHash = this.config.get<string>('FLUTTERWAVE_SECRET_KEY');
+    const secretHash = this.config.get<string>('FLUTTERWAVE_WEBHOOK_SECRET_HASH');
     if (!secretHash) {
-      throw new Error('FLUTTERWAVE_SECRET_KEY is not configured');
+      throw new Error('FLUTTERWAVE_WEBHOOK_SECRET_HASH is not configured');
     }
     this.secretHash = secretHash;
   }
 
-  validateWebhookSignature(signature: string, payload: string): boolean {
+  validateWebhookSignature(signature: string, payload: string | object): boolean {
     if (!this.secretHash) {
-      throw new Error('Flutterwave secret hash is not configured');
+      throw new InternalServerErrorException('Webhook secret hash is not configured');
     }
 
+    if (!signature) {
+      throw new BadRequestException('Missing webhook signature');
+    }
+
+    const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
     const computedSignature = createHmac('sha512', this.secretHash)
-      .update(payload)
+      .update(payloadString)
       .digest('hex');
 
-    return computedSignature === signature;
+    const isValid = computedSignature === signature;
+    if (!isValid) {
+      this.logger.warn('Invalid webhook signature', {
+        computedSignature,
+        receivedSignature: signature,
+      });
+    }
+
+    return isValid;
   }
 
-  async handleWebhook(data: FlutterwaveWebhookDto) {
+  async handleWebhook(payload: any, signature?: string) {
+    this.logger.log('Received webhook payload', { event: payload?.event });
+
     try {
-      // Extract virtual account details
-      const { account_number, amount, currency, tx_ref, status } = data.data;
-
-      // Find the associated fiat account
-      const fiatAccount = await this.prisma.fiatAccount.findFirst({
-        where: { accountNumber: account_number },
-        include: { user: true },
-      });
-
-      if (!fiatAccount) {
-        throw new BadRequestException('Invalid virtual account');
+      // Validate webhook signature if signature is provided
+      if (signature) {
+        const isValid = this.validateWebhookSignature(signature, payload);
+        if (!isValid) {
+          throw new ForbiddenException('Invalid webhook signature');
+        }
+      } else {
+        this.logger.warn('Webhook called without signature, proceeding with caution');
       }
 
-      // Begin transaction
-      return await this.prisma.$transaction(async (tx) => {
-        // Check for duplicate transaction
-        const existingTransaction = await tx.transaction.findUnique({
-          where: { reference: tx_ref },
+      // Handle different webhook event types
+      switch (payload?.event) {
+        case 'charge.completed':
+          return this.handleChargeCompleted(payload);
+        case 'transfer.completed':
+          return this.handleTransferCompleted(payload);
+        default:
+          this.logger.warn(`Unhandled webhook event: ${payload?.event}`, { payload });
+          return { status: 'success', message: 'Webhook received but no action taken' };
+      }
+    } catch (error) {
+      this.logger.error('Error processing webhook:', error);
+      throw error;
+    }
+  }
+
+  private async handleChargeCompleted(payload: FlutterwaveWebhookDto) {
+    const { data } = payload;
+    const {
+      account_number,
+      amount,
+      tokenSymbol,
+      tx_ref,
+      status,
+      id: transactionId
+    } = data;
+
+    this.logger.log(`Processing charge.completed webhook`, {
+      transactionId,
+      accountNumber: account_number,
+      amount,
+      tokenSymbol,
+      status
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      // Check for duplicate transaction
+      const existingTransaction = await tx.transaction.findUnique({
+        where: { reference: tx_ref },
+      });
+
+      if (existingTransaction) {
+        this.logger.warn(`Duplicate transaction detected`, {
+          reference: tx_ref,
+          transactionId: existingTransaction.id
         });
+        return existingTransaction;
+      }
 
-        if (existingTransaction) {
-          this.logger.warn(`Duplicate transaction detected: ${tx_ref}`);
-          return existingTransaction;
+      // Find the crypto wallet by the account number (mapped to wallet address)
+      const cryptoWallet = await tx.cryptoWallet.findFirst({
+        where: {
+          address: account_number,
+          tokenSymbol
         }
+      });
 
-        // Update account balance
-        if (status === 'successful') {
-          await tx.fiatAccount.update({
-            where: { id: fiatAccount.id },
-            data: {
-              balance: { increment: amount },
-              availableBalance: { increment: amount },
-            },
-          });
-        }
+      if (!cryptoWallet) {
+        throw new BadRequestException(`No crypto wallet found for address: ${account_number}`);
+      }
+
+      // Only process successful transactions
+      if (status !== 'successful') {
+        this.logger.warn(`Received non-successful transaction status: ${status}`, {
+          transactionId,
+          reference: tx_ref
+        });
+        return null;
+      }
+
+      try {
+        // Update crypto balance
+       await tx.cryptoBalance.upsert({
+          where: {
+            userId_tokenSymbol_network: {
+              userId: cryptoWallet.userId,
+              tokenSymbol,
+              network: cryptoWallet.network
+            }
+          },
+          update: {
+            available: { increment: amount },
+            updatedAt: new Date(),
+          },
+          create: {
+            userId: cryptoWallet.userId,
+            tokenSymbol,
+            network: cryptoWallet.network,
+            available: amount,
+            staked: 0,
+            pending: 0
+          }
+        });
 
         // Create transaction record
         const transaction = await tx.transaction.create({
           data: {
-            userId: fiatAccount.userId,
-            type: 'deposit',
-            status: status === 'successful' ? 'completed' : 'failed',
+            userId: cryptoWallet.userId,
+            type: 'DEPOSIT',
+            status: 'COMPLETED',
             amount,
-            currency,
+            tokenSymbol,
             fee: 0,
             netAmount: amount,
             reference: tx_ref,
-            fiatAccountId: fiatAccount.id,
-            metadata: JSON.parse(JSON.stringify(data.data)), completedAt: status === 'successful' ? new Date() : null,
+            completedAt: new Date(),
+            cryptoWalletId: cryptoWallet.id,
           },
         });
 
         // Create audit log
         await tx.auditLog.create({
           data: {
-            userId: fiatAccount.userId,
-            action: 'VIRTUAL_ACCOUNT_CREDIT',
+            userId: cryptoWallet.userId,
+            action: 'CRYPTO_DEPOSIT',
             entityType: 'TRANSACTION',
             entityId: transaction.id,
             metadata: {
               amount,
-              currency,
+              tokenSymbol,
               reference: tx_ref,
-              accountNumber: account_number,
+              walletAddress: cryptoWallet.address,
+              transactionId,
+              network: cryptoWallet.network
             },
           },
         });
 
+        // Update user's balance using the balance service if needed
+        await this.balanceService.creditAccount({
+          userId: cryptoWallet.userId,
+          amount,
+          tokenSymbol,
+          reference: tx_ref,
+          metadata: {
+            transactionId: transaction.id,
+            walletId: cryptoWallet.id,
+            network: cryptoWallet.network
+          },
+        });
+
         return transaction;
-      });
-    } catch (error) {
-      this.logger.error('Error processing webhook:', error);
-      throw error;
+      } catch (error) {
+        this.logger.error('Error processing charge.completed webhook:', error);
+        throw error;
+      }
+    });
+  }
+
+  private async handleTransferCompleted(payload: any) {
+    // Implement transfer completion logic here
+    this.logger.log('Processing transfer.completed webhook', { 
+      transferId: payload?.data?.id 
+    });
+    
+    return { status: 'success', message: 'Transfer webhook received' };
+  }
+
+  private async recordFailedTransaction(
+    tx: Prisma.TransactionClient,
+    params: {
+      userId: string;
+      cryptoWalletId: string;
+      amount: number;
+      tokenSymbol: string;
+      reference: string;
+      metadata: any;
+      status: TransactionStatus;
+    }
+  ) {
+    return tx.transaction.create({
+      data: {
+        userId: params.userId,
+        type: TransactionType.DEPOSIT,
+        status: params.status,
+        amount: params.amount,
+        tokenSymbol: params.tokenSymbol,
+        fee: 0,
+        netAmount: params.amount,
+        reference: params.reference,
+        cryptoWalletId: params.cryptoWalletId,
+        metadata: params.metadata,
+      },
+    });
+  }
+
+  private mapTransactionStatus(status: string): TransactionStatus {
+    switch (status?.toLowerCase()) {
+      case 'successful':
+        return TransactionStatus.COMPLETED;
+      case 'pending':
+        return TransactionStatus.PENDING;
+      case 'failed':
+      case 'cancelled':
+        return TransactionStatus.FAILED;
+      default:
+        return TransactionStatus.FAILED;
     }
   }
 }

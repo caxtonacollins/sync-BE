@@ -15,15 +15,15 @@ export class LiquidityCheckDto {
 export class UpdateSwapOrderDto {
   @IsOptional()
   @IsString()
-  fromCurrency?: string;
+  from?: string;
 
   @IsOptional()
   @IsString()
-  toCurrency?: string;
+  to?: string;
 
   @IsOptional()
   @IsNumber()
-  fromAmount?: number;
+  amount?: number;
 
   @IsOptional()
   @IsNumber()

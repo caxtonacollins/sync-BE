@@ -29,46 +29,24 @@ export class BalanceSyncController {
     private readonly cacheSync: CacheSyncService,
   ) {}
 
-  @Get('user/:userId/balance/:currency')
-  async getUserBalance(
-    @Param('userId') userId: string,
-    @Param('currency') currency: string,
-  ) {
-    const balance = await this.balanceSync.getFiatBalance(userId, currency);
-
-    if (!balance) {
-      throw new BadRequestException(
-        `No balance found for user ${userId} and currency ${currency}`,
-      );
-    }
-
-    return {
-      userId,
-      currency,
-      available: balance.available.toString(),
-      staked: balance.staked.toString(),
-      pending: balance.pending.toString(),
-    };
-  }
-
-  @Get('user/:userId/crypto/balance/:currency')
+  @Get('user/:userId/crypto/balance/:tokenSymbol')
   async getUserCryptoBalance(
     @Param('userId') userId: string,
-    @Param('currency') currency: string,
+    @Param('tokenSymbol') tokenSymbol: string,
   ) {
     // For now, get from all networks or specific if available
     const balances = await this.balanceSync.getAllCryptoBalances(userId);
-    const balance = balances.find((b) => b.currency === currency);
+    const balance = balances.find((b) => b.tokenSymbol === tokenSymbol);
 
     if (!balance) {
       throw new BadRequestException(
-        `No crypto balance found for user ${userId} and currency ${currency}`,
+        `No crypto balance found for user ${userId} and tokenSymbol ${tokenSymbol}`,
       );
     }
 
     return {
       userId,
-      currency,
+      tokenSymbol,
       network: balance.network,
       available: balance.available.toString(),
       staked: balance.staked.toString(),
@@ -78,18 +56,11 @@ export class BalanceSyncController {
 
   @Get('user/:userId/balances')
   async getUserBalances(@Param('userId') userId: string) {
-    const fiatBalances = await this.balanceSync.getAllFiatBalances(userId);
     const cryptoBalances = await this.balanceSync.getAllCryptoBalances(userId);
 
     return {
-      fiat: fiatBalances.map((b) => ({
-        currency: b.currency,
-        available: b.available.toString(),
-        staked: b.staked.toString(),
-        pending: b.pending.toString(),
-      })),
       crypto: cryptoBalances.map((b) => ({
-        currency: b.currency,
+        tokenSymbol: b.tokenSymbol,
         network: b.network,
         available: b.available.toString(),
         staked: b.staked.toString(),
@@ -104,10 +75,8 @@ export class BalanceSyncController {
     const result = await this.balanceSync.initializeBalances(userId);
     return {
       message: 'Balances initialized',
-      fiatCount: result.fiats.length,
       cryptoCount: result.cryptos.length,
-      fiatCurrencies: result.fiats.map((f) => f.currency),
-      cryptoCurrencies: result.cryptos.map((c) => `${c.currency}/${c.network}`),
+      cryptoCurrencies: result.cryptos.map((c) => `${c.tokenSymbol}/${c.network}`),
     };
   }
 
@@ -122,16 +91,16 @@ export class BalanceSyncController {
     };
   }
 
-  @Get('validate/user/:userId/currency/:currency')
+  @Get('validate/user/:userId/tokenSymbol/:tokenSymbol')
   async validateBalance(
     @Param('userId') userId: string,
-    @Param('currency') currency: string,
+    @Param('tokenSymbol') tokenSymbol: string,
   ) {
-    const result = await this.cacheSync.validateUserBalance(userId, currency);
+    const result = await this.cacheSync.validateUserBalance(userId, tokenSymbol, 'crypto');
 
     return {
       userId,
-      currency,
+      tokenSymbol,
       network: result.network || null,
       isValid: result.isValid,
       dbValue: result.dbValue.toString(),
@@ -150,7 +119,7 @@ export class BalanceSyncController {
       count: discrepancies.length,
       discrepancies: discrepancies.map((d) => ({
         userId: d.userId,
-        currency: d.currency,
+        tokenSymbol: d.tokenSymbol,
         network: d.network || null,
         dbValue: d.dbValue.toString(),
         blockchainValue: d.blockchainValue.toString(),

@@ -3,9 +3,9 @@ import { LiquidityPoolContractService } from '../liquidity-pool/liquidity-pool.s
 import { TokenContractService } from '../erc20-token/erc20-token.service';
 
 export interface SwapQuote {
-  fromCurrency: string;
-  toCurrency: string;
-  fromAmount: number;
+  from: string;
+  to: string;
+  amount: number;
   toAmount: number;
   rate: number;
   fee: number;
@@ -33,8 +33,8 @@ export class DexIntegrationService {
    * Check if Sync liquidity pool has sufficient liquidity for a swap
    */
   async checkSyncLiquidity(
-    fromCurrency: string,
-    toCurrency: string,
+    from: string,
+    to: string,
     amount: number,
     swapType: 'TOKENTOFIAT' | 'FIATTOTOKEN',
   ): Promise<LiquidityCheckResult> {
@@ -42,7 +42,7 @@ export class DexIntegrationService {
       if (swapType === 'TOKENTOFIAT') {
         // For token to fiat: check if we have enough fiat liquidity
         const fiatBalance = await this.liquidityPoolService.getFiatLiquidityBalance(
-          toCurrency,
+          to,
         );
         const requiredAmount = BigInt(Math.floor(amount * 1e18)); // Convert to wei-like units
         const hasSufficient = fiatBalance >= requiredAmount;
@@ -59,7 +59,7 @@ export class DexIntegrationService {
         };
       } else {
         // For fiat to token: check if we have enough token liquidity
-        const tokenSymbol = `${toCurrency}/USD`;
+        const tokenSymbol = `${to}/USD`;
         const tokenBalance = await this.liquidityPoolService.getTokenBalance(
           tokenSymbol,
         );
@@ -119,12 +119,12 @@ export class DexIntegrationService {
    * This is a placeholder structure - implement with actual Starknet DEX integration
    */
   async getDexQuote(
-    fromCurrency: string,
-    toCurrency: string,
+    from: string,
+    to: string,
     amount: number,
   ): Promise<SwapQuote> {
     this.logger.log(
-      `Getting DEX quote: ${amount} ${fromCurrency} -> ${toCurrency}`,
+      `Getting DEX quote: ${amount} ${from} -> ${to}`,
     );
 
     // TODO: Implement actual DEX integration
@@ -146,9 +146,9 @@ export class DexIntegrationService {
     const toAmount = (amount - fee) * estimatedRate;
 
     return {
-      fromCurrency,
-      toCurrency,
-      fromAmount: amount,
+      from,
+      to,
+      amount: amount,
       toAmount,
       rate: estimatedRate,
       fee,
@@ -163,13 +163,13 @@ export class DexIntegrationService {
    */
   async executeDexSwap(
     userAddress: string,
-    fromCurrency: string,
-    toCurrency: string,
+    from: string,
+    to: string,
     amount: number,
     minAmountOut: number,
   ): Promise<{ txHash: string; status: string }> {
     this.logger.log(
-      `Executing DEX swap: ${amount} ${fromCurrency} -> ${toCurrency} for user ${userAddress}`,
+      `Executing DEX swap: ${amount} ${from} -> ${to} for user ${userAddress}`,
     );
 
     // TODO: Implement actual DEX swap execution
@@ -188,8 +188,8 @@ export class DexIntegrationService {
    * Main routing function: Check liquidity and route to appropriate provider
    */
   async routeSwap(
-    fromCurrency: string,
-    toCurrency: string,
+    from: string,
+    to: string,
     amount: number,
     swapType: 'TOKENTOFIAT' | 'FIATTOTOKEN',
   ): Promise<{
@@ -199,8 +199,8 @@ export class DexIntegrationService {
   }> {
     // Check Sync liquidity first
     const liquidityCheck = await this.checkSyncLiquidity(
-      fromCurrency,
-      toCurrency,
+      from,
+      to,
       amount,
       swapType,
     );
@@ -217,10 +217,10 @@ export class DexIntegrationService {
 
     // Insufficient liquidity - get quote from external DEX
     this.logger.log(
-      `Insufficient Sync liquidity. Routing to external DEX for ${amount} ${fromCurrency} -> ${toCurrency}`,
+      `Insufficient Sync liquidity. Routing to external DEX for ${amount} ${from} -> ${to}`,
     );
 
-    const quote = await this.getDexQuote(fromCurrency, toCurrency, amount);
+    const quote = await this.getDexQuote(from, to, amount);
 
     return {
       provider: 'uniswap', // or 'dex' based on which DEX you integrate

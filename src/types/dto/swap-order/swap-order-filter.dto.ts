@@ -27,11 +27,11 @@ export class SwapOrderFilterDto {
 
   @IsOptional()
   @IsString()
-  fromCurrency?: string;
+  from?: string;
 
   @IsOptional()
   @IsString()
-  toCurrency?: string;
+  to?: string;
 
   @IsOptional()
   @IsString()

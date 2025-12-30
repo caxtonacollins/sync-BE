@@ -34,11 +34,24 @@ export class LiquidityController {
 
   @Post('add-supported-token')
   async addSupportedToken(
-    @Body() addSupportedTokenDto: { symbol: string; address: string },
+    @Body() addSupportedTokenDto: {
+      tokenAddress: string;
+      symbol: string;
+      feedId?: string;
+      decimals?: number;
+      minAmount?: string;
+      maxAmount?: string;
+      isActive?: boolean;
+    },
   ) {
     return await this.contractService.addSupportedToken(
+      addSupportedTokenDto.tokenAddress,
       addSupportedTokenDto.symbol,
-      addSupportedTokenDto.address,
+      addSupportedTokenDto.feedId,
+      addSupportedTokenDto.decimals,
+      addSupportedTokenDto.minAmount,
+      addSupportedTokenDto.maxAmount,
+      addSupportedTokenDto.isActive,
     );
   }
 
@@ -52,10 +65,13 @@ export class LiquidityController {
     );
   }
 
-  @Post('transfer-liquidity-ownership')
+  @Post('transfer-ownership')
   async transferLiquidityOwnership(
     @Body() transferOwnershipDto: TransferOwnershipDto,
-  ) {
+  ): Promise<{
+    transactionHash: string;
+    receipt: any;
+  }> {
     return await this.contractService.transferLiquidityOwnership(
       transferOwnershipDto.newOwnerAddress,
     );
@@ -68,10 +84,10 @@ export class LiquidityController {
       swapFiatToTokenDto.userContractAddress,
       swapFiatToTokenDto.fiatSymbol,
       swapFiatToTokenDto.tokenSymbol,
-      swapFiatToTokenDto.fiatAmount,
+      swapFiatToTokenDto.fiatAmount.toString(),
       swapFiatToTokenDto.swapOrderId,
-      swapFiatToTokenDto.tokenAmount,
-      swapFiatToTokenDto.fee,
+      swapFiatToTokenDto.tokenAmount.toString(),
+      swapFiatToTokenDto.fee.toString(),
     );
   }
 

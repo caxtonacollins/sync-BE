@@ -11,5 +11,5 @@ export class CreateFiatTransferDto {
 
   @IsString()
   @IsNotEmpty()
-  currency: string;
+  tokenSymbol: string;
 }

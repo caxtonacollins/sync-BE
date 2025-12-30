@@ -4,7 +4,7 @@ export class CreateCryptoWalletDto {
   @IsOptional()
   @IsString()
   @IsIn(['STRK', 'ETH', 'USDC'], {
-    message: 'Currency must be one of: STRK, ETH, USDC',
+    message: 'tokenSymbol must be one of: STRK, ETH, USDC',
   })
-  currency?: string = 'STRK';
+  tokenSymbol?: string = 'STRK';
 }

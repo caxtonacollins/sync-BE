@@ -4,8 +4,8 @@ export enum SwapType {
 }
 
 export interface SwapOrderFilter {
-  fromCurrency?: string;
-  toCurrency?: string;
+  from?: string;
+  to?: string;
   status?: string;
   userId?: string;
   minAmount?: number;

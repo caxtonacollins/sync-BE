@@ -7,7 +7,7 @@
 
 ## Overview
 
-Sync Backend is a decentralized payment system built on the StarkNet ecosystem, enabling instant fiat-to-crypto transactions for seamless everyday spending. The system bridges traditional financial systems with decentralized finance (DeFi), allowing users to transact in their local fiat currencies while leveraging cryptocurrency liquidity for instant settlements.
+Sync Backend is a decentralized payment system built on the StarkNet ecosystem, enabling instant fiat-to-crypto transactions for seamless everyday spending. The system bridges traditional financial systems with decentralized finance (DeFi), allowing users to transact in their local fiat currencies while leveraging crypto liquidity for instant settlements.
 
 This project introduces a hybrid payment protocol with:
 - **Local Currency Wallet** (e.g., Naira, USD, EUR) for fiat-based transactions.
@@ -33,7 +33,7 @@ The system enables users to make instant payments using fiat, while leveraging a
    - Used for direct payments where sufficient funds are available.
 
 2. **Crypto Wallet (StarkNet-based)**
-   - Stores cryptocurrency assets (STRK, ETH, USDC, etc.).
+   - Stores crypto assets (STRK, ETH, USDC, etc.).
    - Acts as a reserve to top-up the Local Currency Wallet when needed.
    - Enables decentralized transactions and staking opportunities.
 

@@ -13,7 +13,6 @@ import { KeyManagementService } from 'src/transaction/wallet/key-management.serv
 @Injectable()
 export class TokenContractService {
   private provider: RpcProvider;
-  private readonly _syncTokenAddress: string;
   private readonly _strkTokenAddress: string;
   private readonly _usdcTokenAddress: string;
   private readonly _ethTokenAddress: string;
@@ -25,7 +24,6 @@ export class TokenContractService {
 
   constructor(private readonly keyManagementService: KeyManagementService) {
     this.provider = connectToStarknet();
-    this._syncTokenAddress = process.env.SYNC_TOKEN_ADDRESS || '';
     this._strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
     this._usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
     this._ethTokenAddress = process.env.ETH_TOKEN_ADDRESS || '';
@@ -33,26 +31,24 @@ export class TokenContractService {
     this._sngnTokenAddress = process.env.SNGN_TOKEN_ADDRESS || '';
 
     this.tokenAddressMap = {
-      SYNC: this._syncTokenAddress,
       STRK: this._strkTokenAddress,
       USDC: this._usdcTokenAddress,
       ETH: this._ethTokenAddress,
       BTC: this._btcTokenAddress,
-      SNGN: this._sngnTokenAddress,
+      sNGN: this._sngnTokenAddress,
     };
 
     this.decimalsMap = {
-      SYNC: 18,
       STRK: 18,
       USDC: 6,
       ETH: 18,
       BTC: 18,
-      SNGN: 18, // sNGN uses 18 decimals (1 Naira = 1 sNGN)
+      sNGN: 18, // sNGN uses 18 decimals (1 Naira = 1 sNGN)
     };
   }
 
-  get syncTokenAddress(): string {
-    return this._syncTokenAddress;
+  get sngnTokenAddress(): string {
+    return this._sngnTokenAddress;
   }
 
   get strkTokenAddress(): string {
@@ -74,13 +70,13 @@ export class TokenContractService {
   async mintToken(
     receiverAddress: string,
     amount: string,
-    syncTokenAddress: string,
-  ) {
+    sngnTokenAddress: string,
+  ): Promise<{ transactionHash: string, receipt: any }> {
     if (!receiverAddress) throw new Error('receiverAddress is required');
     if (!amount) throw new Error('amount is required');
 
     const call = {
-      contractAddress: syncTokenAddress,
+      contractAddress: sngnTokenAddress,
       entrypoint: 'mint',
       calldata: [receiverAddress, uint256.bnToUint256(amount)],
     };
@@ -88,9 +84,7 @@ export class TokenContractService {
     try {
       const account = getDeployerWallet();
 
-      const { transaction_hash: txH } = await account.execute(call, {
-        maxFee: 10 ** 15,
-      });
+      const { transaction_hash: txH } = await account.execute(call);
 
       const txR = await this.provider.waitForTransaction(txH);
 
@@ -118,7 +112,7 @@ export class TokenContractService {
     if (!symbol) throw new Error('symbol is required');
     if (!accountAddress) throw new Error('accountAddress is required');
 
-    const tokenAddress = this.tokenAddressMap[symbol.toUpperCase()];
+    const tokenAddress = this.tokenAddressMap[symbol];
     if (!tokenAddress) {
       throw new Error(`Token with symbol ${symbol} not supported`);
     }
@@ -126,7 +120,7 @@ export class TokenContractService {
     try {
       const tokenContract = createNewContractInstance(erc20, tokenAddress);
       const balance = await tokenContract.balance_of(accountAddress);
-      const decimals = this.decimalsMap[symbol.toUpperCase()] || 18;
+      const decimals = this.decimalsMap[symbol] || 18;
 
       // Convert from smallest unit to human-readable format
       const balanceFormatted = Number(balance) / Math.pow(10, decimals);
@@ -155,7 +149,7 @@ export class TokenContractService {
           symbol,
           userAddress,
         );
-        const decimals = this.decimalsMap[symbol.toUpperCase()] || 18;
+        const decimals = this.decimalsMap[symbol] || 18;
 
         return {
           symbol,
@@ -177,23 +171,17 @@ export class TokenContractService {
     return results.filter((result): result is TokenBalance => result !== null);
   }
 
-  /**
-   * Get SYNC token balance (legacy method)
-   */
-  async getSyncTokenBalance(address: string) {
+  async getSNGNTokenBalance(address: string) {
     if (!address) throw new Error('user address is required');
-    return this.getAccountBalance('SYNC', address);
+    return this.getAccountBalance('sNGN', address);
   }
 
-  /**
-   * Generate approve token calldata
-   */
   getApproveTokenCalldata(
     tokenSymbol: string,
     spenderAddress: string,
     amount: string,
   ) {
-    const token = tokenSymbol.toUpperCase();
+    const token = tokenSymbol;
     const tokenAddress = this.tokenAddressMap[token];
 
     if (!tokenAddress) {
@@ -213,27 +201,19 @@ export class TokenContractService {
     };
   }
 
-  /**
-   * Get token address by symbol
-   */
   getTokenAddress(symbol: string): string {
-    const tokenAddress = this.tokenAddressMap[symbol.toUpperCase()];
+    const tokenAddress = this.tokenAddressMap[symbol];
     if (!tokenAddress) {
       throw new Error(`Token with symbol ${symbol} not supported`);
     }
     return tokenAddress;
   }
 
-  /**
-   * Get token decimals by symbol
-   */
+
   getTokenDecimals(symbol: string): number {
-    return this.decimalsMap[symbol.toUpperCase()] || 18;
+    return this.decimalsMap[symbol] || 18;
   }
 
-  /**
-   * Execute user transaction
-   */
   async executeUserTransaction(
     userId: string,
     calls: any[],
@@ -246,9 +226,6 @@ export class TokenContractService {
     }
   }
 
-  /**
-   * Approve token with user credentials
-   */
   async approveTokenWithUserCredentials(
     userId: string,
     tokenAddress: string,
@@ -268,9 +245,6 @@ export class TokenContractService {
     return result;
   }
 
-  /**
-   * Approve token with deployer credentials
-   */
   async approveTokenWithDeployerCredentials(
     tokenAddress: string,
     spenderAddress: string,

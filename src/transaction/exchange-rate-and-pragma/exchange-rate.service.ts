@@ -46,16 +46,12 @@ export class ExchangeRateService {
       }
     } catch (error) {
       console.error('Error reading from cache:', error);
-      // Continue to fetch fresh data if cache read fails
     }
 
     try {
-      const [syncRates, fwRates, syncUsdRate] = await Promise.all([
+      const [syncRates, fwRates] = await Promise.all([
         this.prisma.exchangeRate.findMany(),
         this.flutterwaveService.getExchangeRate('NGN', 'USD', 100),
-        this.contractService.getTokenAmountInUsd(
-          this.tokenContractService.syncTokenAddress,
-        ),
       ]);
 
       const pragmaPairs = ['STRK/USD', 'USDC/USD', 'ETH/USD', 'BTC/USD'];
@@ -69,12 +65,6 @@ export class ExchangeRateService {
           fiatSymbol: 'NGN',
           tokenSymbol: 'USD',
           rate: Number(fwRates.rate),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          fiatSymbol: 'USD',
-          tokenSymbol: 'SYNC',
-          rate: Number(syncUsdRate) / Math.pow(10, 18),
           updatedAt: new Date().toISOString(),
         },
         {

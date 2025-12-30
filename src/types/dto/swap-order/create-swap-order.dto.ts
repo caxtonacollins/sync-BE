@@ -8,27 +8,29 @@ import {
 } from 'class-validator';
 
 export enum SwapType {
-  TOKENTOFIAT = 'TOKENTOFIAT',
-  FIATTOTOKEN = 'FIATTOTOKEN',
+  MARKET = 'MARKET',
+  LIMIT = 'LIMIT',
+  STOP_LIMIT = 'STOP_LIMIT',
+  OCO = 'OCO',
 }
 
 export class CreateSwapOrderDto {
   @IsString()
-  fromCurrency: string;
+  from: string;
 
   @IsString()
-  toCurrency: string;
+  to: string;
 
   @IsNumber()
-  fromAmount: number;
-
-  @IsNumber()
-  @IsOptional()
-  toAmount: number;
+  amount: number;
 
   @IsNumber()
   @IsOptional()
   rate: number;
+
+  @IsNumber()
+  @IsOptional()
+  toAmount?: number;
 
   @IsNumber()
   @IsOptional()

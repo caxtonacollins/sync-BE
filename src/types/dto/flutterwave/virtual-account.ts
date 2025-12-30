@@ -7,7 +7,7 @@ export interface VirtualAccountDetails {
   bank_code: string;
   full_name: string;
   created_at: string;
-  currency: string;
+  tokenSymbol: string;
   is_permanent: boolean;
   status: string;
   reference: string;

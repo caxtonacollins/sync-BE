@@ -68,7 +68,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "speakeasy": "^2.0.0",
-    "starknet": "^7.6.4",
+    "starknet": "^9.2.1",
     "supabase": "^2.51.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0",

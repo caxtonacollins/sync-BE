@@ -27,12 +27,12 @@ export class StakingService {
     let weightedApySum = 0;
 
     for (const stake of allStakes) {
-      const currency =
-        stake.type === 'CRYPTO' ? stake.tokenSymbol : stake.currency;
+      const tokenSymbol =
+        stake.type === 'CRYPTO' ? stake.tokenSymbol : stake.tokenSymbol;
       const rates = await this.exchangeRateService.getExchangeRateFor([
-        currency,
+        tokenSymbol,
       ]);
-      const rate = rates[currency] || 0;
+      const rate = rates[tokenSymbol] || 0;
       const stakeValueUsd = Number(stake.amount) * Number(rate);
 
       totalStakedValueUsd += stakeValueUsd;
@@ -78,7 +78,7 @@ export class StakingService {
   }
 
   //
-  // GET POOL BY SYMBOL/CURRENCY
+  // GET POOL BY SYMBOL/tokenSymbol
   //
 
   async getPoolBySymbol(tokenSymbol: string) {

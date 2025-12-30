@@ -63,8 +63,6 @@ export class LiquidityPoolContractService {
 
       const { transaction_hash: txH } = await account.execute(call, {
         version: 3,
-        maxFee: 10 ** 15,
-        feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
         tip: 10 ** 13,
         paymasterData: [],
       });
@@ -116,14 +114,21 @@ export class LiquidityPoolContractService {
   }
 
   /**
-   * Add token liquidity (replaces add_fiat_liquidity - tokens can represent fiat-backed tokens)
-   * Note: The new contract uses add_token_liquidity for all token types
+   * Add token liquidity to the pool
+   * @param tokenAddress The address of the token to add liquidity for
+   * @param amount The amount of tokens to add (in wei)
+   * @param minLiquidity The minimum amount of liquidity tokens to receive (in wei)
    */
-  async addTokenLiquidity(tokenAddress: string, amount: string) {
+  async addTokenLiquidity(
+    tokenAddress: string, 
+    amount: string, 
+    minLiquidity: string = '0'
+  ) {
     if (!tokenAddress) throw new Error('tokenAddress is required');
     if (!amount) throw new Error('amount is required');
 
     const amountU256 = uint256.bnToUint256(BigInt(amount));
+    const minLiquidityU256 = uint256.bnToUint256(BigInt(minLiquidity));
 
     const liquidityClass = await this.provider.getClassAt(
       this.liquidityContractAddress,
@@ -133,16 +138,20 @@ export class LiquidityPoolContractService {
 
     const call = {
       contractAddress: this.liquidityContractAddress,
-      entrypoint: 'add_token_liquidity',
-      calldata: [tokenAddress, amountU256.low, amountU256.high],
+      entrypoint: 'add_liquidity',
+      calldata: [
+        tokenAddress,
+        amountU256.low,
+        amountU256.high,
+        minLiquidityU256.low,
+        minLiquidityU256.high
+      ],
     };
 
     const account = getDeployerWallet();
 
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
       tip: 10 ** 13,
       paymasterData: [],
     });
@@ -152,7 +161,10 @@ export class LiquidityPoolContractService {
       this.logger.log(`Token liquidity added. Transaction: ${txH}`);
       // Invalidate token balance cache
       await this.cacheManager.del(`liquidity:token:balance:${tokenAddress}`);
+      return txH;
     }
+    
+    throw new Error('Failed to add liquidity');
   }
 
   /**
@@ -181,8 +193,6 @@ export class LiquidityPoolContractService {
 
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
       tip: 10 ** 13,
       paymasterData: [],
     });
@@ -194,12 +204,18 @@ export class LiquidityPoolContractService {
   }
 
   /**
-   * Add token to liquidity bridge (replaces add_supported_token)
-   * The new contract uses add_token with more parameters
+   * Add a new token to the liquidity bridge
+   * @param tokenAddress The address of the token contract
+   * @param symbol The token symbol (e.g., 'USDC')
+   * @param feedId The Pragma feed ID for price oracles (as felt252)
+   * @param decimals Number of decimals for the token
+   * @param minAmount Minimum amount for swaps (in wei)
+   * @param maxAmount Maximum amount for swaps (in wei)
+   * @param isActive Whether the token is active for trading
    */
   async addSupportedToken(
+    tokenAddress: string,
     symbol: string,
-    address: string,
     feedId: string = '0x0',
     decimals: number = 18,
     minAmount: string = '0',
@@ -207,7 +223,7 @@ export class LiquidityPoolContractService {
     isActive: boolean = true,
   ) {
     if (!symbol) throw new Error('symbol is required');
-    if (!address) throw new Error('address is required');
+    if (!tokenAddress) throw new Error('tokenAddress is required');
 
     const symbolFelt = shortString.encodeShortString(symbol);
     const feedIdFelt = feedId.startsWith('0x') ? feedId : `0x${feedId}`;
@@ -218,7 +234,7 @@ export class LiquidityPoolContractService {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'add_token',
       calldata: [
-        address,
+        tokenAddress,
         symbolFelt,
         feedIdFelt,
         decimals,
@@ -234,18 +250,19 @@ export class LiquidityPoolContractService {
 
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
       tip: 10 ** 13,
       paymasterData: [],
     });
 
     const txR = await this.provider.waitForTransaction(txH);
     if (txR.isSuccess()) {
-      this.logger.log(`Token added successfully. Transaction: ${txH}`);
+      this.logger.log(`Token ${symbol} (${tokenAddress}) added successfully. Transaction: ${txH}`);
       // Invalidate supported token cache
       await this.cacheManager.del(`liquidity:token:${symbol}`);
+      return txH;
     }
+    
+    throw new Error('Failed to add token');
   }
 
   async getTokenDecimals(tokenAddress: string): Promise<number> {
@@ -293,75 +310,81 @@ export class LiquidityPoolContractService {
 
   /**
    * Swap fiat to token
+   * @param userContractAddress The user's contract address
+   * @param swapOrderId Unique swap order ID (will be converted to felt252)
+   * @param fiatSymbol Fiat currency symbol (e.g., 'USD')
+   * @param tokenSymbol Token symbol to receive (e.g., 'USDC')
+   * @param fiatAmount Fiat amount in smallest unit (e.g., cents for USD)
+   * @param tokenAmount Expected token amount in wei
+   * @param fee Fee amount in wei
    */
   async swapFiatToToken(
     userContractAddress: string,
+    swapOrderId: string,
     fiatSymbol: string,
     tokenSymbol: string,
-    fiatAmount: number,
-    swapOrderId: string,
-    tokenAmount: number,
-    fee: number,
+    fiatAmount: string,
+    tokenAmount: string,
+    fee: string,
   ) {
-    if (!userContractAddress)
-      throw new Error('userContractAddress is required');
+    if (!userContractAddress) throw new Error('userContractAddress is required');
+    if (!swapOrderId) throw new Error('swapOrderId is required');
     if (!fiatSymbol) throw new Error('fiatSymbol is required');
     if (!tokenSymbol) throw new Error('tokenSymbol is required');
     if (!fiatAmount) throw new Error('fiatAmount is required');
+    if (!tokenAmount) throw new Error('tokenAmount is required');
+    if (fee === undefined) throw new Error('fee is required');
 
-    const user =
-      await this.userService.getUserByCryptoAddress(userContractAddress);
+    const user = await this.userService.getUserByCryptoAddress(userContractAddress);
     if (!user) throw new Error('User not found');
 
-    const swapOrderIdToFelt = uuidToFelt252(swapOrderId);
-    const token = tokenSymbol.toUpperCase();
-
-    // The new contract expects token_symbol as felt252 (shortString encoded)
+    const swapOrderIdFelt = uuidToFelt252(swapOrderId);
     const fiatSymbolFelt = shortString.encodeShortString(fiatSymbol);
-    const tokenSymbolFelt = shortString.encodeShortString(token);
+    const tokenSymbolFelt = shortString.encodeShortString(tokenSymbol);
+    
     const fiatAmountU256 = uint256.bnToUint256(BigInt(fiatAmount));
+    const tokenAmountU256 = uint256.bnToUint256(BigInt(tokenAmount));
+    const feeU128 = BigInt(fee);
 
-    // Get token address to determine decimals
-    const supportedTokenAddress = await this.getSupportedTokenBySymbol(token);
-    const decimals = await this.getTokenDecimals(supportedTokenAddress);
-
-    // Convert token amount to wei units properly handling decimals
-    const amountInWei = convertToWei(tokenAmount.toString(), decimals);
-    const amountU256 = uint256.bnToUint256(amountInWei);
-
-    const swapCall = {
+    const call = {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'swap_fiat_to_token',
       calldata: [
         userContractAddress,
-        swapOrderIdToFelt,
+        swapOrderIdFelt,
         fiatSymbolFelt,
         tokenSymbolFelt,
         fiatAmountU256.low,
         fiatAmountU256.high,
-        amountU256.low,
-        amountU256.high,
-        fee,
+        tokenAmountU256.low,
+        tokenAmountU256.high,
+        feeU128,
       ],
     };
 
     try {
       const account = getDeployerWallet();
+      const { transaction_hash: txHash } = await account.execute(call, {
+        version: 3,
+        tip: 10 ** 13,
+        paymasterData: [],
+      });
 
-      const txResponse = await account.execute(swapCall);
-
+      this.logger.log(`Fiat to token swap initiated. Transaction: ${txHash}`);
+      
       return {
-        txHash: txResponse.transaction_hash,
+        txHash,
         status: 'pending',
         details: {
           from: fiatSymbol,
           to: tokenSymbol,
           amount: fiatAmount,
+          fee: fee.toString(),
         },
       };
     } catch (error) {
-      this.logger.error(`Swap failed ${fiatSymbol}->${tokenSymbol}: ${error.message}`, error.stack);
-      throw new Error(`Swap failed: ${error.message}`);
+      this.logger.error(`Fiat to token swap failed: ${error.message}`, error.stack);
+      throw new Error(`Fiat to token swap failed: ${error.message}`);
     }
   }
 
@@ -541,7 +564,8 @@ export class LiquidityPoolContractService {
 
   /**
    * Get token balance from liquidity pool with caching
-   * Updated to use token address instead of symbol
+   * @param tokenAddressOrSymbol Token address or symbol
+   * @returns Token balance in wei
    */
   async getTokenBalance(tokenAddressOrSymbol: string): Promise<bigint> {
     // If it's a symbol, try to get the address first
@@ -559,21 +583,246 @@ export class LiquidityPoolContractService {
     }
 
     const liquidityClass = await getClassAt(this.liquidityContractAddress);
-    if (!liquidityClass.abi)
+    if (!liquidityClass.abi) {
       throw new Error('No ABI found for liquidity contract');
+    }
 
     const liquidityContract = createNewContractInstance(
       liquidityClass.abi,
       this.liquidityContractAddress,
     );
 
-    const result = await liquidityContract.get_token_balance(tokenAddress);
-    const balance = BigInt(result);
+    try {
+      // First try the new contract's get_token_balance function
+      const result = await liquidityContract.get_token_balance(tokenAddress);
+      const balance = BigInt(result);
 
-    // Cache for 30 seconds
-    await this.cacheManager.set(cacheKey, balance.toString(), 30000);
+      // Cache for 30 seconds
+      await this.cacheManager.set(cacheKey, balance.toString(), 30000);
+      return balance;
+    } catch (error) {
+      // Fallback to reading from storage if the function doesn't exist
+      this.logger.warn(`get_token_balance failed, falling back to storage read: ${error.message}`);
+      throw new Error('Failed to get token balance: ' + error.message);
+    }
+  }
 
-    return balance;
+  /**
+   * Remove liquidity from the pool
+   * @param tokenAddress The address of the token to remove liquidity from
+   * @param liquidity The amount of liquidity tokens to burn
+   * @param minAmount The minimum amount of tokens to receive (slippage protection)
+   */
+  async removeLiquidity(
+    tokenAddress: string,
+    liquidity: string,
+    minAmount: string = '0'
+  ) {
+    if (!tokenAddress) throw new Error('tokenAddress is required');
+    if (!liquidity) throw new Error('liquidity amount is required');
+
+    const liquidityU256 = uint256.bnToUint256(BigInt(liquidity));
+    const minAmountU256 = uint256.bnToUint256(BigInt(minAmount));
+
+    const liquidityClass = await this.provider.getClassAt(
+      this.liquidityContractAddress,
+    );
+    if (!liquidityClass.abi) {
+      throw new Error('No ABI found for liquidity contract');
+    }
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'remove_liquidity',
+      calldata: [
+        tokenAddress,
+        liquidityU256.low,
+        liquidityU256.high,
+        minAmountU256.low,
+        minAmountU256.high,
+      ],
+    };
+
+    const account = getDeployerWallet();
+
+    const { transaction_hash: txH } = await account.execute(call, {
+      version: 3,
+      tip: 10 ** 13,
+      paymasterData: [],
+    });
+
+    const txR = await this.provider.waitForTransaction(txH);
+    if (txR.isSuccess()) {
+      this.logger.log(`Liquidity removed. Transaction: ${txH}`);
+      // Invalidate token balance cache
+      await this.cacheManager.del(`liquidity:token:balance:${tokenAddress}`);
+      return txH;
+    }
+    
+    throw new Error('Failed to remove liquidity');
+  }
+
+  /**
+   * Get pool information for a token
+   * @param tokenAddress The address of the token
+   */
+  async getPoolInfo(tokenAddress: string) {
+    if (!tokenAddress) throw new Error('tokenAddress is required');
+
+    const liquidityClass = await getClassAt(this.liquidityContractAddress);
+    if (!liquidityClass.abi) {
+      throw new Error('No ABI found for liquidity contract');
+    }
+
+    const liquidityContract = createNewContractInstance(
+      liquidityClass.abi,
+      this.liquidityContractAddress,
+    );
+
+    try {
+      return await liquidityContract.get_pool_info(tokenAddress);
+    } catch (error) {
+      this.logger.error(`Failed to get pool info: ${error.message}`, error.stack);
+      throw new Error(`Failed to get pool info: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get token information
+   * @param tokenAddress The address of the token
+   */
+  async getTokenInfo(tokenAddress: string) {
+    if (!tokenAddress) throw new Error('tokenAddress is required');
+
+    const liquidityClass = await getClassAt(this.liquidityContractAddress);
+    if (!liquidityClass.abi) {
+      throw new Error('No ABI found for liquidity contract');
+    }
+
+    const liquidityContract = createNewContractInstance(
+      liquidityClass.abi,
+      this.liquidityContractAddress,
+    );
+
+    try {
+      return await liquidityContract.get_token_info(tokenAddress);
+    } catch (error) {
+      this.logger.error(`Failed to get token info: ${error.message}`, error.stack);
+      throw new Error(`Failed to get token info: ${error.message}`);
+    }
+  }
+
+  /**
+   * Calculate the amount of output tokens for a given input amount
+   * @param fromToken The address of the input token
+   * @param toToken The address of the output token
+   * @param fromAmount The amount of input tokens (in wei)
+   */
+  async calculateSwapAmount(
+    fromToken: string,
+    toToken: string,
+    fromAmount: string
+  ) {
+    if (!fromToken) throw new Error('fromToken is required');
+    if (!toToken) throw new Error('toToken is required');
+    if (!fromAmount) throw new Error('fromAmount is required');
+
+    const fromAmountU256 = uint256.bnToUint256(BigInt(fromAmount));
+
+    const liquidityClass = await getClassAt(this.liquidityContractAddress);
+    if (!liquidityClass.abi) {
+      throw new Error('No ABI found for liquidity contract');
+    }
+
+    const liquidityContract = createNewContractInstance(
+      liquidityClass.abi,
+      this.liquidityContractAddress,
+    );
+
+    try {
+      const result = await liquidityContract.calculate_swap_amount(
+        fromToken,
+        toToken,
+        fromAmountU256.low,
+        fromAmountU256.high
+      );
+      
+      return uint256.uint256ToBN({
+        low: result.low,
+        high: result.high,
+      }).toString();
+    } catch (error) {
+      this.logger.error(`Failed to calculate swap amount: ${error.message}`, error.stack);
+      throw new Error(`Failed to calculate swap amount: ${error.message}`);
+    }
+  }
+
+  /**
+   * Set the fee rate in basis points (1% = 100)
+   * @param feeBps The fee rate in basis points (e.g., 10 for 0.1%)
+   */
+  async setFeeBps(feeBps: number) {
+    if (feeBps < 0 || feeBps > 10000) {
+      throw new Error('Fee must be between 0 and 10000 (100%)');
+    }
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'set_fee_bps',
+      calldata: [feeBps],
+    };
+
+    const account = getDeployerWallet();
+
+    const { transaction_hash: txH } = await account.execute(call, {
+      version: 3,
+      tip: 10 ** 13,
+      paymasterData: [],
+    });
+
+    const txR = await this.provider.waitForTransaction(txH);
+    if (txR.isSuccess()) {
+      this.logger.log(`Fee set to ${feeBps} bps. Transaction: ${txH}`);
+      // Invalidate fee cache
+      await this.cacheManager.del('liquidity:fee:bps');
+      return txH;
+    }
+    
+    throw new Error('Failed to set fee');
+  }
+
+  /**
+   * Withdraw collected fees
+   * @param tokenAddress The address of the token to withdraw fees for
+   * @param amount The amount to withdraw (in wei)
+   */
+  async withdrawFees(tokenAddress: string, amount: string) {
+    if (!tokenAddress) throw new Error('tokenAddress is required');
+    if (!amount) throw new Error('amount is required');
+
+    const amountU256 = uint256.bnToUint256(BigInt(amount));
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'withdraw_fees',
+      calldata: [tokenAddress, amountU256.low, amountU256.high],
+    };
+
+    const account = getDeployerWallet();
+
+    const { transaction_hash: txH } = await account.execute(call, {
+      version: 3,
+      tip: 10 ** 13,
+      paymasterData: [],
+    });
+
+    const txR = await this.provider.waitForTransaction(txH);
+    if (txR.isSuccess()) {
+      this.logger.log(`Withdrew ${amount} in fees. Transaction: ${txH}`);
+      return txH;
+    }
+    
+    throw new Error('Failed to withdraw fees');
   }
 
   /**
@@ -645,8 +894,6 @@ export class LiquidityPoolContractService {
 
       const { transaction_hash: txH } = await account.execute(call, {
         version: 3,
-        maxFee: 10 ** 15,
-        feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
         tip: 10 ** 13,
         paymasterData: [],
       });
@@ -694,8 +941,6 @@ export class LiquidityPoolContractService {
 
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
       tip: 10 ** 13,
       paymasterData: [],
     });
@@ -728,8 +973,6 @@ export class LiquidityPoolContractService {
 
     const { transaction_hash: txH } = await account.execute(call, {
       version: 3,
-      maxFee: 10 ** 15,
-      feeDataAvailabilityMode: RPC.EDataAvailabilityMode.L1,
       tip: 10 ** 13,
       paymasterData: [],
     });

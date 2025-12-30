@@ -141,7 +141,7 @@
         "type": "core::starknet::contract_address::ContractAddress"
       },
       {
-        "name": "currency",
+        "name": "tokenSymbol",
         "type": "core::felt252"
       },
       {
@@ -434,7 +434,7 @@
             "type": "core::starknet::contract_address::ContractAddress"
           },
           {
-            "name": "currency",
+            "name": "tokenSymbol",
             "type": "core::felt252"
           }
         ],
@@ -508,7 +508,7 @@
             "type": "core::starknet::contract_address::ContractAddress"
           },
           {
-            "name": "currency",
+            "name": "tokenSymbol",
             "type": "core::felt252"
           },
           {
@@ -536,7 +536,7 @@
             "type": "core::starknet::contract_address::ContractAddress"
           },
           {
-            "name": "currency",
+            "name": "tokenSymbol",
             "type": "core::felt252"
           },
           {
@@ -556,7 +556,7 @@
             "type": "core::starknet::contract_address::ContractAddress"
           },
           {
-            "name": "currency",
+            "name": "tokenSymbol",
             "type": "core::felt252"
           },
           {
@@ -588,7 +588,7 @@
         "name": "create_reserve_snapshot",
         "inputs": [
           {
-            "name": "currency",
+            "name": "tokenSymbol",
             "type": "core::felt252"
           },
           {
@@ -1074,7 +1074,7 @@
     "kind": "struct",
     "members": [
       {
-        "name": "currency",
+        "name": "tokenSymbol",
         "type": "core::felt252",
         "kind": "data"
       },
@@ -1106,7 +1106,7 @@
         "kind": "data"
       },
       {
-        "name": "currency",
+        "name": "tokenSymbol",
         "type": "core::felt252",
         "kind": "data"
       },
@@ -1128,7 +1128,7 @@
         "kind": "data"
       },
       {
-        "name": "currency",
+        "name": "tokenSymbol",
         "type": "core::felt252",
         "kind": "data"
       },
@@ -1162,7 +1162,7 @@
     "kind": "struct",
     "members": [
       {
-        "name": "currency",
+        "name": "tokenSymbol",
         "type": "core::felt252",
         "kind": "data"
       },

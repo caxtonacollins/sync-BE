@@ -1,20 +1,20 @@
 import Decimal from 'decimal.js';
 
 /**
- * Fintech Industry Standard Currency Utilities
+ * Fintech Industry Standard tokenSymbol Utilities
  *
- * This module provides standardized currency handling following fintech best practices:
+ * This module provides standardized tokenSymbol handling following fintech best practices:
  * - All amounts use Decimal.js for precision
- * - Standardized decimal places per currency
+ * - Standardized decimal places per tokenSymbol
  * - Proper rounding strategies
- * - Currency-specific formatting
+ * - tokenSymbol-specific formatting
  */
 
 /**
  * Standard decimal places for currencies
  * Following ISO 4217 standards and industry best practices
  */
-export const CURRENCY_DECIMALS: Record<string, number> = {
+export const tokenSymbol_DECIMALS: Record<string, number> = {
   // Fiat Currencies (Standard: 2 decimal places)
   NGN: 2, // Nigerian Naira - Kobo
   USD: 2, // US Dollar - Cents
@@ -34,21 +34,20 @@ export const CURRENCY_DECIMALS: Record<string, number> = {
   DAI: 18, // Dai Stablecoin
   WBTC: 8, // Wrapped Bitcoin (8 decimals)
   BTC: 8, // Bitcoin (8 decimals)
-  SYNC: 18, // Sync Token
-  sNGN: 2, // Sync Naira (2 decimals)
+  sNGN: 18, // Sync Naira (18 decimals)
 };
 
 /**
- * Get decimal places for a currency
+ * Get decimal places for a tokenSymbol
  */
-export function getCurrencyDecimals(currency: string): number {
-  return CURRENCY_DECIMALS[currency.toUpperCase()] ?? 2;
+export function getTokenSymbolDecimals(tokenSymbol: string): number {
+  return tokenSymbol_DECIMALS[tokenSymbol.toUpperCase()] ?? 2;
 }
 
 /**
- * Check if currency is fiat
+ * Check if tokenSymbol is fiat
  */
-export function isFiatCurrency(currency: string): boolean {
+export function isFiattokenSymbol(tokenSymbol: string): boolean {
   const fiatCurrencies = [
     'NGN',
     'USD',
@@ -60,14 +59,14 @@ export function isFiatCurrency(currency: string): boolean {
     'UGX',
     'JPY',
   ];
-  return fiatCurrencies.includes(currency.toUpperCase());
+  return fiatCurrencies.includes(tokenSymbol.toUpperCase());
 }
 
 /**
- * Check if currency is crypto
+ * Check if tokenSymbol is crypto
  */
-export function isCryptoCurrency(currency: string): boolean {
-  return !isFiatCurrency(currency);
+export function isCrypto(tokenSymbol: string): boolean {
+  return !isFiattokenSymbol(tokenSymbol);
 }
 
 /**
@@ -75,9 +74,9 @@ export function isCryptoCurrency(currency: string): boolean {
  */
 export function toSmallestUnit(
   amount: string | number | Decimal,
-  currency: string,
+  tokenSymbol: string,
 ): bigint {
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
   const amountDecimal =
     typeof amount === 'string' || typeof amount === 'number'
       ? new Decimal(amount)
@@ -94,9 +93,9 @@ export function toSmallestUnit(
  */
 export function fromSmallestUnit(
   amount: bigint | string,
-  currency: string,
+  tokenSymbol: string,
 ): Decimal {
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
   const amountBigInt = typeof amount === 'string' ? BigInt(amount) : amount;
   const amountDecimal = new Decimal(amountBigInt.toString());
   const divisor = new Decimal(10).pow(decimals);
@@ -110,7 +109,7 @@ export function fromSmallestUnit(
  */
 export function formatAmount(
   amount: string | number | Decimal,
-  currency: string,
+  tokenSymbol: string,
   options?: {
     showSymbol?: boolean;
     useGrouping?: boolean;
@@ -118,13 +117,13 @@ export function formatAmount(
     maximumFractionDigits?: number;
   },
 ): string {
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
   const amountDecimal =
     typeof amount === 'string' || typeof amount === 'number'
       ? new Decimal(amount)
       : amount;
 
-  // Round to currency decimals using ROUND_HALF_UP
+  // Round to tokenSymbol decimals using ROUND_HALF_UP
   const rounded = amountDecimal.toDecimalPlaces(
     decimals,
     Decimal.ROUND_HALF_UP,
@@ -147,7 +146,7 @@ export function formatAmount(
     formatted = parts.join('.');
   }
 
-  // Add currency symbol
+  // Add tokenSymbol symbol
   if (showSymbol) {
     const symbols: Record<string, string> = {
       NGN: '₦',
@@ -160,7 +159,7 @@ export function formatAmount(
       BTC: '₿',
     };
 
-    const symbol = symbols[currency.toUpperCase()] || currency.toUpperCase();
+    const symbol = symbols[tokenSymbol.toUpperCase()] || tokenSymbol.toUpperCase();
     formatted = `${symbol}${formatted}`;
   }
 
@@ -172,7 +171,7 @@ export function formatAmount(
  */
 export function parseAmount(
   amount: string | number,
-  currency: string,
+  tokenSymbol: string,
 ): Decimal {
   const amountStr = amount.toString().trim();
 
@@ -180,14 +179,20 @@ export function parseAmount(
     throw new Error(`Invalid amount: ${amountStr}`);
   }
 
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
   const parsed = new Decimal(amountStr);
 
-  // Validate decimal places
-  const decimalPlaces = parsed.decimalPlaces();
-  if (decimalPlaces > decimals) {
+  // Special handling for sNGN which should support 18 decimal places
+  if (tokenSymbol === 'sNGN' && parsed.decimalPlaces() > 18) {
     throw new Error(
-      `Amount has ${decimalPlaces} decimal places, but ${currency} only supports ${decimals}`,
+      `Amount has ${parsed.decimalPlaces()} decimal places, but sNGN only supports 18`,
+    );
+  }
+  
+  // Validate decimal places for other tokens
+  if (tokenSymbol !== 'sNGN' && parsed.decimalPlaces() > decimals) {
+    throw new Error(
+      `Amount has ${parsed.decimalPlaces()} decimal places, but ${tokenSymbol} only supports ${decimals}`,
     );
   }
 
@@ -200,7 +205,7 @@ export function parseAmount(
 export function addAmounts(
   amount1: string | number | Decimal,
   amount2: string | number | Decimal,
-  currency: string,
+  tokenSymbol: string,
 ): Decimal {
   const a1 =
     typeof amount1 === 'string' || typeof amount1 === 'number'
@@ -212,7 +217,7 @@ export function addAmounts(
       : amount2;
 
   const result = a1.plus(a2);
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
 
   return result.toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP);
 }
@@ -223,7 +228,7 @@ export function addAmounts(
 export function subtractAmounts(
   amount1: string | number | Decimal,
   amount2: string | number | Decimal,
-  currency: string,
+  tokenSymbol: string,
 ): Decimal {
   const a1 =
     typeof amount1 === 'string' || typeof amount1 === 'number'
@@ -235,7 +240,7 @@ export function subtractAmounts(
       : amount2;
 
   const result = a1.minus(a2);
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
 
   return result.toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP);
 }
@@ -246,7 +251,7 @@ export function subtractAmounts(
 export function multiplyAmount(
   amount: string | number | Decimal,
   multiplier: string | number | Decimal,
-  currency: string,
+  tokenSymbol: string,
 ): Decimal {
   const a =
     typeof amount === 'string' || typeof amount === 'number'
@@ -258,7 +263,7 @@ export function multiplyAmount(
       : multiplier;
 
   const result = a.mul(m);
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
 
   return result.toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP);
 }
@@ -269,7 +274,7 @@ export function multiplyAmount(
 export function divideAmount(
   amount: string | number | Decimal,
   divisor: string | number | Decimal,
-  currency: string,
+  tokenSymbol: string,
 ): Decimal {
   const a =
     typeof amount === 'string' || typeof amount === 'number'
@@ -285,7 +290,7 @@ export function divideAmount(
   }
 
   const result = a.div(d);
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
 
   return result.toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP);
 }
@@ -313,14 +318,14 @@ export function compareAmounts(
 }
 
 /**
- * Get database precision for currency
+ * Get database precision for tokenSymbol
  * Returns: { precision: number, scale: number }
  */
-export function getDatabasePrecision(currency: string): {
+export function getDatabasePrecision(tokenSymbol: string): {
   precision: number;
   scale: number;
 } {
-  if (isFiatCurrency(currency)) {
+  if (isFiattokenSymbol(tokenSymbol)) {
     return { precision: 20, scale: 2 }; // Decimal(20, 2) for fiat
   } else {
     return { precision: 30, scale: 18 }; // Decimal(30, 18) for crypto
@@ -333,9 +338,9 @@ export function getDatabasePrecision(currency: string): {
  */
 export function toApiString(
   amount: Decimal | string | number,
-  currency: string,
+  tokenSymbol: string,
 ): string {
-  const decimals = getCurrencyDecimals(currency);
+  const decimals = getTokenSymbolDecimals(tokenSymbol);
   const amountDecimal =
     typeof amount === 'string' || typeof amount === 'number'
       ? new Decimal(amount)

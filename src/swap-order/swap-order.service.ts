@@ -30,7 +30,18 @@ export class SwapOrderService {
 
   async create(dto: CreateSwapOrderDto) {
     return this.prisma.swapOrder.create({
-      data: { ...dto, fee: dto.fee ?? 0 },
+      data: {
+        ...dto,
+        amount: new Prisma.Decimal(dto.amount),
+        fee: dto.fee ? new Prisma.Decimal(dto.fee) : new Prisma.Decimal(0),
+        rate: dto.rate ? new Prisma.Decimal(dto.rate) : null,
+        status: dto.status || 'pending',
+        swapType: dto.swapType,
+        reference: dto.reference,
+        userId: dto.userId,
+        from: dto.from,
+        to: dto.to,
+      },
     });
   }
 
@@ -39,14 +50,14 @@ export class SwapOrderService {
       const { page = 1, limit = 10, ...where } = filter;
       const skip = (page - 1) * limit;
       const prismaWhere: Prisma.SwapOrderWhereInput = {};
-      if (where.fromCurrency) prismaWhere.fromCurrency = where.fromCurrency;
-      if (where.toCurrency) prismaWhere.toCurrency = where.toCurrency;
+      if (where.from) prismaWhere.from = where.from;
+      if (where.to) prismaWhere.to = where.to;
       if (where.status) prismaWhere.status = where.status;
       if (where.userId) prismaWhere.userId = where.userId;
       if (where.minAmount || where.maxAmount) {
-        prismaWhere.fromAmount = {};
-        if (where.minAmount) prismaWhere.fromAmount.gte = where.minAmount;
-        if (where.maxAmount) prismaWhere.fromAmount.lte = where.maxAmount;
+        prismaWhere.amount = {};
+        if (where.minAmount) prismaWhere.amount.gte = where.minAmount;
+        if (where.maxAmount) prismaWhere.amount.lte = where.maxAmount;
       }
 
       if (where.fromDate || where.toDate) {
@@ -92,64 +103,13 @@ export class SwapOrderService {
     return await this.prisma.swapOrder.delete({ where: { id } });
   }
 
-  async executeSwap(dto: CreateSwapOrderDto) {
-    const swapOrder = await this.create(dto);
 
-    try {
-      // Check liquidity and route to appropriate provider
-      const routingResult = await this.dexIntegrationService.routeSwap(
-        dto.fromCurrency,
-        dto.toCurrency,
-        dto.fromAmount,
-        dto.swapType,
-      );
-
-      this.logger.log(
-        `Swap routing decision: Provider=${routingResult.provider}, HasLiquidity=${routingResult.liquidityCheck.hasSufficientLiquidity}`,
-      );
-
-      // Update swap order with provider info
-      await this.update(swapOrder.id, {
-        metadata: {
-          provider: routingResult.provider,
-          liquidityCheck: {
-            available: routingResult.liquidityCheck.availableLiquidity.toString(),
-            required: routingResult.liquidityCheck.requiredLiquidity.toString(),
-          },
-        },
-      });
-
-      if (routingResult.provider === 'sync') {
-        // Use Sync liquidity pool
-        if (dto.swapType === SwapType.TOKENTOFIAT) {
-          await this.executeTokenToFiatSwap(swapOrder);
-        } else if (dto.swapType === SwapType.FIATTOTOKEN) {
-          await this.executeFiatToTokenSwap(swapOrder);
-        } else {
-          throw new Error('Invalid swap type');
-        }
-      } else {
-        // Route to external DEX (Uniswap or Starknet DEX)
-        this.logger.log(
-          `Routing swap to external DEX: ${routingResult.provider}`,
-        );
-        await this.executeDexSwap(swapOrder, routingResult);
-      }
-    } catch (error) {
-      this.logger.error(`Swap execution failed for order ${swapOrder.id}`);
-      await this.update(swapOrder.id, { status: 'failed' });
-      throw error;
-    }
-
-    return swapOrder;
-  }
-
-  private async executeTokenToFiatSwap(swapOrder: any) {
+  private async executeTokenSwap(swapOrder: any) {
     const {
       id: swapOrderId,
-      fromCurrency,
-      toCurrency,
-      fromAmount,
+      from,
+      to,
+      amount,
       userId,
     } = swapOrder;
     this.logger.log(`Executing Token-to-Fiat swap for order ${swapOrder.id}`);
@@ -167,26 +127,26 @@ export class SwapOrderService {
     }
 
     const balance = await this.TokenContractService.getAccountBalance(
-      fromCurrency,
+      from,
       cryptoWalletAddress,
     );
 
-    if (parseFloat(balance) < fromAmount) {
+    if (parseFloat(balance) < amount) {
       throw new Error(
-        `Insufficient token balance. Required: ${fromAmount}, Available: ${balance}`,
+        `Insufficient token balance. Required: ${amount}, Available: ${balance}`,
       );
     }
 
     this.logger.log(
-      `Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`,
+      `Initiating swap on StarkNet: ${amount} ${from} -> ${to}`,
     );
 
     const tokenTransferResult =
       await this.LiquidityPoolContractService.swapTokenToFiat(
         cryptoWalletAddress,
-        toCurrency,
-        fromCurrency,
-        fromAmount,
+        to,
+        from,
+        amount,
         swapOrderId,
       );
 
@@ -210,10 +170,10 @@ export class SwapOrderService {
     const {
       id: swapOrderId,
       userId,
-      fromAmount,
-      fromCurrency,
+      amount,
+      from,
       toAmount,
-      toCurrency,
+      to,
     } = swapOrder;
 
     const user = await this.userService.findOne(userId);
@@ -237,31 +197,31 @@ export class SwapOrderService {
     // calculate the fee to be paid
     const fee = await this.LiquidityPoolContractService.getFeeBPS();
     const feeToNumber = Number(fee);
-    const feeAmount = (fromAmount * feeToNumber) / 100;
+    const feeAmount = (amount * feeToNumber) / 100;
 
     this.logger.log(
-      `Charging ${fromAmount} ${fromCurrency} from user's fiat account`,
+      `Charging ${amount} ${from} from user's fiat account`,
     );
-    const amountToCharge = fromAmount + feeAmount;
-    await this.paymentService.charge(user.id, amountToCharge, fromCurrency);
+    const amountToCharge = amount + feeAmount;
+    await this.paymentService.charge(user.id, amountToCharge, from);
 
     this.logger.log(
-      `Successfully charged ${fromAmount} ${fromCurrency} from user ${userId}`,
+      `Successfully charged ${amount} ${from} from user ${userId}`,
     );
 
     this.logger.log(
-      `Initiating swap on StarkNet: ${fromAmount} ${fromCurrency} -> ${toCurrency}`,
+      `Initiating swap on StarkNet: ${amount} ${from} -> ${to}`,
     );
 
     const tokenTransferResult =
       await this.LiquidityPoolContractService.swapFiatToToken(
         cryptoWalletAddress,
-        fromCurrency,
-        toCurrency,
-        fromAmount,
+        from,
+        to,
+        amount,
         swapOrderId,
         toAmount,
-        feeToNumber,
+        feeToNumber.toString(),
       );
 
     this.logger.log(
@@ -294,23 +254,16 @@ export class SwapOrderService {
       return;
     }
 
-    if (swapOrder.swapType !== 'TOKENTOFIAT') {
-      this.logger.log(
-        `Swap order ${swapOrderId} is not a Token-to-Fiat swap. Skipping payout.`,
-      );
-      return;
-    }
-
     try {
       // Initiate payout
       this.logger.log(
-        `Initiating fiat payout of ${swapOrder.toAmount} ${swapOrder.toCurrency} to user ${swapOrder.userId}`,
+        `Initiating fiat payout of ${swapOrder.amount} ${swapOrder.from} to user ${swapOrder.userId}`,
       );
 
       const payoutResult = await this.paymentService.initiatePayout(
         swapOrder.userId,
-        Number(new Decimal(swapOrder.toAmount || 0).toNumber()),
-        swapOrder.toCurrency,
+        Number(new Decimal(swapOrder.amount || 0).toNumber()),
+        swapOrder.to,
       );
 
       this.logger.log(
@@ -340,14 +293,14 @@ export class SwapOrderService {
   private async executeDexSwap(swapOrder: any, routingResult: any) {
     const {
       id: swapOrderId,
-      fromCurrency,
-      toCurrency,
-      fromAmount,
+      from,
+      to,
+      amount,
       userId,
     } = swapOrder;
 
     this.logger.log(
-      `Executing DEX swap for order ${swapOrderId}: ${fromAmount} ${fromCurrency} -> ${toCurrency}`,
+      `Executing DEX swap for order ${swapOrderId}: ${amount} ${from} -> ${to}`,
     );
 
     const cryptoWallet = await this.walletService.getCryptoWallets(userId);
@@ -369,9 +322,9 @@ export class SwapOrderService {
       // For Starknet, use JediSwap, Ekubo, or bridge to Ethereum for Uniswap
       const dexResult = await this.dexIntegrationService.executeDexSwap(
         cryptoWalletAddress,
-        fromCurrency,
-        toCurrency,
-        fromAmount,
+        from,
+        to,
+        amount,
         quote.toAmount * 0.99, // 1% slippage tolerance
       );
 
@@ -393,8 +346,187 @@ export class SwapOrderService {
     }
   }
 
-  private isKnownToken(currency: string): boolean {
-    const knownTokens = ['ETH', 'STRK', 'USDC', 'sNGN']; // Add sNGN
-    return knownTokens.includes(currency.toUpperCase());
+  /**
+   * Execute swap order - handles both token-to-token and stable token swaps
+   */
+  async executeSwap(dto: CreateSwapOrderDto) {
+    this.logger.log(
+      `Executing swap: ${dto.amount} ${dto.from} -> ${dto.to} for user ${dto.userId}`,
+    );
+
+    // Map frontend field names to backend field names if needed
+    const from = dto.from.toUpperCase();
+    const to = dto.to.toUpperCase();
+
+    // Check if both are known tokens (including stable tokens)
+    const isFromToken = this.isKnownToken(from);
+    const isToToken = this.isKnownToken(to);
+
+    if (!isFromToken || !isToToken) {
+      throw new Error(
+        `Unsupported token pair: ${from} -> ${to}. Both tokens must be supported.`,
+      );
+    }
+
+    // Create swap order
+    const swapOrder = await this.create({
+      ...dto,
+      from,
+      to,
+      reference: dto.reference || `SWAP_${Date.now()}_${dto.userId}`,
+    });
+
+    try {
+      // Execute token-to-token swap (including stable tokens)
+      await this.executeTokenToTokenSwap({
+        ...swapOrder,
+        toAmount: dto.toAmount,
+      });
+
+      return {
+        id: swapOrder.id,
+        status: swapOrder.status,
+        transactionHash: swapOrder.transactionHash,
+        message: 'Swap order created and execution initiated',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to execute swap ${swapOrder.id}: ${error.message}`,
+        error.stack,
+      );
+
+      // Update order status to failed
+      await this.update(swapOrder.id, {
+        status: 'failed',
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Execute token-to-token swap (handles all tokens including stable tokens like sNGN)
+   */
+  private async executeTokenToTokenSwap(swapOrder: any) {
+    const {
+      id: swapOrderId,
+      from,
+      to,
+      amount,
+      toAmount,
+      userId,
+    } = swapOrder;
+
+    this.logger.log(
+      `Executing Token-to-Token swap: ${amount} ${from} -> ${toAmount || '?'} ${to}`,
+    );
+
+    const cryptoWallet = await this.walletService.getCryptoWallets(userId);
+    if (!cryptoWallet || cryptoWallet.length === 0) {
+      throw new Error('User does not have a crypto wallet');
+    }
+
+    const isRegisteredToLiquidity = cryptoWallet[0].isRegisteredToLiquidity;
+    const cryptoWalletAddress = cryptoWallet[0].address;
+
+    if (!isRegisteredToLiquidity) {
+      throw new Error('User is not registered to contract');
+    }
+
+    // Check balance for the source token
+    const balance = await this.TokenContractService.getAccountBalance(
+      from,
+      cryptoWalletAddress,
+    );
+
+    if (parseFloat(balance) < amount) {
+      throw new Error(
+        `Insufficient ${from} balance. Required: ${amount}, Available: ${balance}`,
+      );
+    }
+
+    // Calculate fee
+    const fee = await this.LiquidityPoolContractService.getFeeBPS();
+    const feeToNumber = Number(fee);
+    const feeAmount = (amount * feeToNumber) / 10000;
+
+    // For stable tokens (sNGN) to other tokens, use swap_fiat_to_token
+    // For other tokens to stable tokens, use swap_token_to_fiat
+    // For token-to-token, we'll use the appropriate method based on which is stable
+    const isFromStable = from === 'sNGN';
+    const isToStable = to === 'sNGN';
+
+    let tokenTransferResult;
+
+    if (isFromStable && !isToStable) {
+      // sNGN to token (e.g., sNGN -> USDC)
+      this.logger.log(
+        `Swapping stable token ${from} to token ${to} via swap_fiat_to_token`,
+      );
+
+      tokenTransferResult =
+        await this.LiquidityPoolContractService.swapFiatToToken(
+          cryptoWalletAddress,
+          from, // fiatSymbol (sNGN)
+          to, // tokenSymbol
+          amount,
+          swapOrderId,
+          toAmount || amount, // estimated token amount
+          feeToNumber.toString(),
+        );
+    } else if (!isFromStable && isToStable) {
+      // Token to sNGN (e.g., USDC -> sNGN)
+      this.logger.log(
+        `Swapping token ${from} to stable token ${to} via swap_token_to_fiat`,
+      );
+
+      tokenTransferResult =
+        await this.LiquidityPoolContractService.swapTokenToFiat(
+          cryptoWalletAddress,
+          to, // fiatSymbol (sNGN)
+          from, // tokenSymbol
+          amount.toString(),
+          swapOrderId,
+        );
+    } else {
+      // Token to token (e.g., USDC -> ETH)
+      // Use swap_token_to_fiat first, then swap_fiat_to_token
+      // Or use a direct token-to-token method if available
+      // For now, we'll route through the liquidity pool
+      this.logger.log(
+        `Swapping token ${from} to token ${to} via liquidity pool`,
+      );
+
+      // For token-to-token swaps, we can use the same methods
+      // by treating one as "fiat" in the contract context
+      // But ideally, we should have a direct token-to-token swap
+      // For MVP, we'll use swap_token_to_fiat with the target as "fiat"
+      tokenTransferResult =
+        await this.LiquidityPoolContractService.swapTokenToFiat(
+          cryptoWalletAddress,
+          to, // treated as fiat in contract
+          from, // tokenSymbol
+          amount.toString(),
+          swapOrderId,
+        );
+    }
+
+    this.logger.log(
+      `Token swap transaction sent: ${tokenTransferResult.txHash}`,
+    );
+
+    await this.update(swapOrder.id, {
+      status: 'processing',
+      transactionHash: tokenTransferResult.txHash,
+    });
+
+    this.logger.log(
+      `Swap order ${swapOrder.id} is now processing. Waiting for StarkNet event confirmation...`,
+    );
+  }
+
+  private isKnownToken(tokenSymbol: string): boolean {
+    const knownTokens = ['ETH', 'STRK', 'USDC', 'sNGN', 'SNGN', 'SYNC']; // Add sNGN
+    return knownTokens.includes(tokenSymbol.toUpperCase());
   }
 }

@@ -58,7 +58,7 @@ export class TransferService {
         status: 'processing',
         amount: amount,
         netAmount: amount, // Assuming no fee for now
-        currency: token,
+        tokenSymbol: token,
         reference: `TRANSFER_${Date.now()}`,
         transactionHash: tx.transaction_hash,
       });
@@ -88,7 +88,7 @@ export class TransferService {
       status: 'processing',
       amount: dto.amount,
       netAmount: dto.amount, // Assuming no fee for now
-      currency: dto.token,
+      tokenSymbol: dto.token,
       reference: `TRANSFER_${Date.now()}`,
     });
 

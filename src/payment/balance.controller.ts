@@ -17,6 +17,7 @@ class TransferDto {
   fromAccountNumber: string;
   toAccountNumber: string;
   amount: number;
+  tokenSymbol: string;
 }
 
 @Controller('virtual-accounts')
@@ -31,29 +32,10 @@ export class BalanceController {
     return this.balanceService.getBalance(accountNumber);
   }
 
-  @Get(':accountNumber/transactions')
-  async getTransactionHistory(
-    @Param('accountNumber') accountNumber: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('type') type?: string,
-    @Query('status') status?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.balanceService.getTransactionHistory(accountNumber, {
-      startDate: startDate ? new Date(startDate) : undefined,
-      endDate: endDate ? new Date(endDate) : undefined,
-      type,
-      status,
-      page: page ? parseInt(page, 10) : undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
-    });
-  }
 
   @Post('transfer')
   async transferBetweenAccounts(@Body() transferDto: TransferDto) {
-    const { fromAccountNumber, toAccountNumber, amount } = transferDto;
+    const { fromAccountNumber, toAccountNumber, amount, tokenSymbol } = transferDto;
 
     if (amount <= 0) {
       throw new BadRequestException('Amount must be greater than 0');
@@ -63,12 +45,7 @@ export class BalanceController {
       fromAccountNumber,
       toAccountNumber,
       amount,
+      tokenSymbol
     );
-  }
-
-  @Post(':accountNumber/reconcile')
-  async reconcileAccount(@Param('accountNumber') accountNumber: string) {
-    await this.balanceService.reconcileWithFlutterwave(accountNumber);
-    return { message: 'Account reconciled successfully' };
   }
 }

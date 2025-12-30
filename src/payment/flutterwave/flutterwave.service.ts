@@ -1,7 +1,6 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { VirtualAccountUser } from '../../types/domain';
-import axios, { AxiosError } from 'axios';
-import { WalletService } from 'src/transaction/wallet/wallet.service';
+import axios from 'axios';
 import { AuditLogService } from 'src/audit-log/audit-log.service';
 import { BalanceService } from 'src/payment/balance.service';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -9,11 +8,11 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export interface ExchangeRateResponse {
   rate: number;
   source: {
-    currency: string;
+    tokenSymbol: string;
     amount: number;
   };
   destination: {
-    currency: string;
+    tokenSymbol: string;
     amount: number;
   };
 }
@@ -24,7 +23,7 @@ export interface VirtualAccountDetails {
   account_name: string;
   bank_name: string;
   bank_code: string;
-  currency: string;
+  tokenSymbol: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -49,7 +48,6 @@ export class FlutterwaveService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        fiatAccounts: true,
         cryptoWallets: true,
       },
     });
@@ -98,9 +96,9 @@ export class FlutterwaveService {
 
   /**
    * Fetches the exchange rate between two currencies
-   * @param sourceCurrency - 3-letter ISO currency code of the source currency (e.g., 'KES')
-   * @param destinationCurrency - 3-letter ISO currency code of the destination currency (e.g., 'USD')
-   * @param amount - The amount in the destination currency to convert from
+   * @param sourcetokenSymbol - 3-letter ISO tokenSymbol code of the source tokenSymbol (e.g., 'KES')
+   * @param destinationtokenSymbol - 3-letter ISO tokenSymbol code of the destination tokenSymbol (e.g., 'USD')
+   * @param amount - The amount in the destination tokenSymbol to convert from
    * @returns Promise with the exchange rate and converted amounts
    */
   async getExchangeRate(
@@ -150,10 +148,10 @@ export class FlutterwaveService {
   /**
    * Creates a virtual account for a user
    * @param user - The user to create the account for
-   * @param currency - The currency for the virtual account
+   * @param tokenSymbol - The tokenSymbol for the virtual account
    * @returns The created virtual account details
    */
-  private async createVirtualAccount(user: VirtualAccountUser, currency: string): Promise<VirtualAccountDetails | null> {
+  private async createVirtualAccount(user: VirtualAccountUser, tokenSymbol: string): Promise<VirtualAccountDetails | null> {
     if (!process.env.FLUTTERWAVE_CREATE_VIRTUAL_ACCOUNT_URL) {
       throw new Error('Flutterwave create virtual account URL not found');
     }
@@ -164,7 +162,7 @@ export class FlutterwaveService {
     try {
       const payload = JSON.stringify({
         email: user.email,
-        currency,
+        tokenSymbol,
         amount: 0,
         firstname: user.firstName,
         lastname: user.lastName,
@@ -203,7 +201,7 @@ export class FlutterwaveService {
           account_name: response.data.account_name,
           bank_name: response.data.bank_name,
           bank_code: response.data.bank_code,
-          currency: response.data.currency,
+          tokenSymbol: response.data.tokenSymbol,
           status: response.data.status,
           created_at: response.data.created_at,
           updated_at: response.data.updated_at,
@@ -236,8 +234,8 @@ export class FlutterwaveService {
    */
   async createVirtualAccounts(user: VirtualAccountUser): Promise<VirtualAccountDetails[]> {
     const accounts: VirtualAccountDetails[] = [];
-    for (const currency of this.currencies) {
-      const account = await this.createVirtualAccount(user, currency);
+    for (const tokenSymbol of this.currencies) {
+      const account = await this.createVirtualAccount(user, tokenSymbol);
       if (account) {
         accounts.push(account);
       }
@@ -361,7 +359,7 @@ export class FlutterwaveService {
 
 
 
-  async verifyPayment(transactionId: string, userId: string, amount: number, currency: string = 'NGN') {
+  async verifyPayment(transactionId: string, userId: string, amount: number, tokenSymbol: string = 'NGN') {
     try {
       // Verify transaction with Flutterwave
       const response = await axios.get(
@@ -376,12 +374,23 @@ export class FlutterwaveService {
       const { data } = response.data;
 
       // Check if payment was successful
-      if (data.status !== 'successful' || data.amount !== amount || data.currency !== currency) {
+      if (data.status !== 'successful' || data.amount !== amount || data.tokenSymbol !== tokenSymbol) {
         throw new Error('Payment verification failed: Invalid transaction status or amount');
       }
 
       // Credit user's wallet
-      await this.balanceService.creditAccount(userId, amount, currency, 'Payment via Flutterwave'); // TODO properly implement this function
+      await this.balanceService.creditAccount({
+        userId,
+        amount,
+        tokenSymbol,
+        reference: data.tx_ref,
+        type: TransactionType.DEPOSIT,
+        metadata: {
+          flutterwaveTransactionId: data.id,
+          paymentMethod: data.payment_type,
+          paymentProvider: 'flutterwave',
+        },
+      });
 
       // Calculate fee and net amount
       const fee = parseFloat(data.app_fee) || 0;
@@ -392,7 +401,7 @@ export class FlutterwaveService {
         data: {
           userId,
           amount,
-          currency,
+          tokenSymbol,
           type: 'deposit',
           status: 'completed',
           reference: data.tx_ref,
@@ -415,7 +424,7 @@ export class FlutterwaveService {
           entityId: transaction.id,
           metadata: {
             amount,
-            currency,
+            tokenSymbol,
             provider: 'flutterwave',
             transactionId: data.id,
           },
@@ -426,7 +435,7 @@ export class FlutterwaveService {
         success: true,
         transactionId: transaction.id,
         amount: transaction.amount,
-        currency: transaction.currency,
+        tokenSymbol: transaction.tokenSymbol,
         reference: transaction.reference,
       };
     } catch (error) {
@@ -442,7 +451,7 @@ export class FlutterwaveService {
             error: error.message,
             transactionId,
             amount,
-            currency,
+            tokenSymbol,
             provider: 'flutterwave',
           },
         }

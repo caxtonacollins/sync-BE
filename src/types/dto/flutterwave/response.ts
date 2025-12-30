@@ -21,7 +21,7 @@ export interface InitializePaymentData {
   publicKey: string;
   txRef: string;
   amount: number;
-  currency: string;
+  tokenSymbol: string;
   customer: CustomerDetails;
   customizations: PaymentCustomizations;
 }

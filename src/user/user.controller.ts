@@ -197,7 +197,6 @@ export class UserController {
 
       const parseBoolean = (value?: string) => value === 'true';
       const include: Prisma.UserInclude = {
-        fiatAccounts: parseBoolean(fiatAccounts),
         cryptoWallets: parseBoolean(cryptoWallets),
         transactions: parseBoolean(transactions),
         swapOrders: parseBoolean(swapOrders),
@@ -242,63 +241,6 @@ export class UserController {
       console.error('Error finding user by email:', error);
       throw new Error('Failed to find user by email');
     }
-  }
-
-  @Get(':id/fiat-accounts')
-  @ApiOperation({
-    summary: 'Get user fiat accounts',
-    description:
-      'Retrieves list of fiat accounts for a specific user. Users can only access their own data.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Fiat accounts retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        data: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              accountNumber: { type: 'string' },
-              bankName: { type: 'string' },
-              currency: { type: 'string' },
-              balance: { type: 'number' },
-            },
-          },
-        },
-        pagination: {
-          type: 'object',
-          properties: {
-            total: { type: 'number' },
-            page: { type: 'number' },
-            limit: { type: 'number' },
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Can only access own data',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'User ID',
-    type: 'string',
-    format: 'uuid',
-  })
-  async getUserFiatAccounts(
-    @Req() req: RequestWithUser,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query() pagination: PaginationDto,
-  ) {
-    if (req.user.role !== 'ADMIN' && req.user.userId !== id) {
-      throw new ForbiddenException('You can only access your own data');
-    }
-    return await this.userService.getUserFiatAccounts(id, pagination);
   }
 
   @Get(':id/crypto-wallets')
@@ -380,7 +322,7 @@ export class UserController {
                 enum: ['DEPOSIT', 'WITHDRAWAL', 'TRANSFER'],
               },
               amount: { type: 'number' },
-              currency: { type: 'string' },
+              tokenSymbol: { type: 'string' },
               status: { type: 'string' },
               createdAt: { type: 'string', format: 'date-time' },
             },
@@ -465,10 +407,10 @@ export class UserController {
             type: 'object',
             properties: {
               id: { type: 'string', format: 'uuid' },
-              fromAmount: { type: 'string' },
-              fromCurrency: { type: 'string' },
+              amount: { type: 'string' },
+              from: { type: 'string' },
               toAmount: { type: 'string' },
-              toCurrency: { type: 'string' },
+              to: { type: 'string' },
               status: { type: 'string' },
               createdAt: { type: 'string', format: 'date-time' },
             },
@@ -636,27 +578,27 @@ export class UserController {
     }
   }
 
-  @Get('resolve/account/:accountNumber')
-  async resolveAccount(@Param('accountNumber') accountNumber: string) {
-    const syncAccount =
-      await this.userService.resolveAccountNumber(accountNumber);
-    const banks = await this.flutterwaveService.getBanks();
+  // @Get('resolve/account/:accountNumber')
+  // async resolveAccount(@Param('accountNumber') accountNumber: string) {
+  //   const syncAccount =
+  //     await this.userService.resolveAccountNumber(accountNumber);
+  //   const banks = await this.flutterwaveService.getBanks();
 
-    if (syncAccount) {
-      // SyncPayment account found - put it at the top
-      return {
-        syncAccount,
-        banks: [
-          { name: 'SyncPayment', code: 'SYNC001', isSyncPayment: true },
-          ...banks,
-        ],
-      };
-    }
+  //   if (syncAccount) {
+  //     // SyncPayment account found - put it at the top
+  //     return {
+  //       syncAccount,
+  //       banks: [
+  //         { name: 'SyncPayment', code: 'SYNC001', isSyncPayment: true },
+  //         ...banks,
+  //       ],
+  //     };
+  //   }
 
-    // Not a SyncPayment account - return just the banks
-    return {
-      syncAccount: null,
-      banks,
-    };
-  }
+  //   // Not a SyncPayment account - return just the banks
+  //   return {
+  //     syncAccount: null,
+  //     banks,
+  //   };
+  // }
 }

@@ -7,8 +7,8 @@ export class InitializePaymentDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(['NGN', 'USD', 'EUR', 'GBP'], { message: 'Currency must be one of: NGN, USD, EUR, GBP' })
-  currency?: string = 'NGN';
+  @IsIn(['NGN', 'USD', 'EUR', 'GBP'], { message: 'tokenSymbol must be one of: NGN, USD, EUR, GBP' })
+  tokenSymbol?: string = 'NGN';
 
   @IsString()
   @IsOptional()
@@ -30,7 +30,7 @@ export class VerifyPaymentDto {
 
   @IsString()
   @IsOptional()
-  currency?: string = 'NGN';
+  tokenSymbol?: string = 'NGN';
 }
 
 export interface ExchangeRateResponse {
@@ -39,11 +39,11 @@ export interface ExchangeRateResponse {
   data: {
     rate: number;
     source: {
-      currency: string;
+      tokenSymbol: string;
       amount: number;
     };
     destination: {
-      currency: string;
+      tokenSymbol: string;
       amount: number;
     };
   };

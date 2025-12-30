@@ -15,15 +15,15 @@ export class BridgeLiquidityDto {
 
   @IsString()
   @IsIn(['NGN', 'USD', 'STRK', 'ETH', 'USDC'], {
-    message: 'fromCurrency must be one of: NGN, USD, STRK, ETH, USDC',
+    message: 'from must be one of: NGN, USD, STRK, ETH, USDC',
   })
-  fromCurrency: string;
+  from: string;
 
   @IsString()
   @IsIn(['NGN', 'USD', 'STRK', 'ETH', 'USDC'], {
-    message: 'toCurrency must be one of: NGN, USD, STRK, ETH, USDC',
+    message: 'totokenSymbol must be one of: NGN, USD, STRK, ETH, USDC',
   })
-  toCurrency: string;
+  totokenSymbol: string;
 
   @IsNumber()
   @IsPositive({

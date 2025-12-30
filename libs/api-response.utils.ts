@@ -22,12 +22,12 @@ export interface ApiResponse<T = any> {
  */
 export function formatAmountForApi(
   amount: Decimal | string | number | null | undefined,
-  currency: string,
+  tokenSymbol: string,
 ): string {
   if (amount === null || amount === undefined) {
     return '0';
   }
-  return toApiString(amount, currency);
+  return toApiString(amount, tokenSymbol);
 }
 
 /**
@@ -36,19 +36,19 @@ export function formatAmountForApi(
 export function formatBalanceResponse(balance: {
   balance?: Decimal | string | number | null;
   availableBalance?: Decimal | string | number | null;
-  currency: string;
+  tokenSymbol: string;
 }): {
   balance: string;
   availableBalance: string;
-  currency: string;
+    tokenSymbol: string;
 } {
   return {
-    balance: formatAmountForApi(balance.balance ?? 0, balance.currency),
+    balance: formatAmountForApi(balance.balance ?? 0, balance.tokenSymbol),
     availableBalance: formatAmountForApi(
       balance.availableBalance ?? balance.balance ?? 0,
-      balance.currency,
+      balance.tokenSymbol,
     ),
-    currency: balance.currency,
+    tokenSymbol: balance.tokenSymbol,
   };
 }
 
@@ -56,16 +56,16 @@ export function formatBalanceResponse(balance: {
  * Format unified wallet balance response
  */
 export function formatUnifiedWalletBalance(balance: {
-  currency: string;
+  tokenSymbol: string;
   balance: Decimal | string | number;
   [key: string]: any;
 }): {
-  currency: string;
+    tokenSymbol: string;
   balance: string;
   [key: string]: any;
 } {
   return {
     ...balance,
-    balance: formatAmountForApi(balance.balance, balance.currency),
+    balance: formatAmountForApi(balance.balance, balance.tokenSymbol),
   };
 }

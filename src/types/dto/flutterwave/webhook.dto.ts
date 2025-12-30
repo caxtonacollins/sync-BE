@@ -35,7 +35,7 @@ class FlutterwavePaymentDataDto {
   amount: number;
 
   @ApiProperty()
-  currency: string;
+  tokenSymbol: string;
 
   @ApiProperty()
   charged_amount: number;
@@ -146,8 +146,8 @@ export class FlutterwaveTransferWebhookDto {
     bank_code: string;
     fullname: string;
     date_created: string;
-    currency: string;
-    debit_currency: string;
+      tokenSymbol: string;
+      debit_tokenSymbol: string;
     amount: number;
     fee: number;
     status: string;

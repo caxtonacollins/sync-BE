@@ -52,9 +52,9 @@ export class CryptoStakingService {
       // 1a. Update user balance
       await tx.cryptoBalance.update({
         where: {
-          userId_currency_network: {
+          userId_tokenSymbol_network: {
             userId: user.id,
-            currency: dto.tokenSymbol,
+            tokenSymbol: dto.tokenSymbol,
             network: pool.network,
           },
         },
@@ -149,9 +149,9 @@ export class CryptoStakingService {
         // Revert balance
         await tx.cryptoBalance.update({
           where: {
-            userId_currency_network: {
+            userId_tokenSymbol_network: {
               userId: user.id,
-              currency: dto.tokenSymbol,
+              tokenSymbol: dto.tokenSymbol,
               network: pool.network,
             },
           },
@@ -219,9 +219,9 @@ export class CryptoStakingService {
       // 1b. Return principal + rewards to user's available balance
       await tx.cryptoBalance.update({
         where: {
-          userId_currency_network: {
+          userId_tokenSymbol_network: {
             userId,
-            currency: dto.tokenSymbol,
+            tokenSymbol: dto.tokenSymbol,
             network: stake.pool.network,
           },
         },
@@ -283,9 +283,9 @@ export class CryptoStakingService {
         // Revert balance
         await tx.cryptoBalance.update({
           where: {
-            userId_currency_network: {
+            userId_tokenSymbol_network: {
               userId,
-              currency: dto.tokenSymbol,
+              tokenSymbol: dto.tokenSymbol,
               network: stake.pool.network,
             },
           },
@@ -348,9 +348,9 @@ export class CryptoStakingService {
       // 1b. Add rewards to user's available balance
       await tx.cryptoBalance.update({
         where: {
-          userId_currency_network: {
+          userId_tokenSymbol_network: {
             userId,
-            currency: dto.tokenSymbol,
+            tokenSymbol: dto.tokenSymbol,
             network: stake.pool.network,
           },
         },
@@ -399,9 +399,9 @@ export class CryptoStakingService {
         // Revert balance
         await tx.cryptoBalance.update({
           where: {
-            userId_currency_network: {
+            userId_tokenSymbol_network: {
               userId,
-              currency: dto.tokenSymbol,
+              tokenSymbol: dto.tokenSymbol,
               network: stake.pool.network,
             },
           },
@@ -456,9 +456,9 @@ export class CryptoStakingService {
       // 1b. Return principal minus penalty to user's available balance
       await tx.cryptoBalance.update({
         where: {
-          userId_currency_network: {
+          userId_tokenSymbol_network: {
             userId,
-            currency: dto.tokenSymbol,
+            tokenSymbol: dto.tokenSymbol,
             network: stake.pool.network,
           },
         },
@@ -518,9 +518,9 @@ export class CryptoStakingService {
         // Revert balance
         await tx.cryptoBalance.update({
           where: {
-            userId_currency_network: {
+            userId_tokenSymbol_network: {
               userId,
-              currency: dto.tokenSymbol,
+              tokenSymbol: dto.tokenSymbol,
               network: stake.pool.network,
             },
           },

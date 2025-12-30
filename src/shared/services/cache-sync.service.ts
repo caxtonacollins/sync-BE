@@ -6,7 +6,7 @@ import Decimal from 'decimal.js';
 
 export interface CacheValidationResult {
   userId: string;
-  currency: string;
+  tokenSymbol: string;
   network?: string;
   dbValue: Decimal;
   blockchainValue: Decimal;
@@ -69,7 +69,7 @@ export class CacheSyncService {
           // Get blockchain balance (for crypto stakes)
           const stakePositions = await this.stakingContract.getStakePositions(
             balance.user.starknetAccountAddress,
-            balance.currency,
+            balance.tokenSymbol,
           );
 
           // Calculate total staked from positions
@@ -87,7 +87,7 @@ export class CacheSyncService {
           if (difference.greaterThan(tolerance)) {
             discrepancies.push({
               userId: balance.userId,
-              currency: balance.currency,
+              tokenSymbol: balance.tokenSymbol,
               network: balance.network,
               dbValue: dbStaked,
               blockchainValue: blockchainStaked,
@@ -96,7 +96,7 @@ export class CacheSyncService {
             });
 
             this.logger.warn(
-              `Crypto balance discrepancy detected for user ${balance.userId} (${balance.currency}): DB=${dbStaked.toString()}, Blockchain=${blockchainStaked.toString()}, Diff=${difference.toString()}`,
+              `Crypto balance discrepancy detected for user ${balance.userId} (${balance.tokenSymbol}): DB=${dbStaked.toString()}, Blockchain=${blockchainStaked.toString()}, Diff=${difference.toString()}`,
             );
           }
         } catch (error) {
@@ -125,92 +125,14 @@ export class CacheSyncService {
    * Note: This would typically verify against a bank reconciliation service
    * Runs every 30 minutes
    */
-  @Cron(CronExpression.EVERY_30_MINUTES)
-  async syncFiatBalances() {
-    try {
-      this.logger.debug('Starting fiat balance cache sync...');
-
-      // Get all active fiat balances
-      const fiatBalances = await this.prisma.fiatBalance.findMany({
-        include: {
-          user: {
-            include: {
-              fiatAccounts: {
-                where: { isActive: true },
-              },
-            },
-          },
-        },
-      });
-
-      if (fiatBalances.length === 0) {
-        this.logger.debug('No fiat balances to sync');
-        return;
-      }
-
-      const discrepancies: CacheValidationResult[] = [];
-
-      for (const balance of fiatBalances) {
-        try {
-          // Find corresponding fiat account
-          const fiatAccount = balance.user.fiatAccounts.find(
-            (acc) => acc.currency === balance.currency,
-          );
-
-          if (!fiatAccount) {
-            continue;
-          }
-
-          // In a real implementation, you would call a bank reconciliation service
-          // For now, we'll use the FiatAccount balance as reference
-          const bankBalance = new Decimal(fiatAccount.balance.toString());
-          const dbBalance = balance.available;
-
-          // Check for discrepancies (with small tolerance)
-          const tolerance = new Decimal('0.01'); // 1 cent tolerance for fiat
-          const difference = bankBalance.minus(dbBalance).abs();
-
-          if (difference.greaterThan(tolerance)) {
-            discrepancies.push({
-              userId: balance.userId,
-              currency: balance.currency,
-              dbValue: dbBalance,
-              blockchainValue: bankBalance,
-              isValid: false,
-              discrepancy: difference.toString(),
-            });
-
-            this.logger.warn(
-              `Fiat balance discrepancy detected for user ${balance.userId} (${balance.currency}): DB=${dbBalance.toString()}, Bank=${bankBalance.toString()}, Diff=${difference.toString()}`,
-            );
-          }
-        } catch (error) {
-          this.logger.warn(
-            `Failed to validate fiat balance for user ${balance.userId}:`,
-            error,
-          );
-        }
-      }
-
-      if (discrepancies.length > 0) {
-        this.logger.warn(
-          `Found ${discrepancies.length} fiat balance discrepancies`,
-        );
-      }
-
-      this.logger.debug('Fiat balance cache sync completed');
-    } catch (error) {
-      this.logger.error('Error during fiat balance sync:', error);
-    }
-  }
-
   /**
-   * Manual validation endpoint: Verify a specific user's balance
+   * Manual validation endpoint: Verify a specific user's crypto balance
    */
+  @Cron(CronExpression.EVERY_30_MINUTES)
   async validateUserBalance(
     userId: string,
-    currency: string,
-    network?: string,
+    tokenSymbol: string,
+    network: string,
   ): Promise<CacheValidationResult> {
     try {
       const user = await this.prisma.user.findUnique({
@@ -221,94 +143,59 @@ export class CacheSyncService {
         throw new Error(`User ${userId} not found`);
       }
 
-      if (network) {
-        // Crypto balance validation
-        const dbBalance = await this.prisma.cryptoBalance.findUnique({
-          where: {
-            userId_currency_network: { userId, currency, network },
-          },
-        });
+      if (!network) {
+        throw new Error('Network is required for crypto balance validation');
+      }
 
-        if (!dbBalance) {
-          return {
-            userId,
-            currency,
-            network,
-            dbValue: new Decimal(0),
-            blockchainValue: new Decimal(0),
-            isValid: true,
-          };
-        }
+      // Crypto balance validation
+      const dbBalance = await this.prisma.cryptoBalance.findUnique({
+        where: {
+          userId_tokenSymbol_network: { userId, tokenSymbol, network },
+        },
+      });
 
-        // Get blockchain balance
-        if (!user.starknetAccountAddress) {
-          throw new Error('User has no starknet account');
-        }
-
-        const stakePositions = await this.stakingContract.getStakePositions(
-          user.starknetAccountAddress,
-          currency,
-        );
-
-        const blockchainStaked = stakePositions.reduce((sum, position) => {
-          const amount = new Decimal(String(position.amount || 0));
-          return sum.plus(amount);
-        }, new Decimal(0));
-
-        const dbStaked = dbBalance.staked;
-        const difference = blockchainStaked.minus(dbStaked).abs();
-        const tolerance = new Decimal('0.000001');
-
+      if (!dbBalance) {
         return {
           userId,
-          currency,
+          tokenSymbol,
           network,
-          dbValue: dbStaked,
-          blockchainValue: blockchainStaked,
-          isValid: difference.lessThanOrEqualTo(tolerance),
-          discrepancy: difference.toString(),
-        };
-      } else {
-        // Fiat balance validation
-        const dbBalance = await this.prisma.fiatBalance.findUnique({
-          where: {
-            userId_currency: { userId, currency },
-          },
-        });
-
-        if (!dbBalance) {
-          return {
-            userId,
-            currency,
-            dbValue: new Decimal(0),
-            blockchainValue: new Decimal(0),
-            isValid: true,
-          };
-        }
-
-        const fiatAccount = await this.prisma.fiatAccount.findFirst({
-          where: { userId, currency },
-        });
-
-        const bankBalance = fiatAccount
-          ? new Decimal(fiatAccount.balance.toString())
-          : new Decimal(0);
-        const dbAvailable = dbBalance.available;
-        const difference = bankBalance.minus(dbAvailable).abs();
-        const tolerance = new Decimal('0.01');
-
-        return {
-          userId,
-          currency,
-          dbValue: dbAvailable,
-          blockchainValue: bankBalance,
-          isValid: difference.lessThanOrEqualTo(tolerance),
-          discrepancy: difference.toString(),
+          dbValue: new Decimal(0),
+          blockchainValue: new Decimal(0),
+          isValid: true,
         };
       }
+
+      // Get blockchain balance
+      if (!user.starknetAccountAddress) {
+        throw new Error('User has no starknet account');
+      }
+
+      const stakePositions = await this.stakingContract.getStakePositions(
+        user.starknetAccountAddress,
+        tokenSymbol,
+      );
+
+      const blockchainStaked = stakePositions.reduce((sum, position) => {
+        const amount = new Decimal(String(position.amount || 0));
+        return sum.plus(amount);
+      }, new Decimal(0));
+
+      const dbStaked = dbBalance.staked;
+      const difference = blockchainStaked.minus(dbStaked).abs();
+      const tolerance = new Decimal('0.000001');
+
+      return {
+        userId,
+        tokenSymbol,
+        network,
+        dbValue: dbStaked,
+        blockchainValue: blockchainStaked,
+        isValid: difference.lessThanOrEqualTo(tolerance),
+        discrepancy: difference.toString(),
+      };
     } catch (error) {
       this.logger.error(
-        `Failed to validate user balance ${userId}/${currency}:`,
+        `Failed to validate user balance ${userId}/${tokenSymbol}:`,
         error,
       );
       throw error;
@@ -337,7 +224,7 @@ export class CacheSyncService {
         try {
           const result = await this.validateUserBalance(
             balance.userId,
-            balance.currency,
+            balance.tokenSymbol,
             balance.network,
           );
 
@@ -346,7 +233,7 @@ export class CacheSyncService {
           }
         } catch {
           this.logger.warn(
-            `Failed to validate balance ${balance.userId}/${balance.currency}`,
+            `Failed to validate balance ${balance.userId}/${balance.tokenSymbol}`,
           );
         }
       }
@@ -359,23 +246,18 @@ export class CacheSyncService {
   }
 
   /**
-   * Clear/reset cache for a user (admin function)
+   * Clear/reset crypto cache for a user (admin function)
    * Forces re-sync from blockchain on next balance query
    */
   async clearUserCache(userId: string) {
     try {
-      await this.prisma.$transaction([
-        this.prisma.fiatBalance.deleteMany({
-          where: { userId },
-        }),
-        this.prisma.cryptoBalance.deleteMany({
-          where: { userId },
-        }),
-      ]);
+      await this.prisma.cryptoBalance.deleteMany({
+        where: { userId },
+      });
 
-      this.logger.debug(`Cache cleared for user ${userId}`);
+      this.logger.debug(`Crypto cache cleared for user ${userId}`);
     } catch (error) {
-      this.logger.error(`Failed to clear cache for user ${userId}:`, error);
+      this.logger.error(`Failed to clear crypto cache for user ${userId}:`, error);
       throw error;
     }
   }

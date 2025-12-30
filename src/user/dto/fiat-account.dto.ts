@@ -31,10 +31,10 @@ export class FiatAccountDto {
   @IsString()
   bankCode?: string;
 
-  /** Currency code – defaults to `NGN` in the DB layer */
+  /** tokenSymbol code – defaults to `NGN` in the DB layer */
   @IsOptional()
   @IsString()
-  currency?: string;
+  tokenSymbol?: string;
 
   /** Marks the account as default for the user */
   @IsOptional()

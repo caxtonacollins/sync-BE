@@ -17,7 +17,7 @@ export interface LiquidityBridgeResult {
   orderId: string;
   fromToken: string;
   toToken: string;
-  fromAmount: string;
+  amount: string;
   toAmount: string;
   exchangeRate: string;
   fee: string;

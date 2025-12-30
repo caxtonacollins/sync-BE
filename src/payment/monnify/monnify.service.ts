@@ -16,7 +16,7 @@ export class MonnifyService {
       const payload = {
         accountReference: user.id,
         accountName: accountName,
-        currencyCode: 'NGN',
+        tokenSymbolCode: 'NGN',
         contractCode: process.env.MONNIFY_CONTRACT_CODE,
         customerEmail: user.email,
         customerName: `${user.firstName} ${user.lastName}`,

@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SwapOrderService } from './swap-order.service';
-import { CreateSwapOrderDto } from '../types/dto/swap-order/create-swap-order.dto';
+import { CreateSwapOrderDto, SwapType } from '../types/dto/swap-order/create-swap-order.dto';
 import { UpdateSwapOrderDto } from '../types/dto/swap-order/update-swap-order.dto';
 import { SwapOrderFilterDto } from '../types/dto/swap-order/swap-order-filter.dto';
 import { Request } from 'express';
@@ -36,12 +36,6 @@ export class SwapOrderController {
   create(@Body() dto: CreateSwapOrderDto) {
     dto.status = 'pending';
     return this.swapOrderService.create(dto);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('execute')
-  execute(@Body() dto: CreateSwapOrderDto) {
-    return this.swapOrderService.executeSwap(dto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -83,5 +77,32 @@ export class SwapOrderController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.swapOrderService.remove(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('execute')
+  async execute(@Body() body: any, @Req() req: RequestWithUser) {
+    // Map frontend payload to backend DTO format
+    const dto: CreateSwapOrderDto = {
+      from: body.from,
+      to: body.to,
+      amount: body.fromAmount || body.amount,
+      toAmount: body.toAmount,
+      rate: body.rate,
+      fee: body.fee || 0,
+      status: body.status || 'pending',
+      userId: body.userId || req.user.userId,
+      reference: body.reference || `SWAP_${Date.now()}_${req.user.userId}`,
+      swapType: body.swapType || SwapType.MARKET,
+    };
+
+    // Ensure users can only execute swaps for themselves
+    if (req.user.role !== 'ADMIN' && dto.userId !== req.user.userId) {
+      throw new ForbiddenException(
+        'You can only execute swaps for your own account',
+      );
+    }
+
+    return this.swapOrderService.executeSwap(dto);
   }
 }

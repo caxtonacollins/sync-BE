@@ -20,7 +20,7 @@ export interface CryptoStake extends BaseStake {
 
 export interface FiatStake extends BaseStake {
   type: 'FIAT';
-  currency: string;
+  tokenSymbol: string;
 }
 
 export type Stake = CryptoStake | FiatStake;

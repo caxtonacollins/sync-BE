@@ -23,22 +23,22 @@ export class PaymentService {
   async initiatePayout(
     fiatAccount: any,
     amount: number, // in USD
-    currency: string,
+    tokenSymbol: string,
   ) {
     try {
       const exchangeRateResponse =
-        await this.flutterwaveService.getExchangeRate('USD', currency, amount);
+        await this.flutterwaveService.getExchangeRate('USD', tokenSymbol, amount);
       const payoutAmount = exchangeRateResponse.destination.amount;
       const payoutReference = `PAYOUT_${Date.now()}_${fiatAccount.id}`;
 
-      // Convert amount to smallest currency unit (kobo for NGN, cents for USD, etc.)
+      // Convert amount to smallest tokenSymbol unit (kobo for NGN, cents for USD, etc.)
       const amountInSubunit = Math.round(payoutAmount * 100);
 
       // First, verify the bank account details
       const accountVerification = await this.verifyBankAccount(
         fiatAccount.accountNumber,
         fiatAccount.bankCode?.toString() || '',
-        currency,
+        tokenSymbol,
       );
 
       // Prepare transfer payload
@@ -46,11 +46,11 @@ export class PaymentService {
         account_bank: fiatAccount.bankCode,
         account_number: fiatAccount.accountNumber,
         amount: amountInSubunit,
-        currency: currency.toUpperCase(),
+        tokenSymbol: tokenSymbol.toUpperCase(),
         narration: 'Swap payout from Sync',
         reference: payoutReference,
         callback_url: `${process.env.NEXT_PUBLIC_API_URL}/api/payment/webhook/flutterwave`,
-        debit_currency: currency.toUpperCase(),
+        debit_tokenSymbol: tokenSymbol.toUpperCase(),
         beneficiary_name: accountVerification.account_name || 'Sync User',
       };
 
@@ -90,13 +90,13 @@ export class PaymentService {
   private async verifyBankAccount(
     accountNumber: string,
     bankCode: string,
-    currency: string,
+    tokenSymbol: string,
   ) {
     try {
       this.logger.debug(
         `Verifying bank account: ${accountNumber} for bank code: ${bankCode}`,
       );
-      console.log('currency', currency);
+      console.log('tokenSymbol', tokenSymbol);
       const response = await axios.post(
         `${this.flutterwaveBaseUrl}/accounts/resolve`,
         {
@@ -123,9 +123,9 @@ export class PaymentService {
     }
   }
 
-  async charge(fiatAccount: any, amount: number, currency: string) {
+  async charge(fiatAccount: any, amount: number, tokenSymbol: string) {
     this.logger.log(
-      `Charging ${amount} ${currency} from account ${fiatAccount.accountNumber}`,
+      `Charging ${amount} ${tokenSymbol} from account ${fiatAccount.accountNumber}`,
     );
 
     try {
@@ -149,7 +149,7 @@ export class PaymentService {
 
       // Mock response for development
       // this.logger.warn(
-      //   `MOCK CHARGE: ${amount} ${currency} from ${fiatAccount.accountNumber}`,
+      //   `MOCK CHARGE: ${amount} ${tokenSymbol} from ${fiatAccount.accountNumber}`,
       // );
       // return {
       //   status: 'success',

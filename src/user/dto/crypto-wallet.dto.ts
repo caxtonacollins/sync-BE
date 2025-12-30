@@ -16,15 +16,15 @@ export class CryptoWalletDto {
   @IsString()
   address: string;
 
-  /** Currency symbol – BTC, ETH, USDC, etc. */
+  /** tokenSymbol symbol – BTC, ETH, USDC, etc. */
   @IsString()
-  currency: string;
+  tokenSymbol: string;
 
   /** Encrypted private key */
   @IsString()
   encryptedPrivateKey: string;
 
-  /** Marks this as the user’s primary wallet for the currency */
+  /** Marks this as the user’s primary wallet for the tokenSymbol */
   @IsOptional()
   @IsBoolean()
   isDefault?: boolean;

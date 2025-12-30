@@ -1,15 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AccountService } from './account.service';
+import { AccountContractService } from './account.service';
 
-describe('AccountService', () => {
-  let service: AccountService;
+describe('AccountContractService', () => {
+  let service: AccountContractService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AccountService],
+      providers: [
+        AccountContractService,
+        {
+          provide: 'PrismaService',
+          useValue: {}, // Mock PrismaService
+        },
+      ],
     }).compile();
 
-    service = module.get<AccountService>(AccountService);
+    service = module.get<AccountContractService>(AccountContractService);
   });
 
   it('should be defined', () => {

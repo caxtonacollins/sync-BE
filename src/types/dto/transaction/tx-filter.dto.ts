@@ -23,7 +23,7 @@ export class TxFilterDto {
 
   @IsOptional()
   @IsString()
-  currency?: string;
+  tokenSymbol?: string;
 
   @IsOptional()
   @Type(() => Number)

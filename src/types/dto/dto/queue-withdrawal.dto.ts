@@ -9,7 +9,7 @@ import {
 export class QueueWithdrawalDto {
   @IsString()
   @IsNotEmpty()
-  currency: string;
+  tokenSymbol: string;
 
   @IsNumber()
   @IsNotEmpty()

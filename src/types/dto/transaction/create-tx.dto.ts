@@ -20,7 +20,7 @@ export class CreateTxDto {
   amount: number;
 
   @IsString()
-  currency: string;
+  tokenSymbol: string;
 
   @IsNumber()
   @IsOptional()
