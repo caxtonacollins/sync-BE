@@ -13,7 +13,6 @@ import { SwapOrderModule } from './swap-order/swap-order.module';
 import { ExchangeRateModule } from './transaction/exchange-rate-and-pragma/exchange-rate.module';
 import { LiquidityPoolModule } from './liquidity-pool/liquidity-pool.module';
 import { FlutterwaveModule } from './payment/flutterwave/flutterwave.module';
-import { TransferModule } from './transaction/transfer/transfer.module';
 import { PaymentModule } from './payment/payment.module';
 import { CacheModule } from './cache/cache.module';
 import { StakingModule } from './staking/staking.module';
@@ -34,7 +33,6 @@ import { BalanceSyncModule } from './transaction/balance-sync/balance-sync.modul
     ExchangeRateModule,
     LiquidityPoolModule,
     FlutterwaveModule,
-    TransferModule,
     PaymentModule,
     StakingModule,
     CryptoStakingModule,

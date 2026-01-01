@@ -17,6 +17,8 @@ import { LiquidityEventProcessorService } from './services/event-processor/event
 import { LiquidityPoolContractService } from './services/liquidity-pool/liquidity-pool.service';
 import { StakingContractService } from './services/staking/staking.service';
 import { DexIntegrationService } from './services/dex/dex-integration.service';
+import { TransactionService } from 'src/transaction/transaction.service';
+import { TXContractService } from './services/tx.service';
 
 @Module({
   imports: [
@@ -37,11 +39,13 @@ import { DexIntegrationService } from './services/dex/dex-integration.service';
   ],
   providers: [
     AccountContractService,
+    TransactionService,
     LiquidityPoolContractService,
     TokenContractService,
     LiquidityEventProcessorService,
     StakingContractService,
     DexIntegrationService,
+    TXContractService
   ],
   exports: [
     AccountContractService,

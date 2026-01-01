@@ -4,11 +4,15 @@ import {
   connectToStarknet,
   createNewContractInstance,
   getDeployerWallet,
-} from '../../utils';
+  uuidToFelt252,
+} from '../../helpers/utils.helper';
 import erc20 from '../../abi/erc20.json';
 import { TokenBalance } from '../../../types';
 import chalk from 'chalk';
 import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
+import { AccountContractService } from 'src/contract/services/account/account.service';
+import { TransactionService } from 'src/transaction/transaction.service';
+import { toSmallestUnit } from 'libs/currency.utils';
 
 @Injectable()
 export class TokenContractService {
@@ -22,7 +26,11 @@ export class TokenContractService {
   private readonly tokenAddressMap: Record<string, string>;
   private readonly decimalsMap: Record<string, number>;
 
-  constructor(private readonly keyManagementService: KeyManagementService) {
+  constructor(
+    private readonly transactionService: TransactionService,
+    private readonly keyManagementService: KeyManagementService,
+    private accountContractService: AccountContractService,
+  ) {
     this.provider = connectToStarknet();
     this._strkTokenAddress = process.env.STRK_TOKEN_ADDRESS || '';
     this._usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || '';
@@ -217,9 +225,10 @@ export class TokenContractService {
   async executeUserTransaction(
     userId: string,
     calls: any[],
+    walletAddress: string,
   ): Promise<{ transactionHash: string; receipt?: any }> {
     try {
-      return await this.keyManagementService.executeTransaction(userId, calls);
+      return await this.keyManagementService.executeTransaction(userId, calls, walletAddress);
     } catch (error) {
       console.error(`Failed to execute user transaction for ${userId}:`, error);
       throw error;
@@ -241,7 +250,7 @@ export class TokenContractService {
       }),
     };
 
-    const result = await this.executeUserTransaction(userId, [call]);
+    const result = await this.executeUserTransaction(userId, [call], spenderAddress);
     return result;
   }
 
@@ -268,5 +277,50 @@ export class TokenContractService {
     await this.provider.waitForTransaction(result.transaction_hash);
 
     return result;
+  }
+
+  async transferTokenWithUserCredentials(
+    userId: string,
+    toAddress: string,
+    amount: number,
+    tokenSymbol: string,
+  ) {
+    const uuidUserId = uuidToFelt252(userId);
+    const userWallet = await this.accountContractService.getAccountAddress(uuidUserId);
+    if (!userWallet) {
+      throw new Error('User wallet not found');
+    }
+
+    const tokenAddress = this.getTokenAddress(tokenSymbol);
+    const smallestAmount = toSmallestUnit(amount, tokenSymbol);
+    const amountU256 = uint256.bnToUint256(smallestAmount);
+
+    const call = {
+      contractAddress: tokenAddress,
+      entrypoint: 'transfer',
+      calldata: CallData.compile({
+        to: toAddress,
+        amount: amountU256,
+      }),
+    };
+
+    const result = await this.executeUserTransaction(userId, [call], userWallet);
+
+    const transaction = await this.transactionService.createTransaction({
+      user: {
+        connect: {
+          id: userId,
+        },
+      },
+      type: 'transfer',
+      status: 'processing',
+      amount: amount,
+      netAmount: amount, // Assuming no fee for now
+      tokenSymbol,
+      reference: `TRANSFER_${Date.now()}`,
+      transactionHash: result.transactionHash,
+    });
+
+    return { result, transaction };
   }
 }

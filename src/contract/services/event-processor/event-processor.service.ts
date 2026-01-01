@@ -2,7 +2,7 @@ import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { SwapOrderService } from 'src/swap-order/swap-order.service';
 import { ExchangeRateService } from 'src/transaction/exchange-rate-and-pragma/exchange-rate.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { felt252ToUuid } from 'src/contract/utils';
+import { felt252ToUuid } from 'src/contract/helpers/utils.helper';
 import Decimal from 'decimal.js';
 
 // Event name constants matching Cairo events

@@ -9,9 +9,9 @@ import {
   convertFromWei,
   feltToContractAddress,
   getDeployerWallet,
-} from '../../utils';
+  getUserStarknetAddress,
+} from '../../helpers/utils.helper';
 import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
-import { getUserStarknetAddress } from '../../helpers/contract.helper';
 import { TokenContractService } from '../erc20-token/erc20-token.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -41,7 +41,7 @@ export class StakingContractService {
     lockDuration: number,
   ) {
     try {
-      const userAddress = await getUserStarknetAddress(this.prisma, userId);
+      const userWalletAddress = await getUserStarknetAddress(this.prisma, userId);
 
       const amountInWei = convertToWei(amount, decimals);
       const amountU256 = uint256.bnToUint256(amountInWei);
@@ -77,14 +77,14 @@ export class StakingContractService {
         contractAddress: this.stakingContractAddress,
         entrypoint: 'stake',
         calldata: [
-          userAddress,
+          userWalletAddress,
           tokenSymbol,
           amountU256.low,
           amountU256.high,
           lockDurationU64,
         ],
       };
-      return this.keyManagementService.executeTransaction(userId, [call]);
+      return this.keyManagementService.executeTransaction(userId, [call], userWalletAddress);
     } catch (error) {
       console.error('Failed to stake:', JSON.stringify(error, null, 2));
       throw error;
@@ -92,40 +92,41 @@ export class StakingContractService {
   }
 
   async unstake(userId: string, tokenSymbol: string, stakeId: number) {
-    const userAddress = await getUserStarknetAddress(this.prisma, userId);
+    const userWalletAddress = await getUserStarknetAddress(this.prisma, userId);
 
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'unstake',
-      calldata: [userAddress, tokenSymbol, stakeId],
+      calldata: [userWalletAddress, tokenSymbol, stakeId],
     };
-    return this.keyManagementService.executeTransaction(userId, [call]);
+    return this.keyManagementService.executeTransaction(userId, [call], userWalletAddress);
   }
 
   async claimRewards(userId: string, tokenSymbol: string, stakeId: number) {
-    const userAddress = await getUserStarknetAddress(this.prisma, userId);
+    const userWalletAddress = await getUserStarknetAddress(this.prisma, userId);
 
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'claim_rewards',
-      calldata: [userAddress, tokenSymbol, stakeId],
+      calldata: [userWalletAddress, tokenSymbol, stakeId],
     };
-    return this.keyManagementService.executeTransaction(userId, [call]);
+    return this.keyManagementService.executeTransaction(userId, [call], userWalletAddress);
   }
 
   async emergencyUnstake(userId: string, tokenSymbol: string, stakeId: number) {
-    const userAddress = await getUserStarknetAddress(this.prisma, userId);
+    const userWalletAddress = await getUserStarknetAddress(this.prisma, userId);
 
     const call = {
       contractAddress: this.stakingContractAddress,
       entrypoint: 'emergency_unstake',
-      calldata: [userAddress, tokenSymbol, stakeId],
+      calldata: [userWalletAddress, tokenSymbol, stakeId],
     };
-    return this.keyManagementService.executeTransaction(userId, [call]);
+    return this.keyManagementService.executeTransaction(userId, [call], userWalletAddress);
   }
 
   async executeUserStakingTransaction(userId: string, calls: any[]) {
-    return this.keyManagementService.executeTransaction(userId, calls);
+    const userWalletAddress = await getUserStarknetAddress(this.prisma, userId);
+    return this.keyManagementService.executeTransaction(userId, calls, userWalletAddress);
   }
   async createStakingPool(
     tokenSymbol: string,

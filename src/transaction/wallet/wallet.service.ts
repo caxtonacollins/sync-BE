@@ -1,25 +1,20 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { MonnifyService } from '../../payment/monnify/monnify.service';
 import { Logger } from '@nestjs/common';
 import { CryptoWallet } from '@prisma/client';
 import { ExchangeRateService } from '../exchange-rate-and-pragma/exchange-rate.service';
-import { QueueWithdrawalDto } from '../../types/dto/dto/queue-withdrawal.dto';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 import { AccountContractService } from 'src/contract/services/account/account.service';
-import { BalanceSyncService } from 'src/shared/services/balance-sync.service';
 import Decimal from 'decimal.js';
 import {
   toApiString,
   parseAmount,
   multiplyAmount,
-  addAmounts,
   divideAmount,
 } from '../../../libs/currency.utils';
 import { ensureUserExists } from 'src/common/helpers/db.helper';
@@ -28,42 +23,7 @@ import {
 } from 'src/common/helpers/mapper.helper';
 import { UseInterceptors } from '@nestjs/common';
 import { CacheInterceptor } from '@nestjs/cache-manager';
-
-export interface WalletSummaryResponse {
-  totalBalanceUSD: number;
-  ethTokenBalance: number;
-  strkTokenBalance: number;
-  usdcTokenBalance: number;
-  sngnTokenBalance: number;
-  stakedSyncTokens: number;
-  transactionFeeDiscount: number;
-  activeLiquidityPools: number;
-  dailySettlementCount: number;
-}
-
-export interface UnifiedWalletBalance {
-  userId: string;
-  cryptoBalances: {
-    tokenSymbol: string;
-    balance: string;
-    walletId: string;
-    network: string;
-    address: string;
-    isDefault: boolean;
-  }[];
-  totalValueUSD: string;
-}
-
-export interface WalletTransaction {
-  id: string;
-  type: 'fiat' | 'crypto';
-  tokenSymbol: string;
-  amount: number;
-  status: string;
-  reference: string;
-  createdAt: Date;
-  metadata?: any;
-}
+import { UnifiedWalletBalance, WalletTransaction, WalletSummaryResponse } from 'src/types';
 
 @Injectable()
   @UseInterceptors(CacheInterceptor)

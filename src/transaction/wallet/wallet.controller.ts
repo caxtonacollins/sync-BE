@@ -24,10 +24,8 @@ export class WalletController {
 
   constructor(private readonly walletService: WalletService) {}
 
-  /**
-   * Get unified wallet balance
-   */
   @Get('balance')
+  @UseInterceptors(CacheInterceptor)
   async getBalance(@Request() req: { user: { sub: string } }) {
     try {
       const userId = req.user.sub;
@@ -41,9 +39,6 @@ export class WalletController {
     }
   }
 
-  /**
-   * Get wallet summary for dashboard
-   */
   @Get('summary')
   @UseInterceptors(CacheInterceptor)
   async getSummary(@Request() req) {
@@ -56,9 +51,6 @@ export class WalletController {
     }
   }
 
-  /**
-   * Create crypto wallet
-   */
   @Post('crypto-wallet')
   @HttpCode(HttpStatus.CREATED)
   async createCryptoWallet(

@@ -10,7 +10,7 @@ import {
   getDeployerWallet,
   uuidToFelt252,
   writeAbiToFile,
-} from '../../utils';
+} from '../../helpers/utils.helper';
 import { UserService } from 'src/user/user.service';
 import { TokenContractService } from '../erc20-token/erc20-token.service';
 import { KeyManagementService } from 'src/transaction/wallet/key-management.service';
@@ -422,32 +422,6 @@ export class LiquidityPoolContractService {
     const amountInWei = convertToWei(tokenAmount, decimals);
     const amountU256 = uint256.bnToUint256(amountInWei);
 
-    // try {
-    //   const feeBpsResult = await this.getFeeBPS();
-    //   const feeBps = BigInt(feeBpsResult);
-    //   const fee = (BigInt(tokenAmount) * feeBps) / 10000n;
-    //   const amountAfterFee = BigInt(tokenAmount) - fee;
-
-    //   const pricePerToken = await this.getTokenAmountInUsd(
-    //     supportedTokenAddress,
-    //   );
-
-    //   const decimals = await this.getTokenDecimals(supportedTokenAddress);
-    //   const decimalsPower = BigInt(Math.pow(10, decimals));
-    //   const calculatedFiatAmount =
-    //     BigInt(amountAfterFee * BigInt(pricePerToken)) / decimalsPower;
-
-    //   const availableFiat = await this.getFiatLiquidityBalance(fiat);
-
-    //   if (availableFiat < calculatedFiatAmount) {
-    //     throw new Error(
-    //       `Insufficient fiat liquidity. Available: ${availableFiat}, Required: ${calculatedFiatAmount}`,
-    //     );
-    //   }
-    // } catch (error) {
-    //   throw new Error(`Pre-swap validation failed: ${error.message}`);
-    // }
-
     const swapCall = {
       contractAddress: this.liquidityContractAddress,
       entrypoint: 'swap_token_to_fiat',
@@ -480,6 +454,7 @@ export class LiquidityPoolContractService {
       const txResponse = await this.keyManagementService.executeTransaction(
         user.id,
         [swapCall],
+        userContractAddress,
       );
 
       return {

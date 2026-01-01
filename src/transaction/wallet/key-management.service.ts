@@ -6,8 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Account, RpcProvider } from 'starknet';
-import { decryptPrivateKey } from '../../contract/utils';
-import { connectToStarknet } from '../../contract/utils';
+import { decryptPrivateKey, connectToStarknet } from '../../contract/helpers/utils.helper';
 
 /**
  * KeyManagementService
@@ -92,15 +91,13 @@ export class KeyManagementService {
   async executeTransaction(
     userId: string,
     calls: any[],
-    walletAddress?: string,
+    walletAddress: string,
   ): Promise<{ transactionHash: string; receipt?: any }> {
     try {
       // Get the user's account (with decrypted key in memory)
       const account = await this.getUserAccount(userId, walletAddress);
 
-      const { transaction_hash } = await account.execute(calls, {
-        // feeDataAvailabilityMode: 'L1',
-      });
+      const { transaction_hash } = await account.execute(calls);
 
       this.logger.log(
         `Transaction executed for user ${userId}: ${transaction_hash}`,

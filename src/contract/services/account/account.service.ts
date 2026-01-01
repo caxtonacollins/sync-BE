@@ -9,7 +9,7 @@ import {
   uuidToFelt252,
   writeAbiToFile,
   getDeployerWallet,
-} from '../../utils';
+} from '../../helpers/utils.helper';
 
 @Injectable()
 export class AccountContractService {
@@ -107,10 +107,10 @@ export class AccountContractService {
     }
   }
 
-  async getAccountAddress(userAddress: string) {
+  async getAccountAddress(userId: string) {
     if (!this.accountFactoryAddress)
       throw new Error('ACCOUNT_FACTORY_ADDRESS env variable is not set');
-    if (!userAddress) throw new Error('user address is required');
+    if (!userId) throw new Error('user id is required');
 
     const AccountClass = await getClassAt(this.accountFactoryAddress);
     await writeAbiToFile(AccountClass, 'accountFactoryAbi');
@@ -121,7 +121,7 @@ export class AccountContractService {
         this.accountFactoryAddress,
       );
 
-      const result = await accountContract.get_account(userAddress);
+      const result = await accountContract.get_account(userId);
       const feltValue = Array.isArray(result) ? result[0] : result;
 
       // Convert decimal string to hex

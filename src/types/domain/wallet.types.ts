@@ -1,10 +1,20 @@
+export interface WalletTransaction {
+  id: string;
+  type: 'fiat' | 'crypto';
+  tokenSymbol: string;
+  amount: number;
+  status: string;
+  reference: string;
+  createdAt: Date;
+  metadata?: any;
+}
+
 export interface WalletSummaryResponse {
-  totalBalanceNGN: number;
   totalBalanceUSD: number;
-  syncTokenBalance: number;
   ethTokenBalance: number;
   strkTokenBalance: number;
   usdcTokenBalance: number;
+  sngnTokenBalance: number;
   stakedSyncTokens: number;
   transactionFeeDiscount: number;
   activeLiquidityPools: number;
@@ -13,19 +23,15 @@ export interface WalletSummaryResponse {
 
 export interface UnifiedWalletBalance {
   userId: string;
-  fiatBalances: {
-    tokenSymbol: string;
-    balance: string;
-    accountId: string;
-    provider: string;
-    isDefault: boolean;
-  }[];
   cryptoBalances: {
     tokenSymbol: string;
     balance: string;
-    address: string;
+    walletId: string;
     network: string;
+    address: string;
+    isDefault: boolean;
   }[];
+  totalValueUSD: string;
 }
 
 export interface WalletTransaction {

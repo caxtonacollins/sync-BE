@@ -84,6 +84,7 @@ export function toSmallestUnit(
 
   const multiplier = new Decimal(10).pow(decimals);
   const smallestUnit = amountDecimal.mul(multiplier);
+  // const amountInWei = BigInt(Math.floor(amount * Math.pow(10, decimals)));
 
   return BigInt(smallestUnit.floor().toString());
 }

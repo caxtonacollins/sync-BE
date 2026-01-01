@@ -13,3 +13,18 @@ export class CreateTransferDto {
   @IsNotEmpty()
   token: string;
 }
+
+export class TransferTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  toAddress: string;
+  
+  @IsNumber()
+  @IsNotEmpty()
+  amount: number;
+
+  @IsString()
+  @IsNotEmpty()
+  tokenSymbol: string;
+}
+  

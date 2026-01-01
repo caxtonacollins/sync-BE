@@ -155,12 +155,6 @@ export class UserController {
     format: 'uuid',
   })
   @ApiQuery({
-    name: 'fiatAccounts',
-    required: false,
-    type: 'boolean',
-    description: 'Include fiat accounts in response',
-  })
-  @ApiQuery({
     name: 'cryptoWallets',
     required: false,
     type: 'boolean',
@@ -181,7 +175,6 @@ export class UserController {
   async findById(
     @Req() req: RequestWithUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('fiatAccounts') fiatAccounts?: string,
     @Query('cryptoWallets') cryptoWallets?: string,
     @Query('transactions') transactions?: string,
     @Query('swapOrders') swapOrders?: string,

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StakingContractService } from 'src/contract/services/staking/staking.service';
-import { stringToFelt252 } from 'src/contract/utils';
+import { stringToFelt252 } from 'src/contract/helpers/utils.helper';
 import { BalanceSyncService } from 'src/shared/services/balance-sync.service';
 import { CreateCryptoStakeDto, UnstakeCryptoDto, ClaimCryptoRewardsDto } from 'src/types/dto/crypto-staking/crypto-staking.dto';
 

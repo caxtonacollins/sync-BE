@@ -1,6 +1,7 @@
 import { Abi, Account, Contract, ec, num, RpcProvider, stark } from 'starknet';
 import { promises as fs } from 'fs';
 import crypto from 'crypto';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 export function connectToStarknet() {
   if (!process.env.STARKNET_NODE_URL)
@@ -313,4 +314,20 @@ export function toJSONSafeValue(value: any): any {
   }
 
   return value;
+}
+
+export async function getUserStarknetAddress(
+  prisma: PrismaService,
+  userId: string,
+): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { starknetAccountAddress: true },
+  });
+
+  if (!user?.starknetAccountAddress) {
+    throw new Error('User must have a Starknet account address');
+  }
+
+  return user.starknetAccountAddress;
 }
