@@ -3,7 +3,6 @@ import { SwapOrderService } from './swap-order.service';
 import { SwapOrderController } from './swap-order.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WalletModule } from '../transaction/wallet/wallet.module';
-import { TransactionModule } from '../transaction/transaction.module';
 import { ContractModule } from '../contract/contract.module';
 import { UserModule } from '../user/user.module';
 import { MonnifyModule } from 'src/payment/monnify/monnify.module';
@@ -14,7 +13,6 @@ import { SharedModule } from '../shared/shared.module';
   imports: [
     PrismaModule,
     WalletModule,
-    TransactionModule,
     forwardRef(() => ContractModule),
     forwardRef(() => UserModule),
     MonnifyModule,

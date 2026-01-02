@@ -2,9 +2,9 @@ import { Body, Controller, Param, Post, Get, Req, UseGuards, UnauthorizedExcepti
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 import { MintTokenDto } from 'src/types/dto/contract';
-import { TransferTokenDto } from 'src/types/dto/transfer/create-transfer.dto';
 import { RequestWithUser } from 'src/types';
 import { TXContractService } from 'src/contract/services/tx.service';
+import { TransferTokenDto } from 'src/types/dto/transfer/create-transfer.dto';
 
 @Controller('token')
 export class Erc20TokenController {

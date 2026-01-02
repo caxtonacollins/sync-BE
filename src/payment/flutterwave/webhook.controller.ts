@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  forwardRef,
   Logger,
   BadRequestException,
   NotFoundException,
@@ -17,6 +18,7 @@ import { WalletService } from '../../transaction/wallet/wallet.service';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SellService } from 'src/sell/sell.service';
 
 @Controller('webhooks/flutterwave')
 @ApiTags('Webhooks')
@@ -32,6 +34,8 @@ export class WebhookController {
     private readonly transactionService: TransactionService,
     @Inject(WalletService)
     private readonly walletService: WalletService,
+    @Inject(forwardRef(() => SellService))
+    private readonly sellService: SellService,
     private readonly prismaService: PrismaService,
   ) {
     this.prisma = prismaService;
@@ -46,7 +50,9 @@ export class WebhookController {
     this.logger.log('Received Flutterwave webhook', { event: payload?.event });
     try {
       // Verify the webhook signature
-      const secretHash = this.configService.get('FLUTTERWAVE_WEBHOOK_HASH');
+      const secretHash = this.configService.get(
+        'FLUTTERWAVE_WEBHOOK_SECRET_HASH',
+      );
       if (secretHash && signature !== secretHash) {
         console.error('Invalid webhook signature');
         return { status: 'error', message: 'Invalid signature' };
@@ -84,16 +90,16 @@ export class WebhookController {
 
   private async handleSuccessfulCharge(data: any) {
     const { id, tx_ref, amount, tokenSymbol, status, customer } = data;
-    
+
     if (!tx_ref || !customer?.id) {
       throw new BadRequestException('Invalid charge data');
     }
 
     // Check if transaction already exists
     const existingTx = await this.prisma.transaction.findFirst({
-      where: { reference: tx_ref }
+      where: { reference: tx_ref },
     });
-    
+
     if (existingTx) {
       this.logger.log('Transaction already processed', { reference: tx_ref });
       return existingTx;
@@ -103,7 +109,7 @@ export class WebhookController {
     const amountDecimal = new Decimal(amount);
     const fee = new Decimal(0); // Assuming no fee for deposits, adjust if needed
     const netAmount = amountDecimal.minus(fee);
-    
+
     const transactionData: Prisma.TransactionCreateInput = {
       user: { connect: { id: customer.id } },
       amount: amountDecimal,
@@ -124,25 +130,25 @@ export class WebhookController {
     if (status === 'successful') {
       try {
         // Create the transaction record
-        const transaction = await this.transactionService.createTransaction(transactionData);
-        
+        const transaction =
+          await this.transactionService.createTransaction(transactionData);
+
         // Get or create fiat account for the user
         try {
-          
           this.logger.log('Successfully processed Flutterwave payment', {
             userId: customer.id,
             transactionId: transaction[0].id,
             amount,
             tokenSymbol: tokenSymbol || 'NGN',
-            reference: tx_ref
+            reference: tx_ref,
           });
-          
+
           return transaction[0];
         } catch (error) {
           this.logger.error('Failed to process fiat account', {
             error: error.message,
             userId: customer.id,
-            reference: tx_ref
+            reference: tx_ref,
           });
           throw error;
         }
@@ -152,7 +158,7 @@ export class WebhookController {
           stack: error.stack,
           userId: customer.id,
           amount,
-          reference: tx_ref
+          reference: tx_ref,
         });
         throw error;
       }
@@ -162,35 +168,53 @@ export class WebhookController {
 
   private async handleTransferCompleted(data: any) {
     const { reference, status, amount, tokenSymbol } = data;
-    
+
     if (!reference) {
       throw new BadRequestException('Missing reference in transfer data');
     }
 
     // Find the transaction by reference
     const transaction = await this.prisma.transaction.findFirst({
-      where: { reference }
+      where: { reference },
     });
-    
+
     if (!transaction) {
       this.logger.warn('Transaction not found for reference', { reference });
-      throw new NotFoundException(`Transaction with reference ${reference} not found`);
+      throw new NotFoundException(
+        `Transaction with reference ${reference} not found`,
+      );
     }
-    
+
     // Update transaction status
     const updateData: Prisma.TransactionUpdateInput = {
       status: status === 'SUCCESSFUL' ? 'COMPLETED' : 'FAILED',
       metadata: {
-        ...(transaction.metadata as object || {}),
+        ...((transaction.metadata as object) || {}),
         ...data,
         updatedAt: new Date().toISOString(),
       } as Prisma.InputJsonValue,
     };
-    
-    await this.prisma.transaction.update({
+
+    const updatedTx = await this.prisma.transaction.update({
       where: { id: transaction.id },
       data: updateData,
     });
+
+    // If transfer succeeded and this was a SELL, finalize the sell (debit + burn)
+    if (status === 'SUCCESSFUL' && transaction.type === 'SELL') {
+      try {
+        await this.sellService.finalizeSell(transaction.id);
+      } catch (error) {
+        this.logger.error(
+          'Failed to finalize sell after transfer confirmation',
+          {
+            error: error?.message || error,
+            transactionId: transaction.id,
+          },
+        );
+        // Don't throw here - webhook should return OK so provider won't retry excessively
+      }
+    }
 
     // If transfer failed, log the issue for manual review
     if (status === 'FAILED') {
@@ -199,9 +223,9 @@ export class WebhookController {
         amount,
         tokenSymbol,
         transactionId: transaction.id,
-        userId: transaction.userId
+        userId: transaction.userId,
       });
-      
+
       // In a real implementation, you might want to:
       // 1. Create a support ticket
       // 2. Notify the operations team
@@ -213,43 +237,45 @@ export class WebhookController {
 
   private async handleTransferFailed(data: any) {
     const { reference, amount, tokenSymbol } = data;
-    
+
     if (!reference) {
       throw new BadRequestException('Missing reference in transfer data');
     }
-    
+
     // Find the transaction by reference
     const transaction = await this.prisma.transaction.findFirst({
-      where: { reference }
+      where: { reference },
     });
-    
+
     if (!transaction) {
       this.logger.warn('Transaction not found for reference', { reference });
-      throw new NotFoundException(`Transaction with reference ${reference} not found`);
+      throw new NotFoundException(
+        `Transaction with reference ${reference} not found`,
+      );
     }
-    
+
     // Update transaction status to failed
     const updateData: Prisma.TransactionUpdateInput = {
       status: 'FAILED',
       metadata: {
-        ...(transaction.metadata as object || {}),
+        ...((transaction.metadata as object) || {}),
         ...data,
         updatedAt: new Date().toISOString(),
       } as Prisma.InputJsonValue,
     };
-    
+
     await this.prisma.transaction.update({
       where: { id: transaction.id },
       data: updateData,
     });
-    
+
     // Log the failure for manual review
     this.logger.error('Transfer failed', {
       reference,
       amount,
       tokenSymbol,
       transactionId: transaction.id,
-      userId: transaction.userId
+      userId: transaction.userId,
     });
 
     return { success: true };

@@ -1,30 +1,30 @@
 import { IsString, IsNumber, IsNotEmpty } from 'class-validator';
 
 export class CreateTransferDto {
-  @IsString()
-  @IsNotEmpty()
-  toAddress: string;
+    @IsString()
+    @IsNotEmpty()
+    toAddress: string;
 
-  @IsNumber()
-  @IsNotEmpty()
-  amount: number;
+    @IsNumber()
+    @IsNotEmpty()
+    amount: number;
 
-  @IsString()
-  @IsNotEmpty()
-  token: string;
+    @IsString()
+    @IsNotEmpty()
+    token: string;
 }
 
 export class TransferTokenDto {
-  @IsString()
-  @IsNotEmpty()
-  toAddress: string;
-  
-  @IsNumber()
-  @IsNotEmpty()
-  amount: number;
+    @IsString()
+    @IsNotEmpty()
+    toAddress: string;
 
-  @IsString()
-  @IsNotEmpty()
-  tokenSymbol: string;
+    @IsNumber()
+    @IsNotEmpty()
+    amount: number;
+
+    @IsString()
+    @IsNotEmpty()
+    tokenSymbol: string;
 }
-  
+

@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { VirtualAccountUser } from '../../types/domain';
 import axios from 'axios';
 import { AuditLogService } from 'src/audit-log/audit-log.service';
@@ -35,9 +35,10 @@ export interface VirtualAccountDetails {
 
 @Injectable()
 export class FlutterwaveService {
+  private readonly logger = new Logger(FlutterwaveService.name);
   private readonly currencies = ['NGN']; //'GBP', 'USD', 'EUR'
-  private readonly baseUrl = 'https://api.flutterwave.com/v3';
-  private readonly headers: Record<string, string>;
+  public readonly baseUrl = 'https://api.flutterwave.com/v3';
+  public readonly headers: Record<string, string>;
 
   /**
    * Get user by ID
@@ -357,8 +358,6 @@ export class FlutterwaveService {
     }
   }
 
-
-
   async verifyPayment(transactionId: string, userId: string, amount: number, tokenSymbol: string = 'NGN') {
     try {
       // Verify transaction with Flutterwave
@@ -458,6 +457,180 @@ export class FlutterwaveService {
       });
 
       throw new Error(`Payment verification failed: ${error.message}`);
+    }
+  }
+
+  async initiatePayout(
+    fiatAccount: any,
+    amount: number, // in USD
+    tokenSymbol: string,
+  ) {
+    try {
+      const exchangeRateResponse =
+        await this.getExchangeRate(
+          'USD',
+          tokenSymbol,
+          amount,
+        );
+      const payoutAmount = exchangeRateResponse.destination.amount;
+      const payoutReference = `PAYOUT_${Date.now()}_${fiatAccount.id}`;
+
+      // Convert amount to smallest tokenSymbol unit (kobo for NGN, cents for USD, etc.)
+      const amountInSubunit = Math.round(payoutAmount * 100);
+
+      // First, verify the bank account details
+      const accountVerification = await this.verifyBankAccount(
+        fiatAccount.accountNumber,
+        fiatAccount.bankCode?.toString() || '',
+      );
+
+      // Prepare transfer payload
+      const transferPayload = {
+        account_bank: fiatAccount.bankCode,
+        account_number: fiatAccount.accountNumber,
+        amount: amountInSubunit,
+        tokenSymbol: tokenSymbol.toUpperCase(),
+        narration: 'Swap payout from Sync',
+        reference: payoutReference,
+        callback_url: `${process.env.NEXT_PUBLIC_API_URL}/webhooks/flutterwave`,
+
+        debit_tokenSymbol: tokenSymbol,
+        beneficiary_name: accountVerification.account_name || 'Sync User',
+      };
+
+      this.logger.debug('Initiating transfer with payload:', transferPayload);
+
+      const response = await axios.post(
+        `${this.baseUrl}/transfers`,
+        transferPayload,
+        {
+          headers: this.headers,
+          timeout: 20000,
+        },
+      );
+
+      if (response.data.status === 'success') {
+        this.logger.log(`Payout initiated successfully: ${payoutReference}`);
+        return {
+          status: 'success',
+          reference: payoutReference,
+          data: response.data.data,
+        };
+      } else {
+        throw new Error(response.data.message || 'Payout initiation failed');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message;
+      this.logger.error(`Payout failed: ${errorMessage}`, error.stack);
+      throw new BadRequestException(
+        `Failed to initiate payout: ${errorMessage}`,
+      );
+    }
+  }
+
+  private async verifyBankAccount(
+    accountNumber: string,
+    bankCode: string,
+  ) {
+    try {
+      this.logger.debug(
+        `Verifying bank account: ${accountNumber} for bank code: ${bankCode}`,
+      );
+      const response = await axios.post(
+        `${this.baseUrl}/accounts/resolve`,
+        {
+          account_number: accountNumber,
+          account_bank: bankCode,
+        },
+        {
+          headers: this.headers,
+        },
+      );
+
+      if (response.data.status !== 'success') {
+        throw new Error(response.data.message || 'Account verification failed');
+      }
+
+      return response.data.data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message;
+      this.logger.error(`Bank account verification failed: ${errorMessage}`);
+      throw new Error(`Invalid bank account details: ${errorMessage}`);
+    }
+  }
+
+  async charge(fiatAccount: any, amount: number, tokenSymbol: string) {
+    this.logger.log(
+      `Charging ${amount} ${tokenSymbol} from account ${fiatAccount.accountNumber}`,
+    );
+
+    try {
+      const chargeReference = `CHARGE_${Date.now()}_${fiatAccount.id}`;
+      console.log('chargeReference', chargeReference);
+
+      // Verify account balance first
+      const balanceResponse = await axios.get(
+        `${this.baseUrl}/virtual-account-numbers/${fiatAccount.accountReference}`,
+        {
+          headers: this.headers,
+        },
+      );
+
+      const availableBalance = balanceResponse.data.data.available_balance || 0;
+      if (availableBalance < amount) {
+        throw new BadRequestException('Insufficient balance in fiat account');
+      }
+
+      // Mock response for development
+      // this.logger.warn(
+      //   `MOCK CHARGE: ${amount} ${tokenSymbol} from ${fiatAccount.accountNumber}`,
+      // );
+      // return {
+      //   status: 'success',
+      //   reference: chargeReference,
+      //   message: 'Charge completed (mock mode)',
+      // };
+    } catch (error) {
+      this.logger.error(`Charge failed: ${error.message}`, error.stack);
+      throw new BadRequestException(
+        `Failed to charge account: ${error.message}`,
+      );
+    }
+  }
+
+  async verifyTransferStatus(reference: string) {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/transfers?reference=${reference}`,
+        {
+          headers: this.headers,
+        },
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Transfer verification failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getAccountBalance(fiatAccount: any): Promise<number> {
+    try {
+      // TODO: Implement Flutterwave balance check
+      const response = await axios.get(
+        `${this.baseUrl}/virtual-account-numbers/${fiatAccount.accountReference}`,
+        {
+          headers: this.headers,
+        },
+      );
+
+      return response.data.data.available_balance || 0;
+
+      this.logger.warn(`MOCK BALANCE CHECK: ${fiatAccount.accountNumber}`);
+      return 100000; // Mock balance
+    } catch (error) {
+      this.logger.error(`Balance check failed: ${error.message}`);
+      return 0;
     }
   }
 }

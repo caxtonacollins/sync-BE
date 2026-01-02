@@ -9,15 +9,18 @@ import { WalletModule } from 'src/transaction/wallet/wallet.module';
 import { FlutterwaveController } from './flutterwave.controller';
 import { WebhookService } from './webhook.service';
 import { WebhookController } from './webhook.controller';
+import { SellModule } from 'src/sell/sell.module';
 
 @Module({
-      imports: [
+  imports: [
     PrismaModule,
     ConfigModule,
     forwardRef(() => PaymentModule),
     AuditLogModule,
     forwardRef(() => TransactionModule),
     forwardRef(() => WalletModule),
+    // Allow finalization of sells on transfer confirmation
+    forwardRef(() => SellModule),
   ],
   providers: [FlutterwaveService, WebhookService, ConfigService],
   exports: [FlutterwaveService],

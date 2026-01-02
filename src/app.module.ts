@@ -18,6 +18,11 @@ import { CacheModule } from './cache/cache.module';
 import { StakingModule } from './staking/staking.module';
 import { CryptoStakingModule } from './staking/crypto-staking/crypto-staking.module';
 import { BalanceSyncModule } from './transaction/balance-sync/balance-sync.module';
+import { BuyService } from './buy/buy.service';
+import { SellModule } from './sell/sell.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
+import { BuyController } from './buy/buy.controller';
+import { BuyModule } from './buy/buy.module';
 
 @Module({
   imports: [
@@ -37,8 +42,11 @@ import { BalanceSyncModule } from './transaction/balance-sync/balance-sync.modul
     StakingModule,
     CryptoStakingModule,
     BalanceSyncModule,
+    AuditLogModule,
+    BuyModule,
+    SellModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, PrismaService],
+  controllers: [AppController, BuyController],
+  providers: [AppService, PrismaService, BuyService],
 })
 export class AppModule {}

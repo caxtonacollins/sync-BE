@@ -2,16 +2,15 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import Decimal from 'decimal.js';
 import { Prisma } from '@prisma/client';
 import { WalletService } from '../transaction/wallet/wallet.service';
-import { TransactionService } from '../transaction/transaction.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSwapOrderDto, SwapType } from '../types/dto/swap-order/create-swap-order.dto';
 import { UpdateSwapOrderDto } from '../types/dto/swap-order/update-swap-order.dto';
 import { SwapOrderFilterDto } from '../types/dto/swap-order/swap-order-filter.dto';
 import { UserService } from 'src/user/user.service';
-import { PaymentService } from 'src/payment/payment.service';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
 import { DexIntegrationService } from 'src/contract/services/dex/dex-integration.service';
+import { FlutterwaveService } from 'src/payment/flutterwave/flutterwave.service';
 
 @Injectable()
 export class SwapOrderService {
@@ -20,11 +19,10 @@ export class SwapOrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
-    private readonly transactionService: TransactionService,
     private readonly TokenContractService: TokenContractService,
     private readonly LiquidityPoolContractService: LiquidityPoolContractService,
     private readonly userService: UserService,
-    private readonly paymentService: PaymentService,
+    private readonly flutterwaveService: FlutterwaveService,
     private readonly dexIntegrationService: DexIntegrationService,
   ) {}
 
@@ -203,7 +201,7 @@ export class SwapOrderService {
       `Charging ${amount} ${from} from user's fiat account`,
     );
     const amountToCharge = amount + feeAmount;
-    await this.paymentService.charge(user.id, amountToCharge, from);
+    await this.flutterwaveService.charge(user.id, amountToCharge, from);
 
     this.logger.log(
       `Successfully charged ${amount} ${from} from user ${userId}`,
@@ -260,7 +258,7 @@ export class SwapOrderService {
         `Initiating fiat payout of ${swapOrder.amount} ${swapOrder.from} to user ${swapOrder.userId}`,
       );
 
-      const payoutResult = await this.paymentService.initiatePayout(
+      const payoutResult = await this.flutterwaveService.initiatePayout(
         swapOrder.userId,
         Number(new Decimal(swapOrder.amount || 0).toNumber()),
         swapOrder.to,

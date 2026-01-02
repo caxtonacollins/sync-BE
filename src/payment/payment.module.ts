@@ -1,6 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PaymentService } from './payment.service';
 import { BalanceService } from './balance.service';
 import { BalanceController } from './balance.controller';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -16,8 +15,8 @@ import { MonnifyModule } from './monnify/monnify.module';
         forwardRef(() => WalletModule),
     MonnifyModule,
   ],
-  providers: [PaymentService, BalanceService],
+  providers: [BalanceService],
   controllers: [BalanceController],
-    exports: [PaymentService, BalanceService, MonnifyModule, FlutterwaveModule],
+    exports: [BalanceService, MonnifyModule, FlutterwaveModule],
 })
 export class PaymentModule {}

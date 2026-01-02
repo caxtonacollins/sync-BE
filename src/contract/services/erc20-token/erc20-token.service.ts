@@ -79,7 +79,7 @@ export class TokenContractService {
     receiverAddress: string,
     amount: string,
     sngnTokenAddress: string,
-  ): Promise<{ transactionHash: string, receipt: any }> {
+  ): Promise<{ transactionHash: string; receipt: any }> {
     if (!receiverAddress) throw new Error('receiverAddress is required');
     if (!amount) throw new Error('amount is required');
 
@@ -178,10 +178,44 @@ export class TokenContractService {
     const results = await Promise.all(balancePromises);
     return results.filter((result): result is TokenBalance => result !== null);
   }
+  async burnToken(
+    accountAddress: string,
+    amount: string,
+    sngnTokenAddress: string,
+  ): Promise<{ transactionHash: string; receipt: any }> {
+    if (!accountAddress) throw new Error('accountAddress is required');
+    if (!amount) throw new Error('amount is required');
 
-  async getSNGNTokenBalance(address: string) {
-    if (!address) throw new Error('user address is required');
-    return this.getAccountBalance('sNGN', address);
+    const call = {
+      contractAddress: sngnTokenAddress,
+      // Prefer permissionedBurn if available on the token; fallback to burn
+      entrypoint: 'permissionedBurn',
+      calldata: [accountAddress, uint256.bnToUint256(amount)],
+    };
+
+    try {
+      const account = getDeployerWallet();
+      const { transaction_hash: txH } = await account.execute(call);
+
+      const txR = await this.provider.waitForTransaction(txH);
+
+      if (txR.isSuccess()) {
+        console.log(
+          chalk.green(
+            `Successfully burned ${amount} tokens from ${accountAddress}`,
+          ),
+        );
+        return {
+          transactionHash: txH,
+          receipt: txR,
+        };
+      } else {
+        throw new Error('Burn transaction failed');
+      }
+    } catch (error) {
+      console.error(JSON.stringify(error, null, 2));
+      throw error;
+    }
   }
 
   getApproveTokenCalldata(
@@ -217,7 +251,6 @@ export class TokenContractService {
     return tokenAddress;
   }
 
-
   getTokenDecimals(symbol: string): number {
     return this.decimalsMap[symbol] || 18;
   }
@@ -228,7 +261,11 @@ export class TokenContractService {
     walletAddress: string,
   ): Promise<{ transactionHash: string; receipt?: any }> {
     try {
-      return await this.keyManagementService.executeTransaction(userId, calls, walletAddress);
+      return await this.keyManagementService.executeTransaction(
+        userId,
+        calls,
+        walletAddress,
+      );
     } catch (error) {
       console.error(`Failed to execute user transaction for ${userId}:`, error);
       throw error;
@@ -250,7 +287,11 @@ export class TokenContractService {
       }),
     };
 
-    const result = await this.executeUserTransaction(userId, [call], spenderAddress);
+    const result = await this.executeUserTransaction(
+      userId,
+      [call],
+      spenderAddress,
+    );
     return result;
   }
 
@@ -286,7 +327,8 @@ export class TokenContractService {
     tokenSymbol: string,
   ) {
     const uuidUserId = uuidToFelt252(userId);
-    const userWallet = await this.accountContractService.getAccountAddress(uuidUserId);
+    const userWallet =
+      await this.accountContractService.getAccountAddress(uuidUserId);
     if (!userWallet) {
       throw new Error('User wallet not found');
     }
@@ -304,7 +346,11 @@ export class TokenContractService {
       }),
     };
 
-    const result = await this.executeUserTransaction(userId, [call], userWallet);
+    const result = await this.executeUserTransaction(
+      userId,
+      [call],
+      userWallet,
+    );
 
     const transaction = await this.transactionService.createTransaction({
       user: {
