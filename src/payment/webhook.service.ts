@@ -4,15 +4,15 @@ import {
   BadRequestException,
   ForbiddenException,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'crypto';
-import { FlutterwaveWebhookDto } from 'src/types/dto/flutterwave/webhook.dto';
 import { TransactionType, TransactionStatus, Prisma } from '@prisma/client';
-import { BalanceService } from './balance.service';
-import * as crypto from 'crypto';
 import { BuyService } from 'src/buy/buy.service';
+import Decimal from 'decimal.js';
+import { SellService } from 'src/sell/sell.service';
+import { TransactionService } from 'src/transaction/transaction.service';
 
 @Injectable()
 export class WebhookService {
@@ -22,7 +22,8 @@ export class WebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly balanceService: BalanceService,
+    private readonly transactionService: TransactionService,
+    private readonly sellService: SellService,
     private readonly buyService: BuyService,
   ) {
     const secretHash = this.config.get<string>(
@@ -34,266 +35,310 @@ export class WebhookService {
     this.secretHash = secretHash;
   }
 
-  validateWebhookSignature(
-    signature: string,
-    payload: string | object,
-  ): boolean {
-    if (!this.secretHash) {
-      throw new InternalServerErrorException(
-        'Webhook secret hash is not configured',
-      );
-    }
-
-    if (!signature) {
-      throw new BadRequestException('Missing webhook signature');
-    }
-
-    const payloadString =
-      typeof payload === 'string' ? payload : JSON.stringify(payload);
-    const computedSignature = createHmac('sha256', this.secretHash)
-      .update(payloadString)
-      .digest('hex');
-
-    const isValid = computedSignature === signature;
-    if (!isValid) {
-      this.logger.warn('Invalid webhook signature', {
-        computedSignature,
-        receivedSignature: signature,
-      });
-    }
-
-    return isValid;
-  }
-
   async handleWebhook(payload: any, signature?: string) {
     this.logger.log('Received webhook payload', { event: payload?.event });
 
     try {
-      // Validate webhook signature if signature is provided
-      if (signature) {
-        const isValid = this.validateWebhookSignature(signature, payload);
-        if (!isValid) {
-          throw new ForbiddenException('Invalid webhook signature');
-        }
-      } else {
-        this.logger.warn(
-          'Webhook called without signature, proceeding with caution',
-        );
+      if (!signature || signature !== this.secretHash) {
+        this.logger.error('Invalid webhook signature');
+        return { status: 'error', message: 'Invalid signature' };
       }
 
-      // Handle different webhook event types
-      switch (payload?.event) {
+      switch (payload.event) {
         case 'charge.completed':
-          return this.handleChargeCompleted(payload);
+            // Handle successful payment
+            await this.handleSuccessfulCharge(payload.data);
+            break;
+
         case 'transfer.completed':
-          return this.handleTransferCompleted(payload);
+            // Handle completed transfer
+            await this.handleTransferCompleted(payload.data);
+            break;
+
+          case 'transfer.reversed':
+          case 'transfer.failed':
+            // Handle failed or reversed transfers
+            await this.handleTransferFailed(payload.data);
+            break;
+
         default:
-          this.logger.warn(`Unhandled webhook event: ${payload?.event}`, {
-            payload,
-          });
-          return {
-            status: 'success',
-            message: 'Webhook received but no action taken',
-          };
+            console.log(`Unhandled event type: ${payload.event}`);
       }
+
+      return { status: 'success' };
     } catch (error) {
       this.logger.error('Error processing webhook:', error);
       throw error;
     }
   }
 
-  private async handleBuy(payload: any, signature?: string) {
-    console.log('payload, webhook hit', payload);
-    // Verify webhook signature using header value passed from controller
-    const secret =
-      process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH ||
-      process.env.FLUTTERWAVE_SECRET_HASH;
-    const signatureHeader =
-      signature || payload.headers?.['verif-hash'] || payload.signature; // backward compat
+  private async handleSuccessfulCharge(data: any) {
+    const { id, tx_ref, amount, tokenSymbol, status, customer } = data;
 
-    if (secret) {
-      const hash = crypto
-        .createHmac('sha256', secret)
-        .update(JSON.stringify(payload))
-        .digest('hex');
+    if (!tx_ref) {
+      throw new BadRequestException('Invalid charge data: missing tx_ref');
+    }
 
-      if (hash !== signatureHeader) {
-        throw new Error('Invalid webhook signature');
+    // If this is a BUY flow (we set tx_ref as BUY-{transactionId}), delegate to BuyService
+    if (tx_ref.startsWith('BUY-')) {
+      const transactionId = tx_ref.replace('BUY-', '');
+      if (status === 'successful') {
+        await this.buyService.completeBuy(transactionId, {
+          flutterwaveTransactionId: id,
+          amountPaid: amount,
+        });
+        this.logger.log('Processed BUY webhook and completed transaction', {
+          tx_ref,
+        });
+        return { success: true };
+      } else if (['failed', 'cancelled'].includes(status)) {
+        await this.buyService.failBuy(transactionId, {
+          status: 'FAILED',
+          failureReason: data?.processor_response || 'Payment failed',
+        });
+        this.logger.log('Processed BUY webhook and marked transaction failed', {
+          tx_ref,
+        });
+        return { success: true };
       }
     }
 
-    const { tx_ref, status, transaction_id, amount } = payload.data;
+    // For non-BUY flows, require customer.id to exist
+    if (!customer?.id) {
+      throw new BadRequestException('Invalid charge data: missing customer id');
+    }
 
-    // Get transaction
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: tx_ref.replace('BUY-', '') },
+    // Check if transaction already exists (idempotency)
+    const existingTx = await this.prisma.transaction.findFirst({
+      where: { reference: tx_ref },
     });
 
+    if (existingTx) {
+      this.logger.log('Transaction already processed', { reference: tx_ref });
+      return existingTx;
+    }
+
+    // Create transaction record with required fields
+    const amountDecimal = new Decimal(amount);
+    const fee = new Decimal(0); // Assuming no fee for deposits, adjust if needed
+    const netAmount = amountDecimal.minus(fee);
+
+    const transactionData: Prisma.TransactionCreateInput = {
+      user: { connect: { id: customer.id } },
+      amount: amountDecimal,
+      netAmount: netAmount,
+      fee: fee,
+      tokenSymbol: tokenSymbol || 'NGN',
+      status: status === 'successful' ? 'COMPLETED' : 'FAILED',
+      type: 'DEPOSIT',
+      reference: tx_ref,
+      metadata: {
+        flutterwaveTransactionId: id,
+        customer,
+        verifiedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    };
+
+    // Update wallet balance if transaction is successful
+    if (status === 'successful') {
+      try {
+        // Create the transaction record
+        const transaction =
+          await this.transactionService.createTransaction(transactionData);
+
+        // Get or create fiat account for the user
+        try {
+          this.logger.log('Successfully processed Flutterwave payment', {
+            userId: customer.id,
+            transactionId: transaction[0].id,
+            amount,
+            tokenSymbol: tokenSymbol || 'NGN',
+            reference: tx_ref,
+          });
+
+          return transaction[0];
+        } catch (error) {
+          this.logger.error('Failed to process fiat account', {
+            error: error.message,
+            userId: customer.id,
+            reference: tx_ref,
+          });
+          throw error;
+        }
+      } catch (error) {
+        this.logger.error('Failed to process Flutterwave payment', {
+          error: error.message,
+          stack: error.stack,
+          userId: customer.id,
+          amount,
+          reference: tx_ref,
+        });
+        throw error;
+      }
+    }
+    throw new Error('Transaction processing did not complete successfully');
+  }
+
+  private async handleTransferCompleted(data: any) {
+    const { reference, status, amount, tokenSymbol } = data;
+
+    if (!reference) {
+      throw new BadRequestException('Missing reference in transfer data');
+    }
+
+    // Find the transaction by reference
+    let transaction = await this.prisma.transaction.findFirst({
+      where: { reference },
+    });
+
+    // If not found, attempt to find transaction by payoutReference inside metadata
     if (!transaction) {
-      throw new Error('Transaction not found');
+      this.logger.debug(
+        'Transaction not found by reference; attempting metadata lookup',
+        { reference },
+      );
+      try {
+        const rows: any = await this.prisma.$queryRaw`
+          SELECT * FROM "Transaction" WHERE (metadata ->> 'payoutReference') = ${reference} LIMIT 1
+        `;
+        if (rows && rows.length > 0) {
+          const row = rows[0];
+          transaction = await this.prisma.transaction.findUnique({
+            where: { id: row.id },
+          });
+        }
+      } catch (err) {
+        this.logger.error('Raw lookup for transaction by metadata failed', {
+          error: err?.message || err,
+        });
+      }
+    }
+
+    if (!transaction) {
+      this.logger.warn('Transaction not found for reference', { reference });
+      throw new NotFoundException(
+        `Transaction with reference ${reference} not found`,
+      );
     }
 
     // Update transaction status
-    if (status === 'successful') {
-      await this.buyService.completeBuy(transaction.id, {
-        flutterwaveTransactionId: transaction_id,
-        amountPaid: amount,
+    const updateData: Prisma.TransactionUpdateInput = {
+      status: status === 'SUCCESSFUL' ? 'COMPLETED' : 'FAILED',
+      metadata: {
+        ...((transaction.metadata as object) || {}),
+        ...data,
+        updatedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    };
+
+    const updatedTx = await this.prisma.transaction.update({
+      where: { id: transaction.id },
+      data: updateData,
+    });
+
+    // If transfer succeeded and this was a SELL, finalize the sell (debit + burn)
+    if (status === 'SUCCESSFUL' && transaction.type === 'SELL') {
+      try {
+        await this.sellService.finalizeSell(transaction.id);
+      } catch (error) {
+        this.logger.error(
+          'Failed to finalize sell after transfer confirmation',
+          {
+            error: error?.message || error,
+            transactionId: transaction.id,
+          },
+        );
+        // Don't throw here - webhook should return OK so provider won't retry excessively
+      }
+    }
+
+    // If transfer failed, log the issue for manual review
+    if (status === 'FAILED') {
+      this.logger.error('Transfer failed', {
+        reference,
+        amount,
+        tokenSymbol,
+        transactionId: transaction.id,
+        userId: transaction.userId,
       });
-    } else if (['failed', 'cancelled'].includes(status)) {
-      await this.buyService.failBuy(transaction.id, {
-        status: 'FAILED',
-        failureReason: payload.data.processor_response || 'Payment failed',
-      });
+
+      // In a real implementation, you might want to:
+      // 1. Create a support ticket
+      // 2. Notify the operations team
+      // 3. Potentially refund the user after investigation
     }
 
     return { success: true };
   }
 
-  private async handleChargeCompleted(payload: FlutterwaveWebhookDto) {
-    const { data } = payload;
-    const {
-      account_number,
-      amount,
-      tokenSymbol,
-      tx_ref,
-      status,
-      id: transactionId,
-    } = data;
+  private async handleTransferFailed(data: any) {
+    const { reference, amount, tokenSymbol } = data;
 
-    this.logger.log(`Processing charge.completed webhook`, {
-      transactionId,
-      accountNumber: account_number,
-      amount,
-      tokenSymbol,
-      status,
+    if (!reference) {
+      throw new BadRequestException('Missing reference in transfer data');
+    }
+
+    // Find the transaction by reference
+    let transaction = await this.prisma.transaction.findFirst({
+      where: { reference },
     });
 
-    return this.prisma.$transaction(async (tx) => {
-      // Check for duplicate transaction
-      const existingTransaction = await tx.transaction.findUnique({
-        where: { reference: tx_ref },
-      });
-
-      if (existingTransaction) {
-        this.logger.warn(`Duplicate transaction detected`, {
-          reference: tx_ref,
-          transactionId: existingTransaction.id,
-        });
-        return existingTransaction;
-      }
-
-      // Find the crypto wallet by the account number (mapped to wallet address)
-      const cryptoWallet = await tx.cryptoWallet.findFirst({
-        where: {
-          address: account_number,
-          tokenSymbol,
-        },
-      });
-
-      if (!cryptoWallet) {
-        throw new BadRequestException(
-          `No crypto wallet found for address: ${account_number}`,
-        );
-      }
-
-      // Only process successful transactions
-      if (status !== 'successful') {
-        this.logger.warn(
-          `Received non-successful transaction status: ${status}`,
-          {
-            transactionId,
-            reference: tx_ref,
-          },
-        );
-        return null;
-      }
-
+    // If not found, attempt to find transaction by payoutReference inside metadata
+    if (!transaction) {
+      this.logger.debug(
+        'Transaction not found by reference (failed handler); attempting metadata lookup',
+        { reference },
+      );
       try {
-        // Update crypto balance
-        await tx.cryptoBalance.upsert({
-          where: {
-            userId_tokenSymbol_network: {
-              userId: cryptoWallet.userId,
-              tokenSymbol,
-              network: cryptoWallet.network,
-            },
-          },
-          update: {
-            available: { increment: amount },
-            updatedAt: new Date(),
-          },
-          create: {
-            userId: cryptoWallet.userId,
-            tokenSymbol,
-            network: cryptoWallet.network,
-            available: amount,
-            staked: 0,
-            pending: 0,
-          },
-        });
-
-        // Create transaction record
-        const transaction = await tx.transaction.create({
-          data: {
-            userId: cryptoWallet.userId,
-            type: 'DEPOSIT',
-            status: 'COMPLETED',
-            amount,
-            tokenSymbol,
-            fee: 0,
-            netAmount: amount,
-            reference: tx_ref,
-            completedAt: new Date(),
-            cryptoWalletId: cryptoWallet.id,
-          },
-        });
-
-        // Create audit log
-        await tx.auditLog.create({
-          data: {
-            userId: cryptoWallet.userId,
-            action: 'CRYPTO_DEPOSIT',
-            entityType: 'TRANSACTION',
-            entityId: transaction.id,
-            metadata: {
-              amount,
-              tokenSymbol,
-              reference: tx_ref,
-              walletAddress: cryptoWallet.address,
-              transactionId,
-              network: cryptoWallet.network,
-            },
-          },
-        });
-
-        // Update user's balance using the balance service if needed
-        await this.balanceService.creditAccount({
-          userId: cryptoWallet.userId,
-          amount,
-          tokenSymbol,
-          reference: tx_ref,
-          metadata: {
-            transactionId: transaction.id,
-            walletId: cryptoWallet.id,
-            network: cryptoWallet.network,
-          },
-        });
-
-        return transaction;
-      } catch (error) {
-        this.logger.error('Error processing charge.completed webhook:', error);
-        throw error;
+        const rows: any = await this.prisma.$queryRaw`
+          SELECT * FROM "Transaction" WHERE (metadata ->> 'payoutReference') = ${reference} LIMIT 1
+        `;
+        if (rows && rows.length > 0) {
+          const row = rows[0];
+          transaction = await this.prisma.transaction.findUnique({
+            where: { id: row.id },
+          });
+        }
+      } catch (err) {
+        this.logger.error(
+          'Raw lookup for transaction by metadata failed (failed handler)',
+          { error: err?.message || err },
+        );
       }
-    });
-  }
+    }
 
-  private async handleTransferCompleted(payload: any) {
-    // Implement transfer completion logic here
-    this.logger.log('Processing transfer.completed webhook', {
-      transferId: payload?.data?.id,
+    if (!transaction) {
+      this.logger.warn('Transaction not found for reference', { reference });
+      throw new NotFoundException(
+        `Transaction with reference ${reference} not found`,
+      );
+    }
+
+    // Update transaction status to failed
+    const updateData: Prisma.TransactionUpdateInput = {
+      status: 'FAILED',
+      metadata: {
+        ...((transaction.metadata as object) || {}),
+        ...data,
+        updatedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    };
+
+    await this.prisma.transaction.update({
+      where: { id: transaction.id },
+      data: updateData,
     });
 
-    return { status: 'success', message: 'Transfer webhook received' };
+    // Log the failure for manual review
+    this.logger.error('Transfer failed', {
+      reference,
+      amount,
+      tokenSymbol,
+      transactionId: transaction.id,
+      userId: transaction.userId,
+    });
+
+    return { success: true };
   }
 
   private async recordFailedTransaction(

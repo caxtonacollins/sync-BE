@@ -41,7 +41,7 @@ export const tokenSymbol_DECIMALS: Record<string, number> = {
  * Get decimal places for a tokenSymbol
  */
 export function getTokenSymbolDecimals(tokenSymbol: string): number {
-  return tokenSymbol_DECIMALS[tokenSymbol.toUpperCase()] ?? 2;
+  return tokenSymbol_DECIMALS[tokenSymbol] ?? 2;
 }
 
 /**
@@ -59,7 +59,7 @@ export function isFiattokenSymbol(tokenSymbol: string): boolean {
     'UGX',
     'JPY',
   ];
-  return fiatCurrencies.includes(tokenSymbol.toUpperCase());
+  return fiatCurrencies.includes(tokenSymbol);
 }
 
 /**
@@ -77,16 +77,27 @@ export function toSmallestUnit(
   tokenSymbol: string,
 ): bigint {
   const decimals = getTokenSymbolDecimals(tokenSymbol);
-  const amountDecimal =
-    typeof amount === 'string' || typeof amount === 'number'
-      ? new Decimal(amount)
-      : amount;
-
+  // Convert to string first to handle scientific notation properly
+  const amountStr = amount.toString();
+  
+  // Use Decimal.js for precise arithmetic with large numbers
+  const amountDecimal = new Decimal(amountStr);
   const multiplier = new Decimal(10).pow(decimals);
-  const smallestUnit = amountDecimal.mul(multiplier);
-  // const amountInWei = BigInt(Math.floor(amount * Math.pow(10, decimals)));
-
-  return BigInt(smallestUnit.floor().toString());
+  
+  try {
+    const smallestUnit = amountDecimal.times(multiplier);
+    // Convert to string first to avoid scientific notation, then to BigInt
+    return BigInt(smallestUnit.toFixed(0, Decimal.ROUND_DOWN));
+  } catch (error) {
+    console.error('Error converting to smallest unit:', {
+      amount,
+      amountStr,
+      amountDecimal: amountDecimal.toString(),
+      multiplier: multiplier.toString(),
+      error: error.message,
+    });
+    throw new Error(`Failed to convert amount to smallest unit: ${error.message}`);
+  }
 }
 
 /**
@@ -160,7 +171,7 @@ export function formatAmount(
       BTC: '₿',
     };
 
-    const symbol = symbols[tokenSymbol.toUpperCase()] || tokenSymbol.toUpperCase();
+    const symbol = symbols[tokenSymbol] || tokenSymbol;
     formatted = `${symbol}${formatted}`;
   }
 

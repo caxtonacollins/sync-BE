@@ -352,7 +352,7 @@ model EncryptedKey {
 model AuditLog {
   id         String   @id @default(uuid())
   userId     String?
-  user       User?    @relation(fields: [userId], references: [id])
+  user       User?   @relation(fields: [userId], references: [id])
   action     String
   entityType String?
   entityId   String?

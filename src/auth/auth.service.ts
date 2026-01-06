@@ -12,7 +12,6 @@ import { SessionService } from '../session/session.service';
 import { KeyManagementService } from './key-management.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
-import { randomBytes } from 'crypto';
 import { ethers } from 'ethers';
 import { LoginDto } from 'src/types/dto/auth';
 import {
@@ -28,7 +27,6 @@ import {
   WebAuthnCredential,
 } from '@simplewebauthn/server';
 import * as crypto from 'crypto';
-import * as base64url from 'base64url';
 import { Response } from 'express';
 
 const rpName = 'Sync';
@@ -52,12 +50,22 @@ export class AuthService {
 
   private setRefreshCookie(res: Response, token: string) {
     const isProd = process.env.NODE_ENV === 'production';
-    const sameSite = process.env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict' | undefined;
+    const forceSecure = process.env.FORCE_SECURE_COOKIES === 'true';
+    const frontendIsHttps = (process.env.FRONTEND_URL || '').startsWith(
+      'https',
+    );
+    const secure = isProd || forceSecure || frontendIsHttps;
+    const sameSiteEnv = process.env.COOKIE_SAMESITE as
+      | 'lax'
+      | 'none'
+      | 'strict'
+      | undefined;
+    const sameSite = sameSiteEnv || (secure ? 'none' : 'lax');
 
     res.cookie(this.refreshCookieName, token, {
       httpOnly: true,
-      secure: isProd,
-      sameSite: sameSite || (isProd ? 'none' : 'lax'),
+      secure: secure,
+      sameSite: sameSite,
       path: '/auth',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
@@ -65,17 +73,25 @@ export class AuthService {
 
   private clearRefreshCookie(res: Response) {
     const isProd = process.env.NODE_ENV === 'production';
-    const sameSite = process.env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict' | undefined;
+    const forceSecure = process.env.FORCE_SECURE_COOKIES === 'true';
+    const frontendIsHttps = (process.env.FRONTEND_URL || '').startsWith(
+      'https',
+    );
+    const secure = isProd || forceSecure || frontendIsHttps;
+    const sameSiteEnv = process.env.COOKIE_SAMESITE as
+      | 'lax'
+      | 'none'
+      | 'strict'
+      | undefined;
+    const sameSite = sameSiteEnv || (secure ? 'none' : 'lax');
 
     res.clearCookie(this.refreshCookieName, {
       httpOnly: true,
-      secure: isProd,
-      sameSite: sameSite || (isProd ? 'none' : 'lax'),
+      secure: secure,
+      sameSite: sameSite,
       path: '/auth',
     });
   }
-
-
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -397,9 +413,10 @@ export class AuthService {
       },
     });
 
-    const passkeyAuthenticators = await this.prisma.passkeyAuthenticator.findMany({
-      where: { userId },
-    });
+    const passkeyAuthenticators =
+      await this.prisma.passkeyAuthenticator.findMany({
+        where: { userId },
+      });
 
     return {
       mfaEnabled: user.twoFactorEnabled,
@@ -516,10 +533,7 @@ export class AuthService {
     // Clean up any existing challenges for this user
     await this.prisma.authChallenge.deleteMany({
       where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { userId }
-        ]
+        OR: [{ expiresAt: { lt: new Date() } }, { userId }],
       },
     });
 
@@ -555,7 +569,7 @@ export class AuthService {
       attestationType: 'none',
       authenticatorSelection: {
         residentKey: 'required',
-        userVerification: 'required'
+        userVerification: 'required',
       },
     });
 
@@ -573,7 +587,7 @@ export class AuthService {
   async verifyRegistration(userId: string, body: RegistrationResponseJSON) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { passkeyAuthenticators: true }
+      include: { passkeyAuthenticators: true },
     });
 
     if (!user) {
@@ -584,7 +598,7 @@ export class AuthService {
     const challengeRecord = await this.prisma.authChallenge.findFirst({
       where: {
         userId: user.id,
-        expiresAt: { gte: new Date() }
+        expiresAt: { gte: new Date() },
       },
     });
 
@@ -601,31 +615,40 @@ export class AuthService {
         expectedOrigin: origin,
         expectedRPID: rpID,
       });
-
     } catch (error) {
       const err = error as Error;
-      throw new BadRequestException(err.message || 'Failed to verify registration');
+      throw new BadRequestException(
+        err.message || 'Failed to verify registration',
+      );
     }
 
     const { verified, registrationInfo } = verification;
 
     if (verified && registrationInfo) {
       const { credential, credentialBackedUp } = registrationInfo;
-      const { id: credentialID, publicKey: credentialPublicKey, counter } = credential;
+      const {
+        id: credentialID,
+        publicKey: credentialPublicKey,
+        counter,
+      } = credential;
 
-      const existingAuthenticator = await this.prisma.passkeyAuthenticator.findUnique({
-        where: { credentialID },
-      });
+      const existingAuthenticator =
+        await this.prisma.passkeyAuthenticator.findUnique({
+          where: { credentialID },
+        });
 
       if (existingAuthenticator) {
-        throw new BadRequestException('This authenticator has already been registered.');
+        throw new BadRequestException(
+          'This authenticator has already been registered.',
+        );
       }
 
       await this.prisma.passkeyAuthenticator.create({
         data: {
           userId: user.id,
           credentialID: credentialID,
-          credentialPublicKey: Buffer.from(credentialPublicKey).toString('base64url'),
+          credentialPublicKey:
+            Buffer.from(credentialPublicKey).toString('base64url'),
           counter: counter,
           credentialDeviceType: 'singleDevice', // Adjust as needed
           credentialBackedUp: credentialBackedUp,
@@ -698,7 +721,7 @@ export class AuthService {
     const challengeRecord = await this.prisma.authChallenge.findFirst({
       where: {
         userId: user.id,
-        expiresAt: { gte: new Date() }
+        expiresAt: { gte: new Date() },
       },
     });
 
@@ -726,7 +749,9 @@ export class AuthService {
     } catch (error) {
       const err = error as Error;
       console.error('Passkey Authentication Verification Error:', err);
-      throw new BadRequestException(err.message || 'Failed to verify authentication');
+      throw new BadRequestException(
+        err.message || 'Failed to verify authentication',
+      );
     }
 
     const { verified, authenticationInfo } = verification;
@@ -737,7 +762,9 @@ export class AuthService {
         data: { counter: authenticationInfo.newCounter },
       });
 
-      await this.prisma.authChallenge.delete({ where: { id: challengeRecord.id } });
+      await this.prisma.authChallenge.delete({
+        where: { id: challengeRecord.id },
+      });
 
       await this.prisma.user.update({
         where: { id: user.id },

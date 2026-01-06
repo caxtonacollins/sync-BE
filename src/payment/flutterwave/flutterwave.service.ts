@@ -489,10 +489,10 @@ export class FlutterwaveService {
         account_bank: fiatAccount.bankCode,
         account_number: fiatAccount.accountNumber,
         amount: amountInSubunit,
-        tokenSymbol: tokenSymbol.toUpperCase(),
+        tokenSymbol: tokenSymbol,
         narration: 'Swap payout from Sync',
         reference: payoutReference,
-        callback_url: `${process.env.NEXT_PUBLIC_API_URL}/webhooks/flutterwave`,
+        callback_url: `${process.env.BACKEND_URL}/webhooks/flutterwave`,
 
         debit_tokenSymbol: tokenSymbol,
         beneficiary_name: accountVerification.account_name || 'Sync User',

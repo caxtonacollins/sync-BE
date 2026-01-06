@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { AuditLogService } from 'src/audit-log/audit-log.service';
 import { FlutterwaveService } from 'src/payment/flutterwave/flutterwave.service';
@@ -9,9 +9,10 @@ import { TokenContractService } from 'src/contract/services/erc20-token/erc20-to
 import { WalletService } from 'src/transaction/wallet/wallet.service';
 import { toSmallestUnit } from 'libs/currency.utils';
 
-// src/buy/buy.service.ts
 @Injectable()
 export class BuyService {
+  private readonly logger = new Logger(BuyService.name);
+  
   constructor(
     private prisma: PrismaService,
     private flutterwaveService: FlutterwaveService,
@@ -78,7 +79,7 @@ export class BuyService {
         name: `${user?.firstName} ${user?.lastName}`,
       },
       callback_url: `${process.env.BACKEND_URL}/webhooks/flutterwave`,
-      redirect_url: `${process.env.NEXT_PUBLIC_API_URL}/dashboard`,
+      redirect_url: `${process.env.FRONTEND_URL}/dashboard`,
       customizations: {
         title: 'SyncPay sNGN Purchase',
         description: `Purchase ${amountNGN} sNGN`,
@@ -144,6 +145,10 @@ export class BuyService {
         where: { id: transactionId },
       });
       if (!txRecord) throw new Error('Transaction not found');
+      
+      const tokenSymbol = txRecord.tokenSymbol;
+      if (!tokenSymbol) throw new Error('Token symbol not found');
+      const smallestAmount = toSmallestUnit(txRecord.amount.toString(), tokenSymbol);
 
       // Idempotency: if already completed, no action needed
       if (txRecord.status === 'COMPLETED') {
@@ -161,7 +166,7 @@ export class BuyService {
       const cryptoWallet = wallets[0];
 
       // 1. Mint tokens on-chain to user's crypto wallet
-      const smallestAmount = toSmallestUnit(txRecord.amount.toString(), 'sNGN');
+
       const mintResult = await this.tokenContractService.mintToken(
         cryptoWallet.address,
         smallestAmount.toString(),
@@ -222,18 +227,27 @@ export class BuyService {
         return tx;
       });
     } catch (error) {
-      // Log the error
-      await this.auditLogService.create({
-        action: 'BUY_COMPLETION_FAILED',
-        user: {
-          connect: { id: transactionId },
-        },
-        metadata: {
-          transactionId,
-          error: error.message,
-          flutterwaveTxId: metadata?.flutterwaveTransactionId,
-        },
+      // Log the error - first get the transaction to get the userId
+      const tx = await this.prisma.transaction.findUnique({
+        where: { id: transactionId },
+        select: { userId: true }
       });
+
+      if (tx?.userId) {
+        await this.auditLogService.create({
+          action: 'BUY_COMPLETION_FAILED',
+          user: {
+            connect: { id: tx.userId },
+          },
+          metadata: {
+            transactionId,
+            error: error.message,
+            flutterwaveTxId: metadata?.flutterwaveTransactionId,
+          },
+        });
+      } else {
+        this.logger.error(`Could not find transaction or user for transactionId: ${transactionId}`);
+      }
 
       // Rethrow to allow the caller to handle the error
       throw error;
