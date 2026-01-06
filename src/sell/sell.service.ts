@@ -74,10 +74,11 @@ export class SellService {
         currency || 'NGN',
       );
 
-      // Store payout reference and set processing (do NOT debit or burn yet)
+      // Store payout reference, set transaction.reference to payoutReference, and set processing (do NOT debit or burn yet)
       await this.prisma.transaction.update({
         where: { id: tx.id },
         data: {
+          reference: payoutResult?.reference,
           status: 'PROCESSING',
           metadata: {
             ...(tx.metadata as Record<string, any>),

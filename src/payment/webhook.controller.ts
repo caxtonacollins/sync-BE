@@ -12,13 +12,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHmac } from 'crypto';
 import { ApiTags } from '@nestjs/swagger';
-import { TransactionService } from '../../transaction/transaction.service';
-import { WalletService } from '../../transaction/wallet/wallet.service';
+import { TransactionService } from '../transaction/transaction.service';
+import { WalletService } from '../transaction/wallet/wallet.service';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { SellService } from 'src/sell/sell.service';
+import { BuyService } from 'src/buy/buy.service';
 
 @Controller('webhooks/flutterwave')
 @ApiTags('Webhooks')
@@ -36,6 +38,8 @@ export class WebhookController {
     private readonly walletService: WalletService,
     @Inject(forwardRef(() => SellService))
     private readonly sellService: SellService,
+    @Inject(forwardRef(() => BuyService))
+    private readonly buyService: BuyService,
     private readonly prismaService: PrismaService,
   ) {
     this.prisma = prismaService;
@@ -53,9 +57,15 @@ export class WebhookController {
       const secretHash = this.configService.get(
         'FLUTTERWAVE_WEBHOOK_SECRET_HASH',
       );
-      if (secretHash && signature !== secretHash) {
-        console.error('Invalid webhook signature');
-        return { status: 'error', message: 'Invalid signature' };
+      if (secretHash) {
+        // Verify signature using HMAC-SHA256 of the raw payload (Flutterwave verif-hash)
+        const computed = createHmac('sha256', secretHash)
+          .update(JSON.stringify(payload))
+          .digest('hex');
+        if (signature !== computed) {
+          console.error('Invalid webhook signature');
+          return { status: 'error', message: 'Invalid signature' };
+        }
       }
 
       const { event, data } = payload;
@@ -91,11 +101,40 @@ export class WebhookController {
   private async handleSuccessfulCharge(data: any) {
     const { id, tx_ref, amount, tokenSymbol, status, customer } = data;
 
-    if (!tx_ref || !customer?.id) {
-      throw new BadRequestException('Invalid charge data');
+    if (!tx_ref) {
+      throw new BadRequestException('Invalid charge data: missing tx_ref');
     }
 
-    // Check if transaction already exists
+    // If this is a BUY flow (we set tx_ref as BUY-{transactionId}), delegate to BuyService
+    if (tx_ref.startsWith('BUY-')) {
+      const transactionId = tx_ref.replace('BUY-', '');
+      if (status === 'successful') {
+        await this.buyService.completeBuy(transactionId, {
+          flutterwaveTransactionId: id,
+          amountPaid: amount,
+        });
+        this.logger.log('Processed BUY webhook and completed transaction', {
+          tx_ref,
+        });
+        return { success: true };
+      } else if (['failed', 'cancelled'].includes(status)) {
+        await this.buyService.failBuy(transactionId, {
+          status: 'FAILED',
+          failureReason: data?.processor_response || 'Payment failed',
+        });
+        this.logger.log('Processed BUY webhook and marked transaction failed', {
+          tx_ref,
+        });
+        return { success: true };
+      }
+    }
+
+    // For non-BUY flows, require customer.id to exist
+    if (!customer?.id) {
+      throw new BadRequestException('Invalid charge data: missing customer id');
+    }
+
+    // Check if transaction already exists (idempotency)
     const existingTx = await this.prisma.transaction.findFirst({
       where: { reference: tx_ref },
     });
@@ -174,9 +213,32 @@ export class WebhookController {
     }
 
     // Find the transaction by reference
-    const transaction = await this.prisma.transaction.findFirst({
+    let transaction = await this.prisma.transaction.findFirst({
       where: { reference },
     });
+
+    // If not found, attempt to find transaction by payoutReference inside metadata
+    if (!transaction) {
+      this.logger.debug(
+        'Transaction not found by reference; attempting metadata lookup',
+        { reference },
+      );
+      try {
+        const rows: any = await this.prisma.$queryRaw`
+          SELECT * FROM "Transaction" WHERE (metadata ->> 'payoutReference') = ${reference} LIMIT 1
+        `;
+        if (rows && rows.length > 0) {
+          const row = rows[0];
+          transaction = await this.prisma.transaction.findUnique({
+            where: { id: row.id },
+          });
+        }
+      } catch (err) {
+        this.logger.error('Raw lookup for transaction by metadata failed', {
+          error: err?.message || err,
+        });
+      }
+    }
 
     if (!transaction) {
       this.logger.warn('Transaction not found for reference', { reference });
@@ -243,9 +305,33 @@ export class WebhookController {
     }
 
     // Find the transaction by reference
-    const transaction = await this.prisma.transaction.findFirst({
+    let transaction = await this.prisma.transaction.findFirst({
       where: { reference },
     });
+
+    // If not found, attempt to find transaction by payoutReference inside metadata
+    if (!transaction) {
+      this.logger.debug(
+        'Transaction not found by reference (failed handler); attempting metadata lookup',
+        { reference },
+      );
+      try {
+        const rows: any = await this.prisma.$queryRaw`
+          SELECT * FROM "Transaction" WHERE (metadata ->> 'payoutReference') = ${reference} LIMIT 1
+        `;
+        if (rows && rows.length > 0) {
+          const row = rows[0];
+          transaction = await this.prisma.transaction.findUnique({
+            where: { id: row.id },
+          });
+        }
+      } catch (err) {
+        this.logger.error(
+          'Raw lookup for transaction by metadata failed (failed handler)',
+          { error: err?.message || err },
+        );
+      }
+    }
 
     if (!transaction) {
       this.logger.warn('Transaction not found for reference', { reference });

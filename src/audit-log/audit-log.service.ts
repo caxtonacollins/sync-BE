@@ -21,8 +21,4 @@ export class AuditLogService {
   async update(id: string, data: Prisma.AuditLogUpdateInput) {
     return this.prisma.auditLog.update({ where: { id }, data });
   }
-
-  async remove(id: string) {
-    return this.prisma.auditLog.delete({ where: { id } });
-  }
 }

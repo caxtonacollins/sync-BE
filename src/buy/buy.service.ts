@@ -3,9 +3,7 @@ import axios from 'axios';
 import { AuditLogService } from 'src/audit-log/audit-log.service';
 import { FlutterwaveService } from 'src/payment/flutterwave/flutterwave.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { TransactionService } from 'src/transaction/transaction.service';
 import { CreateBuyRequestDto } from 'src/types/dto/buy/buy-request.dto';
-import * as crypto from 'crypto';
 import { BalanceService } from 'src/payment/balance.service';
 import { TokenContractService } from 'src/contract/services/erc20-token/erc20-token.service';
 import { WalletService } from 'src/transaction/wallet/wallet.service';
@@ -79,7 +77,7 @@ export class BuyService {
         email: user?.email,
         name: `${user?.firstName} ${user?.lastName}`,
       },
-      callback_url: `${process.env.NEXT_PUBLIC_API_URL}/buy/webhook`,
+      callback_url: `${process.env.BACKEND_URL}/webhooks/flutterwave`,
       redirect_url: `${process.env.NEXT_PUBLIC_API_URL}/dashboard`,
       customizations: {
         title: 'SyncPay sNGN Purchase',
@@ -135,53 +133,6 @@ export class BuyService {
       },
     };
   }
-
-  // async handleWebhook(payload: any, signature?: string) {
-  //   console.log('payload, webhook hit', payload);
-  //   // Verify webhook signature using header value passed from controller
-  //   const secret =
-  //     process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH ||
-  //     process.env.FLUTTERWAVE_SECRET_HASH;
-  //   const signatureHeader =
-  //     signature || payload.headers?.['verif-hash'] || payload.signature; // backward compat
-
-  //   if (secret) {
-  //     const hash = crypto
-  //       .createHmac('sha256', secret)
-  //       .update(JSON.stringify(payload))
-  //       .digest('hex');
-
-  //     if (hash !== signatureHeader) {
-  //       throw new Error('Invalid webhook signature');
-  //     }
-  //   }
-
-  //   const { tx_ref, status, transaction_id, amount } = payload.data;
-
-  //   // Get transaction
-  //   const transaction = await this.prisma.transaction.findUnique({
-  //     where: { id: tx_ref.replace('BUY-', '') },
-  //   });
-
-  //   if (!transaction) {
-  //     throw new Error('Transaction not found');
-  //   }
-
-  //   // Update transaction status
-  //   if (status === 'successful') {
-  //     await this.completeBuy(transaction.id, {
-  //       flutterwaveTransactionId: transaction_id,
-  //       amountPaid: amount,
-  //     });
-  //   } else if (['failed', 'cancelled'].includes(status)) {
-  //     await this.failBuy(transaction.id, {
-  //       status: 'FAILED',
-  //       failureReason: payload.data.processor_response || 'Payment failed',
-  //     });
-  //   }
-
-  //   return { success: true };
-  // }
 
   async completeBuy(
     transactionId: string,

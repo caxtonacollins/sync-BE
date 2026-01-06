@@ -34,9 +34,4 @@ export class AuditLogController {
   update(@Param('id') id: string, @Body() data: Prisma.AuditLogUpdateInput) {
     return this.auditLogService.update(id, data);
   }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.auditLogService.remove(id);
-  }
 }

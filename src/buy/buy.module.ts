@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BuyService } from './buy.service';
 import { AuditLogModule } from 'src/audit-log/audit-log.module';
 import { FlutterwaveModule } from 'src/payment/flutterwave/flutterwave.module';
@@ -10,17 +10,17 @@ import { ContractModule } from 'src/contract/contract.module';
 import { WalletModule } from 'src/transaction/wallet/wallet.module';
 
 @Module({
-    imports: [
-        PrismaModule,
-        TransactionModule,
-        FlutterwaveModule,
-        AuditLogModule,
-        BalanceModule,
-        ContractModule,
-        WalletModule,
-    ],
-    controllers: [BuyController],
-    providers: [BuyService],
-    exports: [BuyService],
+  imports: [
+    PrismaModule,
+    TransactionModule,
+    FlutterwaveModule,
+    AuditLogModule,
+    forwardRef(() => BalanceModule),
+    ContractModule,
+    WalletModule,
+  ],
+  controllers: [BuyController],
+  providers: [BuyService],
+  exports: [BuyService],
 })
 export class BuyModule {}
