@@ -25,35 +25,26 @@ export class TransferOwnershipDto {
   newOwnerAddress: string;
 }
 
-export class SwapFiatToTokenDto {
+export class CreateSwapDto {
   @IsString()
-  userContractAddress: string;
+  fromToken: string;
 
   @IsString()
-  fiatSymbol: string;
+  toToken: string;
 
   @IsString()
-  tokenSymbol: string;
+  fromAmount: string;
+
+  @IsString()
+  minToAmount: string;
 
   @IsNumber()
-  fiatAmount: number;
-
-  @IsString()
-  swapOrderId: string;
-
-  @IsNumber()
-  tokenAmount: number;
-
-  @IsNumber()
-  fee: number;
+  deadline: number; // Unix timestamp in seconds
 }
 
-export class SwapTokenToFiatDto {
-  userContractAddress: string;
-  fiatSymbol: string;
-  tokenSymbol: string;
-  tokenAmount: string;
-  swapOrderId: string;
+export class ExecuteSwapDto {
+  @IsNumber()
+  swapId: number;
 }
 
 export class MintTokenDto {

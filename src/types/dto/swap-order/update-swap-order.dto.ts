@@ -52,11 +52,18 @@ export class UpdateSwapOrderDto {
   @IsOptional()
   @IsObject()
   metadata?: {
-    provider: string;
-    liquidityCheck: LiquidityCheckDto;
+    provider?: string;
+    liquidityCheck?: LiquidityCheckDto;
+    minToAmount?: string;
+    deadline?: number;
+    error?: string;
   };
 
   @IsOptional()
   @IsString()
   transactionHash?: string;
+
+  @IsOptional()
+  @IsString()
+  swapId?: string;
 }

@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -40,6 +41,7 @@ export class AuthService {
   private readonly MAX_LOGIN_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION = 30; // minutes
   private readonly refreshCookieName = 'refresh_token';
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private prisma: PrismaService,
@@ -154,8 +156,9 @@ export class AuthService {
     userAgent: string,
     res: Response,
   ) {
+    this.logger.log(`User ${loginDto.email} is logging in`);
     const user = await this.validateUser(loginDto.email, loginDto.password);
-    if (!user) {
+    if (user === null || user === undefined) {
       throw new UnauthorizedException('Invalid credentials');
     }
 

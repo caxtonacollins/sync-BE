@@ -106,27 +106,6 @@ export class LiquidityEventProcessorService {
 
     try {
       switch (eventName) {
-        case EVENT_NAMES.FiatLiquidityAdded:
-          await this.handleFiatLiquidityAdded(evt);
-          break;
-        case EVENT_NAMES.TokenLiquidityAdded:
-          await this.handleTokenLiquidityAdded(evt);
-          break;
-        case EVENT_NAMES.FiatLiquidityRemoved:
-          await this.handleFiatLiquidityRemoved(evt);
-          break;
-        case EVENT_NAMES.FiatDeposit:
-          await this.handleFiatDeposit(evt);
-          break;
-
-        case EVENT_NAMES.FiatToTokenSwapExecuted:
-          await this.handleFiatToTokenSwap(evt);
-          break;
-
-        case EVENT_NAMES.TokenToFiatSwapExecuted:
-          await this.handleTokenToFiatSwap(evt);
-          break;
-
         case EVENT_NAMES.WithdrawalCompleted:
           await this.handleWithdrawalCompleted(evt);
           break;
@@ -168,13 +147,13 @@ export class LiquidityEventProcessorService {
         balance: {
           [operation === 'add' ? 'increment' : 'decrement']: amount,
         },
-        lastUpdated: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
+        lastUpdated: new Date(evt.blockTimestamp),
       },
       create: {
         symbol,
         type,
         balance: amount,
-        lastUpdated: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
+        lastUpdated: new Date(evt.blockTimestamp),
       },
     });
 
@@ -185,150 +164,13 @@ export class LiquidityEventProcessorService {
         type: operation,
         transactionHash: evt.transactionHash,
         blockNumber: evt.blockNumber,
-        timestamp: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
+        timestamp: new Date(evt.blockTimestamp),
       },
     });
 
     this.logger.log(
       `Liquidity ${operation}: ${amount} ${symbol} | New Balance: ${pool.balance}`,
     );
-  }
-
-  private async handleFiatLiquidityAdded(evt: EventPayload) {
-    const { fiat_symbol, amount } = evt.data;
-    const parsedAmount = parseFloat(amount);
-    await this.updateLiquidityPool(
-      evt,
-      fiat_symbol,
-      'fiat',
-      parsedAmount,
-      'add',
-    );
-  }
-
-  private async handleTokenLiquidityAdded(evt: EventPayload) {
-    const { token_symbol, amount_formatted, amount } = evt.data;
-    const parsedAmount = parseFloat(amount_formatted || amount);
-    await this.updateLiquidityPool(
-      evt,
-      token_symbol,
-      'token',
-      parsedAmount,
-      'add',
-    );
-  }
-
-  private async handleFiatLiquidityRemoved(evt: EventPayload) {
-    const { fiat_symbol, amount_formatted, amount } = evt.data;
-    const parsedAmount = parseFloat(amount_formatted || amount);
-    await this.updateLiquidityPool(
-      evt,
-      fiat_symbol,
-      'fiat',
-      parsedAmount,
-      'remove',
-    );
-  }
-
-  private async handleFiatDeposit(evt: EventPayload) {
-    const {
-      user,
-      fiat_account_id,
-      fiat_symbol,
-      amount,
-      amount_formatted,
-      transaction_id,
-    } = evt.data;
-
-    this.logger.log(
-      `Fiat Deposit: ${amount_formatted || amount} ${fiat_symbol} | User: ${user} | Ref: ${transaction_id}`,
-    );
-
-    if (!transaction_id) {
-      this.logger.warn('FiatDeposit missing transaction_id, skipping');
-      return;
-    }
-
-    const wallet = await this.prisma.cryptoWallet.findFirst({
-      where: { address: user },
-    });
-
-    if (!wallet) {
-      this.logger.warn(`User with address ${user} not found for fiat deposit.`);
-      return;
-    }
-
-    // Upsert transaction as deposit acknowledgement
-    await this.prisma.transaction.upsert({
-      where: { reference: transaction_id },
-      update: {
-        status: 'completed',
-        completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
-        blockNumber: evt.blockNumber,
-        transactionHash: evt.transactionHash,
-      },
-      create: {
-        userId: wallet.userId,
-        type: 'deposit',
-        status: 'completed',
-        amount: parseFloat(amount_formatted || amount),
-        tokenSymbol: fiat_symbol || 'USD',
-        netAmount: parseFloat(amount_formatted || amount),
-        reference: transaction_id,
-        blockNumber: evt.blockNumber,
-        transactionHash: evt.transactionHash,
-        completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
-      },
-    });
-  }
-
-  private async handleFiatToTokenSwap(evt: EventPayload) {
-    const {
-      user,
-      swap_order_id,
-      fiat_symbol,
-      token_symbol,
-      fiat_amount,
-      fiat_amount_formatted,
-      token_amount,
-      token_amount_formatted,
-      fee,
-      fee_formatted,
-    } = evt.data;
-
-    const fiatAmt = parseFloat(fiat_amount_formatted || fiat_amount || '0');
-    const tokenAmt = parseFloat(token_amount_formatted || token_amount || '0');
-    const feeAmt = parseFloat(fee_formatted || fee || '0');
-
-    this.logger.log(
-      `Fiat→Token Swap: ${fiatAmt} ${fiat_symbol} → ${tokenAmt} ${token_symbol} | Fee: ${feeAmt}`,
-    );
-
-    // Find and complete matching pending swap order
-    await this.completeNearestPendingOrder(evt);
-  }
-
-  /**
-   * Handle TokenToFiatSwapExecuted event from StarkNet
-   * This confirms the swap was successful on-chain
-   * After updating the order, trigger the fiat payout
-   */
-  private async handleTokenToFiatSwap(evt: EventPayload) {
-    const completedOrderId = await this.completeNearestPendingOrder(evt);
-
-    console.log('completedNearestPendingOrder', completedOrderId);
-
-    if (completedOrderId) {
-      try {
-        this.logger.log(`Triggering payout for swap order ${completedOrderId}`);
-        await this.swapOrderService.initiatePayoutForSwap(completedOrderId);
-      } catch (error) {
-        this.logger.error(
-          `Failed to trigger payout for swap ${completedOrderId}: ${error.message}`,
-          error.stack,
-        );
-      }
-    }
   }
 
   private async handleWithdrawalCompleted(evt: EventPayload) {
@@ -488,7 +330,7 @@ export class LiquidityEventProcessorService {
         where: { id: pendingSwapOrder.id },
         data: {
           status: 'completed',
-          completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
+          completedAt: new Date(evt.blockTimestamp),
           amount: fiat_amount,
           fee: parseFloat(feeStr),
           blockNumber: evt.blockNumber,
@@ -534,7 +376,7 @@ export class LiquidityEventProcessorService {
           status: 'completed',
           blockNumber: evt.blockNumber,
           transactionHash: evt.transactionHash,
-          completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
+          completedAt: new Date(evt.blockTimestamp),
         },
         create: {
           userId: pendingSwapOrder.userId,
@@ -548,7 +390,7 @@ export class LiquidityEventProcessorService {
           swapOrderId: pendingSwapOrder.id,
           blockNumber: evt.blockNumber,
           transactionHash: evt.transactionHash,
-          completedAt: new Date(parseInt(evt.blockTimestamp, 10) * 1000),
+          completedAt: new Date(evt.blockTimestamp),
         },
       });
 

@@ -167,9 +167,6 @@ export class LiquidityPoolContractService {
     throw new Error('Failed to add liquidity');
   }
 
-  /**
-   * Add token liquidity
-   */
   async addTokenToLiquidity(symbol: string, amount: string) {
     if (!symbol) throw new Error('symbol is required');
     if (!amount) throw new Error('amount is required');
@@ -270,9 +267,94 @@ export class LiquidityPoolContractService {
     return 18;
   }
 
-  /**
-   * Get token amount in USD with caching
-   */
+  async createSwap(
+    fromToken: string,
+    toToken: string,
+    fromAmount: string,
+    minToAmount: string,
+    deadline: number,
+  ) {
+    if (!this.liquidityContractAddress) {
+      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
+    }
+
+    // Convert amounts to Uint256
+    const fromAmountU256 = uint256.bnToUint256(BigInt(fromAmount));
+    const minToAmountU256 = uint256.bnToUint256(BigInt(minToAmount));
+
+    // Convert token addresses to ContractAddress
+    const fromTokenAddress = this.tokenContractService.getTokenAddress(fromToken);
+    const toTokenAddress = this.tokenContractService.getTokenAddress(toToken);
+
+    if (!fromTokenAddress || !toTokenAddress) {
+      throw new Error('Invalid token addresses');
+    }
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'swap',
+      calldata: [
+        fromTokenAddress,
+        toTokenAddress,
+        fromAmountU256.low,
+        fromAmountU256.high,
+        minToAmountU256.low,
+        minToAmountU256.high,
+        deadline,
+      ],
+    };
+
+    try {
+      const account = getDeployerWallet();
+      const { transaction_hash: txHash } = await account.execute(call);
+
+      this.logger.log(`Swap created. Transaction: ${txHash}`);
+      
+      return {
+        txHash,
+        status: 'pending',
+        details: {
+          from: fromToken,
+          to: toToken,
+          fromAmount,
+          minToAmount,
+          deadline,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create swap: ${error.message}`, error.stack);
+      throw new Error(`Failed to create swap: ${error.message}`);
+    }
+  }
+
+  async executeSwap(swapId: number) {
+    if (!this.liquidityContractAddress) {
+      throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
+    }
+
+    const call = {
+      contractAddress: this.liquidityContractAddress,
+      entrypoint: 'execute_swap',
+      calldata: [swapId],
+    };
+
+    try {
+      const account = getDeployerWallet();
+      const { transaction_hash: txHash } = await account.execute(call);
+
+      this.logger.log(`Swap ${swapId} executed. Transaction: ${txHash}`);
+      
+      return {
+        txHash,
+        status: 'executed',
+        swapId,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to execute swap ${swapId}: ${error.message}`, error.stack);
+      throw new Error(`Failed to execute swap: ${error.message}`);
+    }
+  }
+
   async getTokenAmountInUsd(address: string) {
     if (!this.liquidityContractAddress)
       throw new Error('LIQUIDITY_CONTRACT_ADDRESS env variable is not set');
@@ -415,8 +497,9 @@ export class LiquidityPoolContractService {
     const fiatSymbolFelt = shortString.encodeShortString(fiatSymbol);
     const tokenSymbolFelt = shortString.encodeShortString(token);
     
-    const supportedTokenAddress = await this.getSupportedTokenBySymbol(token);
-    const decimals = await this.getTokenDecimals(supportedTokenAddress);
+    // Resolve token address and decimals from TokenContractService/env
+    const supportedTokenAddress = this.tokenContractService.getTokenAddress(token);
+    const decimals = this.tokenContractService.getTokenDecimals(token);
 
     // Convert token amount to wei units properly handling decimals
     const amountInWei = convertToWei(tokenAmount, decimals);
@@ -439,8 +522,7 @@ export class LiquidityPoolContractService {
 
     try {
       // const account = getDeployerWallet();
-      const tokenAddress =
-        this.tokenContractService.getTokenAddress(tokenSymbol);
+      const tokenAddress = this.tokenContractService.getTokenAddress(tokenSymbol);
       if (!tokenAddress) throw new Error(`Token ${tokenSymbol} not supported`);
       await this.tokenContractService.approveTokenWithUserCredentials(
         user.id,

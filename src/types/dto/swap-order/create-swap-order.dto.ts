@@ -5,6 +5,7 @@ import {
   IsUUID,
   IsDateString,
   IsEnum,
+  IsObject,
 } from 'class-validator';
 
 export enum SwapType {
@@ -14,7 +15,11 @@ export enum SwapType {
   OCO = 'OCO',
 }
 
-export class CreateSwapOrderDto {
+export class SwapOrderDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   from: string;
 
@@ -29,8 +34,7 @@ export class CreateSwapOrderDto {
   rate: number;
 
   @IsNumber()
-  @IsOptional()
-  toAmount?: number;
+  toAmount: number;
 
   @IsNumber()
   @IsOptional()
@@ -56,4 +60,15 @@ export class CreateSwapOrderDto {
 
   @IsEnum(SwapType)
   swapType: SwapType;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: {
+    swapId: string;
+    minToAmount: string;
+    deadline: number;
+    transactionHash: string;
+    completedAt: string;
+    error: string;
+  };
 }

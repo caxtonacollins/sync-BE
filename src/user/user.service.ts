@@ -84,6 +84,12 @@ export class UserService {
         ),
       );
 
+      const isRegSuccess =
+        await this.liquidityPoolContractService.registerUserToLiquidity(
+          accountResult.accountAddress!,
+          user.id,
+        );
+
       await this.prisma.cryptoWallet.create({
         data: {
           userId: user.id,
@@ -92,6 +98,7 @@ export class UserService {
           encryptedPrivateKey: accountResult.encryptedPrivateKey!,
           tokenSymbol: 'STRK',
           isDefault: true,
+          isRegisteredToLiquidity: isRegSuccess === 'success' ? true : false,
         },
       });
 
@@ -576,7 +583,6 @@ export class UserService {
 
   async remove(id: string) {
     return this.prisma.$transaction(async (prisma) => {
-
       // Then delete all related CryptoWallet records
       await prisma.cryptoWallet.deleteMany({
         where: { userId: id },

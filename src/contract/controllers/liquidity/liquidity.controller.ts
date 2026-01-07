@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { LiquidityPoolContractService } from 'src/contract/services/liquidity-pool/liquidity-pool.service';
-import { CreateAccountDto, TransferOwnershipDto, SwapFiatToTokenDto, SwapTokenToFiatDto, UpgradeAccountFactoryDto, SetLiquidityContractAddressDto } from 'src/types';
+import { CreateAccountDto, TransferOwnershipDto, UpgradeAccountFactoryDto, SetLiquidityContractAddressDto, CreateSwapDto, ExecuteSwapDto } from 'src/types';
 
 @UseInterceptors(CacheInterceptor)
 @Controller('liquidity')
@@ -77,38 +77,29 @@ export class LiquidityController {
     );
   }
 
-  @Post('swap-fiat-to-token')
-  async swapFiatToToken(@Body() swapFiatToTokenDto: SwapFiatToTokenDto) {
-    console.log(swapFiatToTokenDto);
-    return await this.contractService.swapFiatToToken(
-      swapFiatToTokenDto.userContractAddress,
-      swapFiatToTokenDto.fiatSymbol,
-      swapFiatToTokenDto.tokenSymbol,
-      swapFiatToTokenDto.fiatAmount.toString(),
-      swapFiatToTokenDto.swapOrderId,
-      swapFiatToTokenDto.tokenAmount.toString(),
-      swapFiatToTokenDto.fee.toString(),
-    );
-  }
-
-  @Post('swap-token-to-fiat')
-  async swapTokenToFiat(@Body() swapTokenToFiatDto: SwapTokenToFiatDto) {
-    return await this.contractService.swapTokenToFiat(
-      swapTokenToFiatDto.userContractAddress,
-      swapTokenToFiatDto.fiatSymbol,
-      swapTokenToFiatDto.tokenSymbol,
-      swapTokenToFiatDto.tokenAmount,
-      swapTokenToFiatDto.swapOrderId,
-    );
-  }
-
   @Post('upgrade-liquidity-contract')
   async upgradeLiquidityContract(
     @Body() upgradeAccountFactoryDto: UpgradeAccountFactoryDto,
   ) {
-    return await this.contractService.upgradeLiquidityContract(
+    return this.contractService.upgradeLiquidityContract(
       upgradeAccountFactoryDto.classHash,
     );
+  }
+
+  @Post('swap')
+  async createSwap(@Body() createSwapDto: CreateSwapDto) {
+    return this.contractService.createSwap(
+      createSwapDto.fromToken,
+      createSwapDto.toToken,
+      createSwapDto.fromAmount,
+      createSwapDto.minToAmount,
+      createSwapDto.deadline,
+    );
+  }
+
+  @Post('swap/execute')
+  async executeSwap(@Body() executeSwapDto: ExecuteSwapDto) {
+    return this.contractService.executeSwap(executeSwapDto.swapId);
   }
 
   @Post('upgrade-pragma-oracle-address')

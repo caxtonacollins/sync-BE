@@ -188,8 +188,7 @@ export class TokenContractService {
 
     const call = {
       contractAddress: sngnTokenAddress,
-      // Prefer permissionedBurn if available on the token; fallback to burn
-      entrypoint: 'permissionedBurn',
+      entrypoint: 'burn',
       calldata: [accountAddress, uint256.bnToUint256(amount)],
     };
 
@@ -287,10 +286,14 @@ export class TokenContractService {
       }),
     };
 
+    const userFeltId = uuidToFelt252(userId);
+    const userWallet =
+      await this.accountContractService.getAccountAddress(userFeltId);
+
     const result = await this.executeUserTransaction(
       userId,
       [call],
-      spenderAddress,
+      userWallet,
     );
     return result;
   }

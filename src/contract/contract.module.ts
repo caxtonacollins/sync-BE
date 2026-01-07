@@ -10,6 +10,7 @@ import { LiquidityController } from './controllers/liquidity/liquidity.controlle
 import { StakingController } from './controllers/staking/staking.controller';
 import { AccountController } from './controllers/account/account.controller';
 import { EventsController } from './controllers/events/events.controller';
+import { ContractEventsController } from './controllers/events/contract-events.controller';
 import { Erc20TokenController } from './controllers/erc20-token/erc20-token.controller';
 import { AccountContractService } from './services/account/account.service';
 import { TokenContractService } from './services/erc20-token/erc20-token.service';
@@ -35,6 +36,7 @@ import { TXContractService } from './services/tx.service';
     StakingController,
     AccountController,
     EventsController,
+    ContractEventsController,
     Erc20TokenController,
   ],
   providers: [

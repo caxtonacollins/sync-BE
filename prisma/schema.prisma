@@ -303,6 +303,7 @@ model SwapOrder {
   from    String
   to      String
   amount      Decimal   @db.Decimal(38, 18)
+  toAmount      Decimal   @db.Decimal(38, 18)
   rate            Decimal?  @db.Decimal(20, 8) // Exchange rate precision: 8 decimals
   swapType        SwapType
   fee             Decimal?  @db.Decimal(38, 18)
@@ -313,6 +314,7 @@ model SwapOrder {
   completedAt     DateTime?
   blockNumber     String?
   transactionHash String?
+  metadata Json?
 
   transactions Transaction[]
 
