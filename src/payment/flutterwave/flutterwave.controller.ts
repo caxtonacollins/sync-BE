@@ -12,11 +12,23 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { FlutterwaveService } from './flutterwave.service';
-import { User } from '@prisma/client';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
-import { VerifyPaymentDto, InitializePaymentDto } from 'src/types/dto/flutterwave/transaction';
-import { ApiResponseType, UpdateBVNDto, InitializePaymentResponse } from 'src/types/dto/flutterwave/response';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBody,
+} from '@nestjs/swagger';
+import {
+  VerifyPaymentDto,
+  InitializePaymentDto,
+} from 'src/types/dto/flutterwave/transaction';
+import {
+  ApiResponseType,
+  UpdateBVNDto,
+  InitializePaymentResponse,
+} from 'src/types/dto/flutterwave/response';
 
 @ApiTags('Flutterwave')
 @Controller('flutterwave')
@@ -27,7 +39,10 @@ export class FlutterwaveController {
   @Post('create-virtual-accounts')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Create virtual accounts for a user' })
-  @ApiResponse({ status: 201, description: 'Virtual accounts created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Virtual accounts created successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid user data' })
   async createVirtualAccounts(@Req() req: Request) {
     const userId = req.user?.id;
@@ -42,9 +57,9 @@ export class FlutterwaveController {
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Initialize Flutterwave payment' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Payment initialized successfully', 
+  @ApiResponse({
+    status: 200,
+    description: 'Payment initialized successfully',
     schema: {
       type: 'object',
       properties: {
@@ -63,27 +78,27 @@ export class FlutterwaveController {
               properties: {
                 email: { type: 'string' },
                 name: { type: 'string' },
-                phone: { type: 'string' }
-              }
+                phone: { type: 'string' },
+              },
             },
             customizations: {
               type: 'object',
               properties: {
                 title: { type: 'string' },
                 description: { type: 'string' },
-                logo: { type: 'string' }
-              }
-            }
-          }
-        }
-      }
-    }
+                logo: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 400, description: 'Invalid payment data' })
   @ApiBody({ type: InitializePaymentDto })
   async initializePayment(
     @Body() initializePaymentDto: InitializePaymentDto,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<InitializePaymentResponse> {
     try {
       const userId = req.user?.['userId'];
@@ -92,13 +107,13 @@ export class FlutterwaveController {
       }
 
       const user = await this.flutterwaveService.getUserById(userId);
-      
+
       // Generate a unique transaction reference
       const txRef = `FLW-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      
+
       // In a real implementation, you would save this transaction reference to your database
       // and associate it with the user
-      
+
       // Return the Flutterwave public key and transaction reference to the frontend
       const response: InitializePaymentResponse = {
         success: true,
@@ -121,16 +136,19 @@ export class FlutterwaveController {
           },
         },
       };
-      
+
       return response;
     } catch (error) {
       const errorResponse: InitializePaymentResponse = {
         success: false,
         status: 'error',
-        message: error instanceof Error ? error.message : 'Failed to initialize payment',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to initialize payment',
         data: undefined,
       };
-      
+
       return errorResponse;
     }
   }
@@ -143,7 +161,7 @@ export class FlutterwaveController {
   @ApiResponse({ status: 400, description: 'Invalid payment data' })
   async verifyPayment(
     @Body() verifyPaymentDto: VerifyPaymentDto,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<ApiResponseType> {
     try {
       const userId = req.user?.id;
@@ -155,7 +173,7 @@ export class FlutterwaveController {
         verifyPaymentDto.transaction_id,
         userId,
         verifyPaymentDto.amount || 0,
-        verifyPaymentDto.tokenSymbol || 'NGN'
+        verifyPaymentDto.tokenSymbol || 'NGN',
       );
 
       return {
@@ -169,7 +187,7 @@ export class FlutterwaveController {
         success: false,
         status: 'error',
         message: error.message || 'Failed to verify payment',
-        data: null
+        data: null,
       };
     }
   }

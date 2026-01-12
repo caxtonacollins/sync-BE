@@ -1,4 +1,14 @@
-import { Prisma, PrismaClient, UserRole, VerificationStatus, AccountStatus, TransactionType, TransactionStatus, StakeStatus, SwapType } from '@prisma/client';
+import {
+  Prisma,
+  PrismaClient,
+  UserRole,
+  VerificationStatus,
+  AccountStatus,
+  TransactionType,
+  TransactionStatus,
+  StakeStatus,
+  SwapType,
+} from '@prisma/client';
 import { hash } from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -88,7 +98,8 @@ async function main() {
       postalCode: '100001',
       idType: 'nin',
       idNumber: '12345678901',
-      starknetAccountAddress: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+      starknetAccountAddress:
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     },
   });
 
@@ -106,8 +117,11 @@ async function main() {
 
   for (let i = 1; i <= 5; i++) {
     const hashedPassword = await hash(testPasswords[i - 1], 10);
-    userPasswords.push({ email: `user${i}@example.com`, password: testPasswords[i - 1] });
-    
+    userPasswords.push({
+      email: `user${i}@example.com`,
+      password: testPasswords[i - 1],
+    });
+
     const user = await prisma.user.create({
       data: {
         email: `user${i}@example.com`,
@@ -116,11 +130,14 @@ async function main() {
         lastName: `Last${i}`,
         phoneNumber: `+234800000000${i}`,
         role: UserRole.USER,
-        verificationStatus: i % 2 === 0 ? VerificationStatus.VERIFIED : VerificationStatus.PENDING,
+        verificationStatus:
+          i % 2 === 0
+            ? VerificationStatus.VERIFIED
+            : VerificationStatus.PENDING,
         status: AccountStatus.ACTIVE,
         twoFactorEnabled: i % 3 === 0,
         bvn: `1234567890${i}`,
-        dateOfBirth: new Date(1990 + i, i % 12, (i * 2) % 28 + 1),
+        dateOfBirth: new Date(1990 + i, i % 12, ((i * 2) % 28) + 1),
         address: `${i} User Street`,
         city: i % 2 === 0 ? 'Lagos' : 'Abuja',
         state: i % 2 === 0 ? 'Lagos' : 'Abuja',
@@ -128,7 +145,8 @@ async function main() {
         postalCode: `10000${i}`,
         idType: i % 2 === 0 ? 'nin' : 'passport',
         idNumber: `ID1234567${i}`,
-        starknetAccountAddress: `0x${i.toString().repeat(64 - i.toString().length)}${i}`.slice(0, 64),
+        starknetAccountAddress:
+          `0x${i.toString().repeat(64 - i.toString().length)}${i}`.slice(0, 64),
       },
     });
     users.push(user);
@@ -171,14 +189,14 @@ async function main() {
     ].map((pool) =>
       prisma.cryptoStakingPool.create({
         data: pool,
-      })
-    )
+      }),
+    ),
   );
 
   // Create crypto wallets and balances for users
   console.log('💼 Creating wallets and balances...');
   const tokens = ['STRK', 'ETH', 'USDC', 'USDT'];
-  
+
   for (const user of [admin, ...users]) {
     // Create encrypted key for each user (in a real app, this would be properly encrypted)
     await prisma.encryptedKey.create({
@@ -216,23 +234,24 @@ async function main() {
           tokenSymbol: token,
           network,
           available: baseAmount * 0.8, // 80% available
-          staked: baseAmount * 0.15,   // 15% staked
-          pending: baseAmount * 0.05,  // 5% pending
+          staked: baseAmount * 0.15, // 15% staked
+          pending: baseAmount * 0.05, // 5% pending
         },
       });
 
       // Create some transactions
       const transactionTypes = Object.values(TransactionType);
       const statuses = Object.values(TransactionStatus);
-      
+
       // Create 5-10 random transactions per token
       const transactionCount = Math.floor(Math.random() * 6) + 5;
       for (let i = 0; i < transactionCount; i++) {
         const amount = Math.random() * 1000 + 1;
         const fee = amount * 0.01; // 1% fee
-        const type = transactionTypes[Math.floor(Math.random() * transactionTypes.length)];
+        const type =
+          transactionTypes[Math.floor(Math.random() * transactionTypes.length)];
         const status = statuses[Math.floor(Math.random() * statuses.length)];
-        
+
         await prisma.transaction.create({
           data: {
             userId: user.id as string,
@@ -246,11 +265,22 @@ async function main() {
             metadata: {
               walletAddress: wallet.address,
               network,
-              confirmations: status === 'COMPLETED' ? 12 : Math.floor(Math.random() * 12),
+              confirmations:
+                status === 'COMPLETED' ? 12 : Math.floor(Math.random() * 12),
             },
             cryptoWalletId: wallet.id,
-            ...(status === 'COMPLETED' ? { completedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) } : {}),
-            ...(status === 'COMPLETED' ? { transactionHash: `0x${Math.random().toString(16).substring(2, 66)}` } : {}),
+            ...(status === 'COMPLETED'
+              ? {
+                  completedAt: new Date(
+                    Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000,
+                  ),
+                }
+              : {}),
+            ...(status === 'COMPLETED'
+              ? {
+                  transactionHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+                }
+              : {}),
           },
         });
       }
@@ -260,14 +290,14 @@ async function main() {
   // Create staking positions for some users
   console.log('🏦 Creating staking positions...');
   const stakingUsers = users.slice(0, 3); // First 3 users will have staking positions
-  
+
   for (const user of stakingUsers) {
     const pool = pools[Math.floor(Math.random() * pools.length)];
     const amount = Math.random() * 1000 + 100;
     const lockDays = [30, 60, 90, 180, 365][Math.floor(Math.random() * 5)];
     const unlockAt = new Date();
     unlockAt.setDate(unlockAt.getDate() + lockDays);
-    
+
     await prisma.cryptoStake.create({
       data: {
         userId: user.id as string,
@@ -279,9 +309,13 @@ async function main() {
         unlockAt,
         baseApyBps: pool.baseApyBps,
         bonusApyBps: pool.bonusApyBps,
-        effectiveApyBps: pool.baseApyBps + (Math.random() * pool.bonusApyBps),
+        effectiveApyBps: pool.baseApyBps + Math.random() * pool.bonusApyBps,
         status: Math.random() > 0.2 ? StakeStatus.ACTIVE : StakeStatus.UNSTAKED,
-        ...(Math.random() > 0.2 ? { onChainTxHash: `0x${Math.random().toString(16).substring(2, 66)}` } : {}),
+        ...(Math.random() > 0.2
+          ? {
+              onChainTxHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+            }
+          : {}),
         onChainRecorded: Math.random() > 0.5,
       },
     });
@@ -297,8 +331,8 @@ async function main() {
     ].map((pool) =>
       prisma.liquidityPool.create({
         data: pool,
-      })
-    )
+      }),
+    ),
   );
 
   // Create pool history
@@ -307,7 +341,7 @@ async function main() {
     for (let i = 0; i < 10; i++) {
       const amount = Math.random() * 10000 + 1000;
       const type = Math.random() > 0.5 ? 'add' : 'remove';
-      
+
       await prisma.poolHistory.create({
         data: {
           poolId: pool.id,
@@ -323,12 +357,19 @@ async function main() {
 
   // Create audit logs
   console.log('📝 Creating audit logs...');
-  const actions = ['LOGIN', 'LOGOUT', 'PASSWORD_CHANGE', 'PROFILE_UPDATE', 'WITHDRAWAL', 'DEPOSIT'];
-  
+  const actions = [
+    'LOGIN',
+    'LOGOUT',
+    'PASSWORD_CHANGE',
+    'PROFILE_UPDATE',
+    'WITHDRAWAL',
+    'DEPOSIT',
+  ];
+
   for (let i = 0; i < 50; i++) {
     const user = users[Math.floor(Math.random() * users.length)];
     const action = actions[Math.floor(Math.random() * actions.length)];
-    
+
     await prisma.auditLog.create({
       data: {
         userId: user.id,
@@ -346,7 +387,7 @@ async function main() {
   }
 
   console.log('✅ Database seeded successfully!');
-  
+
   // Log test user credentials
   console.log('\nTest user credentials:');
   userPasswords.forEach(({ email, password }) => {
